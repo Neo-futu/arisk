@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>FSI Risk Platform</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;color:#e2e8f0;min-height:100vh;font-size:14px}
+/* Layout */
+.header{background:#1a1f2e;border-bottom:1px solid #2d3748;padding:12px 20px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:100}
+.header h1{font-size:16px;font-weight:600;color:#fff}
+.badge{background:#2563eb;color:#fff;font-size:10px;padding:2px 7px;border-radius:999px;font-weight:500}
+.layout{display:flex;height:calc(100vh - 48px)}
+.sidebar{width:220px;background:#1a1f2e;border-right:1px solid #2d3748;padding:12px;overflow-y:auto;flex-shrink:0}
+.sidebar-section{margin-bottom:20px}
+.sidebar-label{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#718096;margin-bottom:6px}
+.menu-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:5px;cursor:pointer;color:#cbd5e0;font-size:13px;margin-bottom:1px;transition:all .15s}
+.menu-item:hover{background:#2d3748;color:#fff}
+.menu-item.active{background:#2563eb20;color:#60a5fa;font-weight:500}
+.menu-item .icon{font-size:14px;width:16px;text-align:center}
+.menu-badge{background:#ef4444;color:#fff;font-size:10px;padding:1px 5px;border-radius:999px;margin-left:auto}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.tab-bar{display:flex;border-bottom:1px solid #2d3748;background:#1a1f2e;padding:0 16px;gap:2px}
+.tab{padding:10px 14px;font-size:13px;cursor:pointer;color:#718096;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s}
+.tab:hover{color:#cbd5e0}
+.tab.active{color:#60a5fa;border-bottom-color:#2563eb;font-weight:500}
+.view{display:none;flex:1;overflow:hidden;flex-direction:column}
+.view.active{display:flex}
+.content{flex:1;padding:16px;overflow-y:auto}
+
+/* Cards */
+.card{background:#1a1f2e;border:1px solid #2d3748;border-radius:8px;padding:16px;margin-bottom:12px}
+.card-title{font-size:13px;font-weight:600;color:#e2e8f0;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.metric{background:#0f1117;border-radius:6px;padding:10px 12px}
+.metric .m-label{font-size:10px;color:#718096;margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em}
+.metric .m-value{font-size:22px;font-weight:700}
+.metric .m-sub{font-size:10px;color:#718096;margin-top:2px}
+.ok{color:#34d399}.warn{color:#fbbf24}.err{color:#f87171}.info{color:#60a5fa}
+
+/* Buttons */
+.btn{padding:7px 14px;border-radius:5px;font-size:12px;cursor:pointer;border:none;font-weight:500;transition:all .15s}
+.btn-primary{background:#2563eb;color:#fff}.btn-primary:hover{background:#1d4ed8}
+.btn-danger{background:#dc2626;color:#fff}.btn-danger:hover{background:#b91c1c}
+.btn-outline{background:transparent;color:#60a5fa;border:1px solid #2563eb}.btn-outline:hover{background:#2563eb20}
+.btn-ghost{background:#2d3748;color:#cbd5e0}.btn-ghost:hover{background:#374151}
+.btn-sm{padding:4px 10px;font-size:11px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* Review inbox */
+.review-list{display:flex;flex-direction:column;gap:8px}
+.review-item{background:#1a1f2e;border:1px solid #2d3748;border-radius:8px;padding:14px;cursor:pointer;transition:all .15s}
+.review-item:hover{border-color:#4a5568}
+.review-item.selected{border-color:#2563eb;background:#1e2a45}
+.review-item.priority-1{border-left:3px solid #ef4444}
+.review-item.priority-2{border-left:3px solid #f59e0b}
+.review-item.priority-3{border-left:3px solid #6b7280}
+.review-header{display:flex;align-items:flex-start;gap:10px;margin-bottom:8px}
+.review-title{font-size:13px;font-weight:600;color:#e2e8f0;flex:1}
+.review-meta{font-size:11px;color:#718096;display:flex;gap:10px;flex-wrap:wrap}
+.cat-badge{font-size:10px;padding:2px 7px;border-radius:4px;font-weight:600;white-space:nowrap}
+.cat-COMPLIANCE_BREACH{background:#7f1d1d;color:#fca5a5}
+.cat-HIGH_RISK{background:#78350f;color:#fcd34d}
+.cat-REPORT_PUBLISH{background:#1e3a5f;color:#93c5fd}
+.cat-DATA_WRITE{background:#1a1f2e;color:#9ca3af;border:1px solid #374151}
+.cat-DATA_LOAD{background:#1a1f2e;color:#9ca3af;border:1px solid #374151}
+.cat-AGENT_HANDOFF{background:#1e293b;color:#7dd3fc}
+.status-badge{font-size:10px;padding:2px 7px;border-radius:4px;font-weight:600}
+.st-PENDING{background:#1c2a1c;color:#86efac}.st-IN_REVIEW{background:#1e2a45;color:#93c5fd}
+.st-APPROVED{background:#052e16;color:#4ade80}.st-REJECTED{background:#450a0a;color:#fca5a5}
+.st-EXPIRED{background:#1c1c1c;color:#6b7280}
+
+/* 小富 AI 審核面板 */
+.xiaofu-panel{background:#0f1c0f;border:1px solid #1a3a1a;border-radius:8px;padding:14px;margin:10px 0}
+.xiaofu-header{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.xiaofu-avatar{width:28px;height:28px;background:linear-gradient(135deg,#059669,#10b981);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0}
+.xiaofu-name{font-size:12px;font-weight:600;color:#34d399}
+.xiaofu-tag{font-size:10px;background:#052e16;color:#4ade80;padding:1px 6px;border-radius:3px;border:1px solid #065f46}
+.xiaofu-pending{color:#fbbf24;font-size:12px;padding:8px 0}
+.risk-tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700}
+.risk-LOW{background:#052e16;color:#4ade80}.risk-MEDIUM{background:#1c2a0a;color:#a3e635}
+.risk-HIGH{background:#451a03;color:#fb923c}.risk-CRITICAL{background:#450a0a;color:#f87171}
+.risk-UNKNOWN{background:#1c1c1c;color:#6b7280}
+.rec-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;margin-left:8px}
+.rec-APPROVE{background:#052e16;color:#4ade80}.rec-REJECT{background:#450a0a;color:#f87171}
+.rec-REQUIRE_HUMAN{background:#1e2a45;color:#93c5fd}.rec-ESCALATE{background:#1c1c00;color:#fbbf24}
+.concern-list{list-style:none;margin:8px 0;padding:0}
+.concern-list li{font-size:11px;color:#9ca3af;padding:2px 0;padding-left:12px;position:relative}
+.concern-list li::before{content:"▸";position:absolute;left:0;color:#4b5563}
+.xiaofu-note{font-size:11px;color:#6ee7b7;background:#022c22;border-radius:4px;padding:8px;margin-top:8px;border-left:2px solid #059669}
+.actions-bar{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+
+/* 審核詳情面板 */
+.detail-panel{background:#141a27;border:1px solid #2d3748;border-radius:8px;padding:14px;height:100%;overflow-y:auto}
+.detail-empty{color:#4a5568;text-align:center;padding:40px 20px;font-size:13px}
+.payload-box{background:#0a0d14;border-radius:6px;padding:10px;font-size:11px;font-family:monospace;color:#7dd3fc;max-height:200px;overflow-y:auto;white-space:pre-wrap}
+.reviewer-input{background:#0f1117;border:1px solid #374151;border-radius:5px;padding:8px 10px;color:#e2e8f0;font-size:12px;width:100%;resize:vertical;min-height:60px}
+.reviewer-input:focus{outline:none;border-color:#2563eb}
+
+/* Operation Logs */
+.log-filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+.filter-input{background:#1a1f2e;border:1px solid #2d3748;border-radius:5px;padding:5px 10px;color:#e2e8f0;font-size:12px}
+.filter-input:focus{outline:none;border-color:#2563eb}
+.filter-select{background:#1a1f2e;border:1px solid #2d3748;border-radius:5px;padding:5px 10px;color:#e2e8f0;font-size:12px;cursor:pointer}
+.log-table{width:100%;border-collapse:collapse;font-size:11px}
+.log-table th{background:#1a1f2e;padding:7px 10px;text-align:left;color:#718096;font-weight:500;border-bottom:1px solid #2d3748;white-space:nowrap;position:sticky;top:0}
+.log-table td{padding:6px 10px;border-bottom:1px solid #1a1f2e;color:#cbd5e0;vertical-align:top}
+.log-table tr:hover td{background:#1a1f2e20}
+.log-level{padding:1px 6px;border-radius:3px;font-weight:700;font-size:10px}
+.lv-INFO{background:#0c2a4a;color:#60a5fa}.lv-WARNING{background:#1c1a00;color:#fbbf24}
+.lv-ERROR{background:#2d0000;color:#f87171}.lv-CRITICAL{background:#4a0000;color:#ff4444}
+.lv-DEBUG{background:#1a1f2e;color:#6b7280}
+.cat-chip{padding:1px 5px;border-radius:3px;font-size:10px;background:#1e293b;color:#7dd3fc}
+.duration-ok{color:#4ade80}.duration-slow{color:#fbbf24}.duration-very-slow{color:#f87171}
+
+/* Chat area */
+.chat-container{display:flex;flex-direction:column;height:100%}
+.chat-msgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
+.msg{max-width:72%;padding:10px 14px;border-radius:8px;font-size:13px;line-height:1.6}
+.msg.user{background:#2563eb;color:#fff;align-self:flex-end;border-radius:8px 8px 2px 8px}
+.msg.agent{background:#1a1f2e;border:1px solid #2d3748;align-self:flex-start;border-radius:8px 8px 8px 2px}
+.msg.agent .sender{font-size:10px;color:#60a5fa;margin-bottom:4px;font-weight:600}
+.chat-input-bar{display:flex;gap:8px;padding:10px 12px;border-top:1px solid #2d3748;background:#1a1f2e;align-items:flex-end}
+.chat-input{flex:1;background:#0f1117;border:1px solid #2d3748;border-radius:6px;padding:8px 12px;color:#e2e8f0;font-size:13px;resize:none;min-height:36px;max-height:120px;font-family:inherit}
+.chat-input:focus{outline:none;border-color:#2563eb}
+.mode-pills{display:flex;gap:4px;margin-bottom:6px}
+.pill{padding:3px 10px;border-radius:999px;font-size:11px;cursor:pointer;border:none;font-weight:500;transition:all .15s}
+.pill.active{background:#2563eb;color:#fff}
+.pill:not(.active){background:#2d3748;color:#9ca3af}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:#0f1117}
+::-webkit-scrollbar-thumb{background:#2d3748;border-radius:2px}
+
+/* Responsive helper */
+.flex-row{display:flex;gap:12px}
+.flex-col{display:flex;flex-direction:column;gap:8px}
+.split-pane{display:grid;grid-template-columns:380px 1fr;gap:12px;height:100%;overflow:hidden}
+.pane-scroll{overflow-y:auto;height:100%}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🏦 FSI Risk Platform</h1>
+  <span class="badge">v0.1</span>
+  <span style="margin-left:auto;font-size:11px;color:#718096" id="hdr-time"></span>
+</div>
+
+<div class="layout">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">基金</div>
+      <div class="menu-item active" id="fund-BHMMF" onclick="selectFund('BHMMF')">
+        <span class="icon">📊</span> Balance HKD MMF
+      </div>
+      <div class="menu-item" id="fund-FUND2" onclick="selectFund('FUND2')">
+        <span class="icon">📊</span> 基金 B
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">工具</div>
+      <div class="menu-item" onclick="quickCmd('/risk')"><span class="icon">⚡</span> 風控快照</div>
+      <div class="menu-item" onclick="quickCmd('/compliance')"><span class="icon">✅</span> 合規核查</div>
+      <div class="menu-item" onclick="quickCmd('/positions')"><span class="icon">📋</span> 持倉明細</div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">系統</div>
+      <div class="menu-item" onclick="switchTab('review-tab')">
+        <span class="icon">🔔</span> 審核收件箱
+        <span class="menu-badge" id="badge-count" style="display:none">0</span>
+      </div>
+      <div class="menu-item" onclick="switchTab('logs-tab')"><span class="icon">📝</span> 操作日誌</div>
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div class="main">
+    <div class="tab-bar">
+      <div class="tab active" id="tab-dashboard"   onclick="switchTab('dashboard')">📊 儀表板</div>
+      <div class="tab"        id="tab-review-tab"  onclick="switchTab('review-tab')">
+        🔔 審核收件箱 <span id="tab-badge" style="display:none;background:#ef4444;color:#fff;font-size:10px;padding:1px 5px;border-radius:999px;margin-left:4px">0</span>
+      </div>
+      <div class="tab"        id="tab-logs-tab"    onclick="switchTab('logs-tab')">📝 操作日誌</div>
+      <div class="tab"        id="tab-ai-chat"     onclick="switchTab('ai-chat')">🤖 AI 助手</div>
+    </div>
+
+    <!-- ① Dashboard -->
+    <div class="view active" id="view-dashboard">
+      <div class="content">
+        <div class="card">
+          <div class="card-title">
+            ⚡ 風控概覽 — <span id="dash-fund">BHMMF</span>
+            <button class="btn btn-ghost btn-sm" onclick="loadDashboard()">刷新</button>
+          </div>
+          <div class="grid-4" id="dash-metrics">
+            <div class="metric"><div class="m-label">WAM</div><div class="m-value" id="m-wam">--</div><div class="m-sub">限額 ≤60 天</div></div>
+            <div class="metric"><div class="m-label">WAL</div><div class="m-value" id="m-wal">--</div><div class="m-sub">限額 ≤120 天</div></div>
+            <div class="metric"><div class="m-label">每日流動</div><div class="m-value" id="m-dliq">--</div><div class="m-sub">下限 ≥7.5%</div></div>
+            <div class="metric"><div class="m-label">每週流動</div><div class="m-value" id="m-wliq">--</div><div class="m-sub">下限 ≥15%</div></div>
+            <div class="metric"><div class="m-label">VaR 1D 99%</div><div class="m-value info" id="m-var">--</div><div class="m-sub">歷史模擬</div></div>
+            <div class="metric"><div class="m-label">合規狀態</div><div class="m-value" id="m-comp">--</div><div class="m-sub">SFC 第8.2章</div></div>
+            <div class="metric"><div class="m-label">待審核</div><div class="m-value warn" id="m-pending">--</div><div class="m-sub">審核收件箱</div></div>
+            <div class="metric"><div class="m-label">今日日誌</div><div class="m-value info" id="m-logs">--</div><div class="m-sub">操作記錄</div></div>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title">📋 資產類型分佈</div>
+            <div id="dash-asset-types" style="color:#718096;font-size:12px">載入中...</div>
+          </div>
+          <div class="card">
+            <div class="card-title">🔝 Top 5 發行人</div>
+            <div id="dash-issuers" style="color:#718096;font-size:12px">載入中...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ② Review Inbox -->
+    <div class="view" id="view-review-tab">
+      <div class="content" style="padding:0;height:100%">
+        <div class="split-pane" style="padding:12px;gap:12px">
+
+          <!-- Left: List -->
+          <div class="pane-scroll">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+              <span style="font-size:13px;font-weight:600">審核收件箱</span>
+              <select class="filter-select" style="margin-left:auto" onchange="filterReviews(this.value)" id="review-filter">
+                <option value="">全部</option>
+                <option value="COMPLIANCE_BREACH">合規違規</option>
+                <option value="HIGH_RISK">高風險</option>
+                <option value="REPORT_PUBLISH">報告發布</option>
+                <option value="DATA_WRITE">數據寫入</option>
+              </select>
+              <button class="btn btn-ghost btn-sm" onclick="loadReviews()">刷新</button>
+            </div>
+            <div class="review-list" id="review-list">
+              <div style="color:#4a5568;text-align:center;padding:30px;font-size:13px">載入中...</div>
+            </div>
+          </div>
+
+          <!-- Right: Detail -->
+          <div class="pane-scroll">
+            <div class="detail-panel" id="review-detail">
+              <div class="detail-empty">← 點擊左側審核請求查看詳情</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ③ Logs -->
+    <div class="view" id="view-logs-tab">
+      <div class="content">
+        <!-- Summary bar -->
+        <div class="card" id="log-summary-bar">
+          <div class="card-title">📈 日誌統計概覽</div>
+          <div class="grid-4" id="log-summary-metrics" style="font-size:12px;color:#718096">載入中...</div>
+        </div>
+        <!-- Filters -->
+        <div class="card" style="padding:12px">
+          <div class="log-filters">
+            <select class="filter-select" id="f-level" onchange="loadLogs()">
+              <option value="">全部級別</option>
+              <option value="DEBUG">DEBUG</option>
+              <option value="INFO">INFO</option>
+              <option value="WARNING">WARNING</option>
+              <option value="ERROR">ERROR</option>
+              <option value="CRITICAL">CRITICAL</option>
+            </select>
+            <select class="filter-select" id="f-category" onchange="loadLogs()">
+              <option value="">全部類別</option>
+              <option value="API_ACCESS">API_ACCESS</option>
+              <option value="AGENT_ACTION">AGENT_ACTION</option>
+              <option value="REVIEW_EVENT">REVIEW_EVENT</option>
+              <option value="RISK_CALC">RISK_CALC</option>
+              <option value="ETL_JOB">ETL_JOB</option>
+              <option value="MCP_CALL">MCP_CALL</option>
+              <option value="SYSTEM">SYSTEM</option>
+            </select>
+            <input class="filter-input" id="f-actor" placeholder="操作者..." oninput="debounceLoadLogs()" style="width:140px">
+            <input class="filter-input" id="f-fund" placeholder="基金 ID..." oninput="debounceLoadLogs()" style="width:110px">
+            <input class="filter-input" id="f-min-dur" type="number" placeholder="最小耗時(ms)" oninput="debounceLoadLogs()" style="width:130px">
+            <select class="filter-select" id="f-status" onchange="loadLogs()">
+              <option value="">全部狀態</option>
+              <option value="ok">ok</option>
+              <option value="error">error</option>
+              <option value="blocked">blocked</option>
+              <option value="timeout">timeout</option>
+            </select>
+            <button class="btn btn-primary btn-sm" onclick="loadLogs()">查詢</button>
+            <button class="btn btn-ghost btn-sm" onclick="clearLogFilters()">清除</button>
+          </div>
+          <div id="log-table-wrap" style="overflow-x:auto;max-height:calc(100vh - 380px)">
+            <table class="log-table" id="log-table">
+              <thead>
+                <tr>
+                  <th>時間</th><th>級別</th><th>類別</th><th>操作者</th>
+                  <th>動作</th><th>基金</th><th>耗時</th><th>狀態</th>
+                </tr>
+              </thead>
+              <tbody id="log-tbody"><tr><td colspan="8" style="text-align:center;color:#4a5568;padding:20px">載入中...</td></tr></tbody>
+            </table>
+          </div>
+          <div id="log-pagination" style="margin-top:8px;font-size:11px;color:#718096;display:flex;align-items:center;gap:12px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ④ AI Chat -->
+    <div class="view" id="view-ai-chat">
+      <div class="chat-container">
+        <div class="chat-msgs" id="chat-msgs">
+          <div class="msg agent">
+            <div class="sender">🤖 小富 AI 助手</div>
+            您好！我是小富，FSI Risk Platform 的 AI 風控助手。<br><br>
+            您可以問我：<br>
+            • <code>/risk BHMMF</code> — 風控快照分析<br>
+            • <code>/compliance BHMMF</code> — SFC 守則合規核查<br>
+            • <code>/positions BHMMF</code> — 持倉明細<br>
+            • 或直接用自然語言描述您的需求
+          </div>
+        </div>
+        <div class="chat-input-bar">
+          <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+            <div class="mode-pills">
+              <button class="pill active" id="pill-agent" onclick="setMode('agent')">🤖 Agent</button>
+              <button class="pill" id="pill-direct" onclick="setMode('direct')">⚡ Direct</button>
+            </div>
+            <div style="display:flex;gap:8px">
+              <textarea class="chat-input" id="chat-in" rows="1" placeholder="輸入問題或指令..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg()}"></textarea>
+              <button class="btn btn-primary" onclick="sendMsg()" style="align-self:flex-end">發送</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── 狀態 ──────────────────────────────────────────────────────────
+let currentFund = 'BHMMF';
+let currentMode = 'agent';
+let currentReviewId = null;
+let reviewerId = localStorage.getItem('reviewerId') || 'reviewer-' + Math.random().toString(36).slice(2,8);
+let logOffset = 0; let logTotal = 0; const logLimit = 50;
+let _debounceTimer = null;
+
+// ── 初始化 ────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  updateClock();
+  setInterval(updateClock, 1000);
+  loadDashboard();
+  setInterval(pollPending, 30000);
+});
+
+function updateClock() {
+  document.getElementById('hdr-time').textContent = new Date().toLocaleString('zh-HK');
+}
+
+// ── Tab 切換 ──────────────────────────────────────────────────────
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  document.getElementById('view-' + id).classList.add('active');
+  if (id === 'review-tab') loadReviews();
+  if (id === 'logs-tab') { loadLogSummary(); loadLogs(); }
+}
+
+function selectFund(f) {
+  currentFund = f;
+  document.querySelectorAll('[id^="fund-"]').forEach(el => el.classList.remove('active'));
+  document.getElementById('fund-' + f)?.classList.add('active');
+  document.getElementById('dash-fund').textContent = f;
+  loadDashboard();
+}
+
+function setMode(m) {
+  currentMode = m;
+  document.getElementById('pill-agent').className = 'pill' + (m==='agent' ? ' active' : '');
+  document.getElementById('pill-direct').className = 'pill' + (m==='direct' ? ' active' : '');
+}
+
+function quickCmd(cmd) {
+  switchTab('ai-chat');
+  document.getElementById('chat-in').value = cmd + ' ' + currentFund;
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────
+async function loadDashboard() {
+  const today = new Date().toISOString().split('T')[0];
+  try {
+    const [exp, pending, logSum] = await Promise.all([
+      apiFetch(`/query/risk/exposure/${currentFund}?as_of_date=${today}`).catch(()=>null),
+      apiFetch('/review-ui/inbox').catch(()=>null),
+      apiFetch('/logs-ui/summary').catch(()=>null),
+    ]);
+    if (exp) renderDashMetrics(exp);
+    if (pending) {
+      const cnt = pending.count || 0;
+      document.getElementById('m-pending').textContent = cnt;
+      document.getElementById('m-pending').className = 'm-value ' + (cnt > 0 ? 'warn' : 'ok');
+      setBadge(cnt);
+    }
+    if (logSum) {
+      document.getElementById('m-logs').textContent = logSum.total_count || 0;
+      renderAssetTypes(exp); renderIssuers(exp);
+    }
+  } catch(e) { console.error('Dashboard load failed', e); }
+}
+
+function renderDashMetrics(d) {
+  const wam = d.wam_days||0, wal = d.wal_days||0;
+  const dl = d.daily_liquid_pct||0, wl = d.weekly_liquid_pct||0;
+  set('m-wam', wam.toFixed(1)+' 天', wam>60?'err':wam>50?'warn':'ok');
+  set('m-wal', wal.toFixed(1)+' 天', wal>120?'err':wal>100?'warn':'ok');
+  set('m-dliq', dl.toFixed(2)+'%', dl<7.5?'err':dl<10?'warn':'ok');
+  set('m-wliq', wl.toFixed(2)+'%', wl<15?'err':wl<20?'warn':'ok');
+  set('m-comp', d.is_compliant?'✅ 合規':'❌ 違規', d.is_compliant?'ok':'err');
+}
+
+function set(id, val, cls='') {
+  const el = document.getElementById(id); if(el){ el.textContent=val; if(cls) el.className='m-value '+cls; }
+}
+
+function renderAssetTypes(d) {
+  const el = document.getElementById('dash-asset-types');
+  if (!d?.by_asset_type) { el.textContent='暫無數據'; return; }
+  const rows = Object.entries(d.by_asset_type)
+    .sort((a,b)=>b[1].pct-a[1].pct)
+    .map(([k,v])=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #1a1f2e"><span style="color:#e2e8f0">${k}</span><span style="color:#60a5fa;font-weight:600">${v.pct?.toFixed(1)||0}%</span></div>`)
+    .join('');
+  el.innerHTML = rows || '<div style="color:#4a5568">暫無數據</div>';
+}
+
+function renderIssuers(d) {
+  const el = document.getElementById('dash-issuers');
+  if (!d?.top_issuers?.length) { el.textContent='暫無數據'; return; }
+  const rows = d.top_issuers.slice(0,5)
+    .map(i=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #1a1f2e"><span style="color:#e2e8f0;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${i.issuer}">${i.issuer||'N/A'}</span><span style="color:#60a5fa;font-weight:600;margin-left:8px">${i.pct?.toFixed(1)||0}%</span></div>`)
+    .join('');
+  el.innerHTML = rows;
+}
+
+// ── Review Inbox ──────────────────────────────────────────────────
+async function loadReviews() {
+  const cat = document.getElementById('review-filter')?.value || '';
+  const url = '/review-ui/inbox' + (cat ? '?category='+cat : '');
+  const data = await apiFetch(url).catch(()=>null);
+  const list = document.getElementById('review-list');
+  if (!data || !data.reviews?.length) {
+    list.innerHTML = '<div style="color:#4a5568;text-align:center;padding:30px;font-size:12px">📭 暫無待審核請求</div>';
+    setBadge(0); return;
+  }
+  setBadge(data.count);
+  list.innerHTML = data.reviews.map(r => `
+    <div class="review-item priority-${r.priority}" id="ri-${r.review_id}" onclick="selectReview('${r.review_id}')">
+      <div class="review-header">
+        <div class="review-title">${escHtml(r.title)}</div>
+        <span class="cat-badge cat-${r.category}">${r.category}</span>
+      </div>
+      <div class="review-meta">
+        <span>📁 ${r.fund_id||'N/A'}</span>
+        <span>📅 ${r.as_of_date||'N/A'}</span>
+        <span>⏱ ${Math.round(r.remaining_minutes||0)}分鐘剩餘</span>
+        <span class="status-badge st-${r.status}">${r.status}</span>
+        ${r.ai_recommendation ? `<span style="font-size:10px;background:#052e16;color:#4ade80;padding:1px 6px;border-radius:3px">🤖 小富: ${r.ai_recommendation}</span>` : '<span style="font-size:10px;color:#4b5563">🤖 AI分析中...</span>'}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function filterReviews(cat) { loadReviews(); }
+
+async function selectReview(rid) {
+  currentReviewId = rid;
+  document.querySelectorAll('.review-item').forEach(el=>el.classList.remove('selected'));
+  document.getElementById('ri-'+rid)?.classList.add('selected');
+  const data = await apiFetch('/review-ui/inbox/'+rid).catch(()=>null);
+  const ai = await apiFetch('/review-ui/inbox/'+rid+'/ai-review').catch(()=>null);
+  renderReviewDetail(data, ai);
+}
+
+function renderReviewDetail(d, ai) {
+  const panel = document.getElementById('review-detail');
+  if (!d) { panel.innerHTML='<div class="detail-empty">載入失敗</div>'; return; }
+
+  const payload = JSON.stringify(d.payload||{}, null, 2);
+  const aiHtml = renderXiaoFuPanel(ai, d.category);
+  const decisionHistory = (d.decisions||[]).map(dec=>
+    `<div style="background:#0a0d14;border-radius:5px;padding:8px;margin-bottom:6px;font-size:11px">
+      <span style="color:${dec.action==='APPROVE'?'#4ade80':'#f87171'};font-weight:600">${dec.action}</span>
+      <span style="color:#718096;margin:0 6px">by</span>
+      <span style="color:#e2e8f0">${dec.reviewer}</span>
+      <span style="color:#4b5563;float:right">${fmtTime(dec.decided_at)}</span>
+      ${dec.notes?`<div style="color:#9ca3af;margin-top:4px">${escHtml(dec.notes)}</div>`:''}
+    </div>`
+  ).join('') || '<div style="color:#4a5568;font-size:11px">暫無決策記錄</div>';
+
+  const isActionable = ['PENDING','IN_REVIEW'].includes(d.status);
+  const autoApprovable = ai?.ai_result?.auto_approvable && ai?.ai_recommendation === 'APPROVE' && !['COMPLIANCE_BREACH','HIGH_RISK'].includes(d.category);
+
+  panel.innerHTML = `
+    <div style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span class="cat-badge cat-${d.category}">${d.category}</span>
+        <span class="status-badge st-${d.status}">${d.status}</span>
+        ${d.priority===1?'<span style="color:#ef4444;font-size:11px">🔴 緊急</span>':''}
+      </div>
+      <div style="font-size:14px;font-weight:600;color:#fff;margin-bottom:6px">${escHtml(d.title)}</div>
+      <div style="font-size:11px;color:#718096;display:flex;gap:12px">
+        <span>基金: ${d.fund_id||'N/A'}</span>
+        <span>日期: ${d.as_of_date||'N/A'}</span>
+        <span>觸發: ${d.triggered_by}</span>
+        <span>SLA: ${d.sla_minutes}分鐘</span>
+      </div>
+    </div>
+
+    <div style="margin-bottom:12px">
+      <div style="font-size:11px;font-weight:600;color:#718096;margin-bottom:6px;text-transform:uppercase">摘要</div>
+      <div style="font-size:12px;color:#cbd5e0;line-height:1.6;background:#0a0d14;border-radius:5px;padding:10px">${escHtml(d.summary)}</div>
+    </div>
+
+    ${aiHtml}
+
+    ${d.artefact_url ? `<div style="margin-bottom:12px"><a href="${d.artefact_url}" target="_blank" class="btn btn-outline btn-sm">📎 查看報告文件</a></div>` : ''}
+
+    <div style="margin-bottom:12px">
+      <div style="font-size:11px;font-weight:600;color:#718096;margin-bottom:6px;text-transform:uppercase">原始 Payload</div>
+      <div class="payload-box">${escHtml(payload)}</div>
+    </div>
+
+    <div style="margin-bottom:12px">
+      <div style="font-size:11px;font-weight:600;color:#718096;margin-bottom:6px;text-transform:uppercase">決策歷史</div>
+      ${decisionHistory}
+    </div>
+
+    ${isActionable ? `
+    <div style="border-top:1px solid #2d3748;padding-top:12px">
+      <div style="font-size:11px;font-weight:600;color:#718096;margin-bottom:8px;text-transform:uppercase">人工審核決策</div>
+      <textarea class="reviewer-input" id="review-notes" placeholder="審核備注（拒絕時必填原因）..."></textarea>
+      <div class="actions-bar" style="margin-top:8px">
+        ${autoApprovable ? `<button class="btn btn-ghost btn-sm" onclick="aiAutoApprove('${d.review_id}')" style="color:#34d399;border:1px solid #065f46">🤖 採納小富建議（自動批准）</button>` : ''}
+        <button class="btn btn-primary btn-sm" onclick="approveReview('${d.review_id}')">✅ 批准</button>
+        <button class="btn btn-danger btn-sm" onclick="rejectReview('${d.review_id}')">❌ 拒絕</button>
+        <button class="btn btn-ghost btn-sm" onclick="claimReview('${d.review_id}')">👤 認領</button>
+      </div>
+    </div>` : `<div style="color:#4b5563;font-size:11px;padding-top:8px;border-top:1px solid #2d3748">審核已完成 (${d.status})</div>`}
+  `;
+}
+
+function renderXiaoFuPanel(ai, category) {
+  if (!ai) return '';
+  if (ai.ai_status === 'pending') {
+    return `<div class="xiaofu-panel"><div class="xiaofu-header"><div class="xiaofu-avatar">富</div><span class="xiaofu-name">小富</span><span class="xiaofu-tag">AI審核</span></div><div class="xiaofu-pending">⏳ 小富正在分析中，請稍候...</div></div>`;
+  }
+  const r = ai.ai_result || {};
+  const concerns = (r.key_concerns||[]).map(c=>`<li>${escHtml(c)}</li>`).join('');
+  const refs = (r.regulatory_refs||[]).map(ref=>`<code style="background:#0a0d14;padding:1px 5px;border-radius:3px;font-size:10px;margin-right:4px">${escHtml(ref)}</code>`).join('');
+  const forceHuman = ['COMPLIANCE_BREACH','HIGH_RISK'].includes(category);
+  return `
+    <div class="xiaofu-panel" style="margin-bottom:12px">
+      <div class="xiaofu-header">
+        <div class="xiaofu-avatar">富</div>
+        <span class="xiaofu-name">小富</span>
+        <span class="xiaofu-tag">AI審核</span>
+        <span class="risk-tag risk-${r.risk_level||'UNKNOWN'}" style="margin-left:8px">${r.risk_level||'UNKNOWN'}</span>
+        <span class="rec-badge rec-${r.recommendation||'REQUIRE_HUMAN'}">${r.recommendation||'REQUIRE_HUMAN'}</span>
+        <span style="color:#4b5563;font-size:10px;margin-left:auto">信心度: ${((r.confidence||0)*100).toFixed(0)}%</span>
+      </div>
+      <div style="font-size:12px;color:#9ca3af;line-height:1.6;margin-bottom:8px">${escHtml(r.reasoning||'')}</div>
+      ${concerns ? `<ul class="concern-list">${concerns}</ul>` : ''}
+      ${refs ? `<div style="margin-top:6px">${refs}</div>` : ''}
+      ${forceHuman ? `<div style="font-size:11px;color:#fbbf24;margin-top:8px;padding:6px;background:#1c1a00;border-radius:4px">⚠️ 此類別必須人工審核，小富無法自動批准</div>` : ''}
+      ${r.reviewer_note ? `<div class="xiaofu-note">${escHtml(r.reviewer_note)}</div>` : ''}
+    </div>`;
+}
+
+// ── Review 操作 ───────────────────────────────────────────────────
+async function approveReview(rid) {
+  const notes = document.getElementById('review-notes')?.value || '';
+  const data = await apiPost(`/review-ui/inbox/${rid}/approve`, {reviewer: reviewerId, notes});
+  if (data) { alert('✅ 已批准'); loadReviews(); selectReview(rid); }
+}
+async function rejectReview(rid) {
+  const reason = document.getElementById('review-notes')?.value?.trim();
+  if (!reason) { alert('拒絕時必須填寫原因'); return; }
+  const data = await apiPost(`/review-ui/inbox/${rid}/reject`, {reviewer: reviewerId, reason});
+  if (data) { alert('❌ 已拒絕'); loadReviews(); selectReview(rid); }
+}
+async function claimReview(rid) {
+  const data = await apiPost(`/review-ui/inbox/${rid}/claim`, {reviewer: reviewerId});
+  if (data) { alert('👤 已認領'); selectReview(rid); }
+}
+async function aiAutoApprove(rid) {
+  if (!confirm('確定採納小富的自動批准建議？')) return;
+  const data = await apiPost(`/review-ui/inbox/${rid}/ai-approve`, {});
+  if (data) { alert('🤖 小富自動批准已執行'); loadReviews(); selectReview(rid); }
+}
+
+// ── Operation Logs ────────────────────────────────────────────────
+async function loadLogSummary() {
+  const data = await apiFetch('/logs-ui/summary').catch(()=>null);
+  if (!data) return;
+  const el = document.getElementById('log-summary-metrics');
+  const byLvl = data.by_level||{};
+  el.innerHTML = `
+    <div class="metric"><div class="m-label">總日誌</div><div class="m-value info">${data.total_count||0}</div></div>
+    <div class="metric"><div class="m-label">錯誤</div><div class="m-value ${(data.error_count||0)>0?'err':'ok'}">${data.error_count||0}</div></div>
+    <div class="metric"><div class="m-label">WARNING</div><div class="m-value warn">${byLvl.WARNING||0}</div></div>
+    <div class="metric"><div class="m-label">平均耗時</div><div class="m-value">${data.avg_duration_ms||0} ms</div></div>
+  `;
+}
+
+async function loadLogs() {
+  const params = new URLSearchParams({
+    limit: logLimit, offset: logOffset,
+    ...(gv('f-level') && {level: gv('f-level')}),
+    ...(gv('f-category') && {category: gv('f-category')}),
+    ...(gv('f-actor') && {actor: gv('f-actor')}),
+    ...(gv('f-fund') && {fund_id: gv('f-fund')}),
+    ...(gv('f-status') && {status: gv('f-status')}),
+    ...(gv('f-min-dur') && {min_duration_ms: gv('f-min-dur')}),
+  });
+  const data = await apiFetch('/logs-ui/?' + params).catch(()=>null);
+  const tbody = document.getElementById('log-tbody');
+  if (!data?.logs?.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#4a5568;padding:20px">暫無日誌記錄</td></tr>';
+    return;
+  }
+  logTotal = data.total;
+  tbody.innerHTML = data.logs.map(l => {
+    const dur = l.duration_ms;
+    const durClass = !dur ? '' : dur > 5000 ? 'duration-very-slow' : dur > 1000 ? 'duration-slow' : 'duration-ok';
+    return `<tr>
+      <td style="white-space:nowrap;color:#718096">${fmtTime(l.log_time)}</td>
+      <td><span class="log-level lv-${l.level}">${l.level}</span></td>
+      <td><span class="cat-chip">${l.category}</span></td>
+      <td style="color:#e2e8f0">${escHtml(l.actor||'')}</td>
+      <td style="color:#cbd5e0;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(l.action||'')}">${escHtml(l.action||'')}</td>
+      <td style="color:#60a5fa">${l.fund_id||''}</td>
+      <td class="${durClass}">${dur!=null?dur+'ms':''}</td>
+      <td><span style="color:${l.status==='ok'?'#4ade80':l.status==='error'?'#f87171':'#fbbf24'}">${l.status}</span></td>
+    </tr>`;
+  }).join('');
+
+  const pag = document.getElementById('log-pagination');
+  const total = data.total; const pages = Math.ceil(total/logLimit);
+  const cur = Math.floor(logOffset/logLimit)+1;
+  pag.innerHTML = `
+    <span>共 ${total} 條</span>
+    <button class="btn btn-ghost btn-sm" onclick="goLogPage(${Math.max(0,logOffset-logLimit)})" ${logOffset===0?'disabled':''}>◀</button>
+    <span>第 ${cur}/${Math.max(1,pages)} 頁</span>
+    <button class="btn btn-ghost btn-sm" onclick="goLogPage(${logOffset+logLimit})" ${logOffset+logLimit>=total?'disabled':''}>▶</button>
+  `;
+}
+
+function goLogPage(off) { logOffset=off; loadLogs(); }
+function gv(id) { return document.getElementById(id)?.value||''; }
+function debounceLoadLogs() { clearTimeout(_debounceTimer); _debounceTimer=setTimeout(loadLogs, 600); }
+function clearLogFilters() {
+  ['f-level','f-category','f-actor','f-fund','f-status','f-min-dur'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  logOffset=0; loadLogs();
+}
+
+// ── Chat ──────────────────────────────────────────────────────────
+async function sendMsg() {
+  const inp = document.getElementById('chat-in');
+  const text = inp.value.trim(); if (!text) return;
+  inp.value = '';
+  const msgs = document.getElementById('chat-msgs');
+  msgs.innerHTML += `<div class="msg user">${escHtml(text)}</div>`;
+  const typingId = 'typing-' + Date.now();
+  msgs.innerHTML += `<div class="msg agent" id="${typingId}"><div class="sender">🤖 小富</div><span style="color:#718096">思考中...</span></div>`;
+  msgs.scrollTop = msgs.scrollHeight;
+  const today = new Date().toISOString().split('T')[0];
+  try {
+    const resp = await apiPost('/agent/chat', {task:text, fund_id:currentFund, date:today, mode:currentMode});
+    document.getElementById(typingId).innerHTML = `<div class="sender">🤖 小富</div>${escHtml(resp?.reply||JSON.stringify(resp)).replace(/\n/g,'<br>')}`;
+  } catch(e) {
+    document.getElementById(typingId).innerHTML = `<div class="sender">🤖 小富</div><span style="color:#f87171">請求失敗: ${e.message}</span>`;
+  }
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+// ── Utilities ─────────────────────────────────────────────────────
+async function apiFetch(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function apiPost(url, body) {
+  const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  if (!r.ok) { const err=await r.text(); alert('錯誤: '+err); return null; }
+  return r.json();
+}
+function setBadge(n) {
+  const b1=document.getElementById('badge-count'), b2=document.getElementById('tab-badge');
+  if (n>0) { b1.textContent=n; b1.style.display=''; b2.textContent=n; b2.style.display=''; }
+  else { b1.style.display='none'; b2.style.display='none'; }
+}
+async function pollPending() {
+  const data = await apiFetch('/review-ui/inbox').catch(()=>null);
+  if (data) setBadge(data.count||0);
+}
+function fmtTime(ts) {
+  if (!ts) return '';
+  return new Date(ts).toLocaleString('zh-HK', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>

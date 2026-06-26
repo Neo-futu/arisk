@@ -1,0 +1,19 @@
+{
+  "buckets": {
+    "fsi-risk-artefacts": {
+      "description": "風控計算結果、報表 xlsx、圖表 PNG",
+      "prefix_policies": {
+        "reports/": {"versioning": true, "lifecycle_days": 365},
+        "snapshots/": {"versioning": true, "lifecycle_days": 730},
+        "exports/": {"versioning": false, "lifecycle_days": 90}
+      }
+    },
+    "fsi-raw-data": {
+      "description": "Wind 原始數據 dump、上傳持倉文件",
+      "prefix_policies": {
+        "wind/": {"versioning": false, "lifecycle_days": 180},
+        "uploads/": {"versioning": true, "lifecycle_days": 365}
+      }
+    }
+  }
+}

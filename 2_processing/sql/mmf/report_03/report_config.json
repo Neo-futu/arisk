@@ -1,0 +1,154 @@
+{
+  "report_id": "report_03",
+  "report_name": "MMF整體分析日報",
+  "description": "對應 SmartReport/03：所有 MMF 基金管理層彙總視角",
+  "excel_template": "Template.xlsm",
+  "params": {
+    "evaluate_date": "DATE — 估值日期",
+    "trade_days_ahead": "INT — 默認5，用於05_assets_5y.sql",
+    "rate_shock_bps": "NUMERIC — 默認50，用於17_stress_test.sql"
+  },
+  "sheet_layout": {
+    "日报-sql导入数据": {
+      "note": "SQL 標籤在行3（01~07）、行23（08/04/05）、行42（06）、行60（09/11/40）、行78（13）、行94（10/12/16）、行116（03）",
+      "row3_area":  "01.sql@A3→A5 | 02.sql@I3→I5 | 07.sql@L3→L5（流通受限，暫無）",
+      "row23_area": "08.sql@A23→A26 | 04.sql@D23→D26 | 05.sql@I23→I26",
+      "row42_area": "06.sql@A42→A44",
+      "row60_area": "09.sql@A60→A62（暫無） | 11.sql@D60→D62（暫無） | 40.sql@F60→F62（暫無）",
+      "row78_area": "13.sql@A78→A80（暫無）",
+      "row94_area": "10.sql@A94→A96（暫無） | 12.sql@E94→E96 | 16.sql@K94→K96",
+      "row116_area":"03.sql@A116→A118"
+    },
+    "持仓数据":           "17.sql@R2（標記），A1=表頭 → 數據從 A2 開始",
+    "回购明细":           "15.sql@M2（標記），A1=表頭 → 數據從 A2 開始",
+    "其他监控-sql导入数据": "18.sql@A2→A4 | 19.sql@D2→D4 | 39.sql@A14→A16 | 42.sql@A551→A553（暫無）"
+  },
+  "queries": [
+    {
+      "id": "03_01",
+      "name": "NAV偏離概況",
+      "sql": "01_nav_deviation.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "A5",
+      "header": false,
+      "description": "01.sql@A3，表頭A4，數據A5：NAV/偏差/WAM/WAL/每萬份/7日年化"
+    },
+    {
+      "id": "03_02",
+      "name": "一個月以內流動性",
+      "sql": "02_liquidity_1m.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "I5",
+      "header": false,
+      "description": "02.sql@I3，表頭I4，數據I5：現金 + 一年期以內利率債"
+    },
+    {
+      "id": "03_08",
+      "name": "期限結構（按評級）",
+      "sql": "08_duration_structure.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "A26",
+      "header": false,
+      "description": "08.sql@A23，表頭A24-A25，數據A26：按評級類別加權平均久期"
+    },
+    {
+      "id": "03_04",
+      "name": "前十大持有人",
+      "sql": "04_top_holders.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "D26",
+      "header": false,
+      "description": "04.sql@D23，表頭D24-D25，數據D26：機構佔比/前1大/前10大"
+    },
+    {
+      "id": "03_05",
+      "name": "T+N到期資產",
+      "sql": "05_assets_5y.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "I26",
+      "header": false,
+      "description": "05.sql@I23，表頭I24-I25，數據I26：T+1~T+5到期各類資產"
+    },
+    {
+      "id": "03_06",
+      "name": "資產組合月度",
+      "sql": "06_asset_portfolio.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "A44",
+      "header": false,
+      "description": "06.sql@A42，表頭A43，數據A44：NAV/現金/債券/存款/CD/回購細分"
+    },
+    {
+      "id": "03_12",
+      "name": "T+1至T+5到期",
+      "sql": "12_maturity_t1t5.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "E96",
+      "header": false,
+      "description": "12.sql@E94，表頭E95，數據E96：SFC每日/每週流動性基礎數據"
+    },
+    {
+      "id": "03_16",
+      "name": "月季年末到期",
+      "sql": "16_maturity_buckets.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "K96",
+      "header": false,
+      "description": "16.sql@K94，表頭K95，數據K96：T+14/T+30/月末/季末/年末到期分佈"
+    },
+    {
+      "id": "03_03",
+      "name": "偏差拆分",
+      "sql": "03_deviation_breakdown.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "A118",
+      "header": false,
+      "description": "03.sql@A116，表頭A117，數據A118：偏差按品種拆解（CD/企業債/政府債）"
+    },
+    {
+      "id": "03_17",
+      "name": "壓力測試持倉明細",
+      "sql": "17_stress_test.sql",
+      "sheet": "持仓数据",
+      "start_cell": "A2",
+      "header": false,
+      "description": "17.sql@R2（標記），A1=表頭，數據A2：+50bp壓測各持倉估值和偏差"
+    },
+    {
+      "id": "03_15",
+      "name": "回購持倉明細",
+      "sql": "15_overnight_repo.sql",
+      "sheet": "回购明细",
+      "start_cell": "A2",
+      "header": false,
+      "description": "15.sql@M2（標記），A1=表頭，數據A2：所有回購持倉明細"
+    },
+    {
+      "id": "03_41",
+      "name": "存款/CD銀行分佈",
+      "sql": "41_bank_deposit_dist.sql",
+      "sheet": "其他监控-sql导入数据",
+      "start_cell": "A4",
+      "header": false,
+      "description": "18.sql@A2，表頭A3，數據A4：存款+CD按銀行/期限分佈"
+    },
+    {
+      "id": "03_19",
+      "name": "債券存單加權平均期限",
+      "sql": "19_wam_detail.sql",
+      "sheet": "其他监控-sql导入数据",
+      "start_cell": "D4",
+      "header": false,
+      "description": "19.sql@D2，表頭D3，數據D4：利率債/信用債/存單加權平均剩餘期限"
+    },
+    {
+      "id": "03_39",
+      "name": "銀行間隔夜回購",
+      "sql": "39_ib_overnight_repo.sql",
+      "sheet": "其他监控-sql导入数据",
+      "start_cell": "A16",
+      "header": false,
+      "description": "39.sql@A14，表頭A15，數據A16：銀行間市場隔夜逆回購明細"
+    }
+  ]
+}

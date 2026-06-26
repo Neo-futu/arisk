@@ -1,0 +1,18 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq-dev gcc && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml .
+RUN pip install --no-cache-dir -e "."
+
+COPY 1_datastorage/ 1_datastorage/
+COPY 2_processing/ 2_processing/
+
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+
+EXPOSE 8001
+
+CMD ["uvicorn", "2_processing.api.main:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "2"]

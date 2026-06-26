@@ -1,0 +1,115 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fsi-processing-api
+  labels:
+    app: fsi-risk-platform
+    component: processing-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: fsi-risk-platform
+      component: processing-api
+  template:
+    metadata:
+      labels:
+        app: fsi-risk-platform
+        component: processing-api
+    spec:
+      containers:
+      - name: processing-api
+        image: fsi-risk-platform/processing:latest
+        ports:
+        - containerPort: 8001
+        envFrom:
+        - secretRef:
+            name: fsi-secrets
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 30
+          periodSeconds: 15
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fsi-entry-web
+  labels:
+    app: fsi-risk-platform
+    component: entry-web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: fsi-risk-platform
+      component: entry-web
+  template:
+    metadata:
+      labels:
+        app: fsi-risk-platform
+        component: entry-web
+    spec:
+      containers:
+      - name: entry-web
+        image: fsi-risk-platform/entry:latest
+        ports:
+        - containerPort: 8000
+        envFrom:
+        - secretRef:
+            name: fsi-secrets
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fsi-celery-worker
+  labels:
+    app: fsi-risk-platform
+    component: celery-worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: fsi-risk-platform
+      component: celery-worker
+  template:
+    metadata:
+      labels:
+        app: fsi-risk-platform
+        component: celery-worker
+    spec:
+      containers:
+      - name: celery-worker
+        image: fsi-risk-platform/processing:latest
+        command: ["celery", "-A", "2_processing.workers.celery_app", "worker", "--loglevel=info"]
+        envFrom:
+        - secretRef:
+            name: fsi-secrets
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"

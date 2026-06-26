@@ -1,0 +1,15 @@
+{
+  "name": "fsi-risk-skills",
+  "description": "FSI Risk Platform — 風控分析、MMF合規、業績歸因、報表生成技能集",
+  "version": "0.1.0",
+  "type": "skills_and_commands",
+  "skills": {
+    "path": "skills/",
+    "pattern": "*/SKILL.md"
+  },
+  "commands": {
+    "path": "commands/",
+    "pattern": "*.md"
+  },
+  "mcp": "../4_mcp/.mcp.json"
+}

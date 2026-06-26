@@ -1,0 +1,29 @@
+{
+  "mcpServers": {
+    "wind": {
+      "description": "WindAPI 行情、財務、指數數據連接器",
+      "command": "python",
+      "args": ["-m", "4_mcp.wind.wind_mcp_server"],
+      "env": {
+        "WIND_USERNAME": "${WIND_USERNAME}",
+        "WIND_PASSWORD": "${WIND_PASSWORD}"
+      }
+    },
+    "internal-db": {
+      "description": "內部 Postgres 數據庫 MCP（只讀）",
+      "command": "python",
+      "args": ["-m", "4_mcp.internal.internal_mcp_server"],
+      "env": {
+        "DATABASE_URL": "${DATABASE_URL}",
+        "MCP_GATEWAY_SECRET": "${MCP_GATEWAY_SECRET}"
+      }
+    },
+    "fsi-gateway": {
+      "description": "統一 MCP Gateway — 路由到 wind / internal-db / redis",
+      "url": "http://localhost:${MCP_GATEWAY_PORT:-8002}/mcp",
+      "headers": {
+        "Authorization": "Bearer ${MCP_GATEWAY_SECRET}"
+      }
+    }
+  }
+}

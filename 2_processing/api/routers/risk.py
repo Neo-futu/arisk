@@ -1,0 +1,73 @@
+"""風控 API Router。"""
+from datetime import date
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..deps import get_db, verify_api_key
+from ...risk.exposure_engine import compute_exposure
+from ...risk.var_calculator import compute_historical_var
+
+router = APIRouter(dependencies=[Depends(verify_api_key)])
+
+
+@router.get("/exposure/{fund_id}")
+async def get_exposure(
+    fund_id: str,
+    as_of_date: Annotated[date, Query(description="持倉日期 YYYY-MM-DD")],
+    db: AsyncSession = Depends(get_db),
+):
+    """計算基金指定日期的暴露指標及 MMF 合規狀態。"""
+    result = await compute_exposure(fund_id, as_of_date, db)
+    return {
+        "fund_id": result.fund_id,
+        "as_of_date": result.as_of_date,
+        "total_nav_hkd": result.total_nav_hkd,
+        "wam_days": result.wam_days,
+        "wal_days": result.wal_days,
+        "daily_liquid_pct": result.daily_liquid_pct,
+        "weekly_liquid_pct": result.weekly_liquid_pct,
+        "is_compliant": result.is_compliant,
+        "breach_flags": result.breach_flags,
+        "by_asset_type": {k: {"mv_hkd": v, "pct": v / result.total_nav_hkd * 100 if result.total_nav_hkd else 0}
+                          for k, v in result.by_asset_type.items()},
+        "by_currency": {k: {"mv_hkd": v, "pct": v / result.total_nav_hkd * 100 if result.total_nav_hkd else 0}
+                        for k, v in result.by_currency.items()},
+        "by_maturity_bucket": {k: {"mv_hkd": v, "pct": v / result.total_nav_hkd * 100 if result.total_nav_hkd else 0}
+                                for k, v in result.by_maturity_bucket.items()},
+        "top_issuers": sorted(
+            [{"issuer": k, "mv_hkd": v, "pct": v / result.total_nav_hkd * 100 if result.total_nav_hkd else 0}
+             for k, v in result.by_issuer.items()],
+            key=lambda x: x["pct"], reverse=True
+        )[:10],
+    }
+
+
+@router.get("/var/{fund_id}")
+async def get_var(
+    fund_id: str,
+    as_of_date: Annotated[date, Query()],
+    confidence: float = 0.99,
+    horizon_days: int = 1,
+    method: str = "historical",
+    db: AsyncSession = Depends(get_db),
+):
+    """計算基金 VaR。method: historical | parametric"""
+    if method == "parametric":
+        from ...risk.var_calculator import compute_parametric_var
+        result = await compute_parametric_var(fund_id, as_of_date, db, confidence, horizon_days)
+    else:
+        result = await compute_historical_var(fund_id, as_of_date, db, confidence, horizon_days)
+
+    return {
+        "fund_id": result.fund_id,
+        "as_of_date": result.as_of_date,
+        "confidence": result.confidence,
+        "horizon_days": result.horizon_days,
+        "var_hkd": result.var_amount_hkd,
+        "var_pct_nav": result.var_pct_nav,
+        "cvar_hkd": result.cvar_amount_hkd,
+        "method": result.method,
+        "sample_size": result.sample_size,
+    }

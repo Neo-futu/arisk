@@ -1,0 +1,26 @@
+name: compliance-agent
+description: >
+  MMF 合規監控 Agent：對照 SFC 守則第8.2章進行逐條合規核查，
+  生成合規報告並對違規發出預警。
+
+system:
+  file: ../../3_skills/skills/mmf-compliance/SKILL.md
+
+skills:
+  - path: ../../3_skills/skills/mmf-compliance/SKILL.md
+  - path: ../../3_skills/skills/risk-analysis/SKILL.md
+
+callable_agents:
+  - manifest: subagents/rule-checker.yaml
+    description: "對照守則逐條核查"
+  - manifest: subagents/flag-writer.yaml
+    description: "記錄違規標誌到 DB，發出預警"
+
+tools:
+  mcp:
+    - internal-db
+
+metadata:
+  security_tier: "internal"
+  regulatory_framework: "SFC UT Code Section II Chapter 8.2"
+  write_holder: "flag-writer"

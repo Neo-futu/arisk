@@ -1,0 +1,47 @@
+name: risk-agent
+description: >
+  基金風控分析 Agent：自主完成持倉拉取 → 暴露計算 → VaR → MMF 合規核查 → 報告生成。
+  支援 agent 模式（複雜多步驟）和直接查詢模式（低延遲）。
+
+system:
+  file: ../../3_skills/skills/risk-analysis/SKILL.md
+
+skills:
+  - path: ../../3_skills/skills/risk-analysis/SKILL.md
+  - path: ../../3_skills/skills/mmf-compliance/SKILL.md
+  - path: ../../3_skills/skills/xlsx-report/SKILL.md
+
+callable_agents:
+  - manifest: subagents/data-puller.yaml
+    description: "負責從 Processing API 和 MCP 拉取持倉和市場數據"
+  - manifest: subagents/risk-calculator.yaml
+    description: "執行風控計算（暴露、VaR、WAM/WAL）"
+  - manifest: subagents/report-writer.yaml
+    description: "生成格式化報告（Markdown + xlsx），唯一有寫權限的子 agent"
+
+tools:
+  mcp:
+    - fsi-gateway
+    - internal-db
+
+metadata:
+  security_tier: "internal"
+  data_sensitivity: "confidential"
+  write_holder: "report-writer"
+
+  # 人工審核設定（對應 human-review SKILL.md 審核觸發矩陣）
+  human_review_required: true
+  review_gates:
+    - gate: "pre_report_write"
+      trigger: "always"              # 每次報告寫入前必須審核
+      category: "REPORT_PUBLISH"
+    - gate: "compliance_breach"
+      trigger: "breach_flags_nonempty"   # 有任何 SFC 守則違規時
+      category: "COMPLIANCE_BREACH"
+    - gate: "high_risk"
+      trigger: "var_pct_nav_gt_5"    # VaR > NAV 5%
+      category: "HIGH_RISK"
+  review_sla_minutes:
+    COMPLIANCE_BREACH: 30
+    HIGH_RISK: 30
+    REPORT_PUBLISH: 120

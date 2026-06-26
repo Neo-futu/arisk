@@ -1,0 +1,93 @@
+{
+  "report_id": "report_06",
+  "report_name": "MMF特定基金詳細分析",
+  "description": "對應 SmartReport/06：針對指定 port_ids 的完整詳細分析（9張報表）",
+  "excel_template": "Template.xlsx",
+  "params": {
+    "port_ids": "TEXT[] — 目標組合ID列表，如 ['BHMMF001','BHMMF002']",
+    "evaluate_date": "DATE — 估值日期"
+  },
+  "queries": [
+    {
+      "id": "06_01",
+      "name": "資產分佈",
+      "sql": "01_asset_breakdown.sql",
+      "sheet": "资产分布原始",
+      "start_cell": "A3",
+      "header": false,
+      "description": "估值科目彙總 + 利率/信用/存單細分 + AA+以下資產標識"
+    },
+    {
+      "id": "06_02",
+      "name": "銀行存單匯總",
+      "sql": "02_bank_cd_summary.sql",
+      "sheet": "银行存款交易对手原始",
+      "start_cell": "A3",
+      "header": false,
+      "description": "存款+CD按銀行分組排名，附合計行"
+    },
+    {
+      "id": "06_03",
+      "name": "到期梯度",
+      "sql": "03_maturity_ladder.sql",
+      "sheet": "剩余期限结构原始",
+      "start_cell": "A3",
+      "header": false,
+      "description": "D+1至D+20逐天 + 月/季/年段分佈，按資產類型分行"
+    },
+    {
+      "id": "06_04",
+      "name": "可提前支取存款到期",
+      "sql": "04_deposit_early_redeem.sql",
+      "sheet": "可提支存款到期原始",
+      "start_cell": "A3",
+      "header": false,
+      "description": "僅統計可提前支取的存款，按銀行/D+1~D+7+到期分佈"
+    },
+    {
+      "id": "06_05",
+      "name": "影子定價偏離度分析",
+      "sql": "05_deviation_analysis.sql",
+      "sheet": "影子定价偏离度原始",
+      "start_cell": "A2",
+      "header": false,
+      "description": "當前偏離度 + 低/中/高壓情景測試 + 各品種成本/市值/久期"
+    },
+    {
+      "id": "06_06",
+      "name": "資產變現情況",
+      "sql": "06_asset_liquidity.sql",
+      "sheet": "资产变现原始",
+      "start_cell": "A2",
+      "header": false,
+      "description": "各資產類別 T+1~T+7 可變現金額（政府債/信用債/CD/回購）"
+    },
+    {
+      "id": "06_07",
+      "name": "信用債及質押債發行人",
+      "sql": "07_credit_repo_issuers.sql",
+      "sheet": "信用债及质押债原始",
+      "start_cell": "A2",
+      "header": false,
+      "description": "信用債發行人清單 + 逆回購融出交易對手清單"
+    },
+    {
+      "id": "06_08",
+      "name": "每日運作簡報（SFC合規）",
+      "sql": "08_compliance_daily.sql",
+      "sheet": "十全每日运作简报原始",
+      "start_cell": "A2",
+      "header": false,
+      "description": "規模/每萬份/最大單一信用債/流動受限/WAM/WAL/回購/前十大持有人"
+    },
+    {
+      "id": "06_09",
+      "name": "T+1日可用流動性",
+      "sql": "09_t1_liquidity.sql",
+      "sheet": "T+1日可用流动性原始",
+      "start_cell": "A2",
+      "header": false,
+      "description": "T+1流動性六大來源：現金/自然到期/回購淨差/可融資/債券變現/存款提取"
+    }
+  ]
+}
