@@ -47,14 +47,19 @@ CREATE TABLE IF NOT EXISTS fsi.para_peer_group (
 COMMENT ON TABLE fsi.para_peer_group IS '基金可比組：如「香港股票基金」/「香港貨幣市場基金」，業績排名和分位數分析基礎';
 
 CREATE TABLE IF NOT EXISTS fsi.para_peer_group_member (
-    group_id    INTEGER      NOT NULL,
-    fund_code   VARCHAR(32)  NOT NULL,
-    fund_name   VARCHAR(200),
-    begin_date  DATE         NOT NULL,
-    end_date    DATE,
+    group_id      INTEGER      NOT NULL,
+    fund_code     VARCHAR(32)  NOT NULL,   -- SFC 認可代碼（如 AGW600）
+    fund_name     VARCHAR(200),            -- 基金名稱（中文）
+    fund_name_en  VARCHAR(200),            -- 基金名稱（英文）
+    wind_code     VARCHAR(32),             -- Wind 行情代碼（如 BOC000014.OF / 3421.OF）
+    begin_date    DATE         NOT NULL,
+    end_date      DATE,
+    memo          TEXT,                    -- 備注（如類別確認、Wind 暫無等）
     PRIMARY KEY (group_id, fund_code, begin_date)
 );
 COMMENT ON TABLE fsi.para_peer_group_member IS '可比組成員：同類公募基金列表，定期更新，計算組合業績分位排名';
+COMMENT ON COLUMN fsi.para_peer_group_member.fund_code    IS 'SFC 認可代碼，香港監管機構授予的唯一識別碼';
+COMMENT ON COLUMN fsi.para_peer_group_member.wind_code    IS 'Wind 行情代碼，用於從 Wind 拉取 NAV/收益率數據；ETF用股票代碼（如3421.OF）';
 
 CREATE TABLE IF NOT EXISTS fsi.para_port_peer_mapping (
     port_id     VARCHAR(16)  NOT NULL,

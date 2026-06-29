@@ -26,7 +26,8 @@ def connect():
 
 CLEANUP_SQL = [
     # 持倉/數據表（按 port_id + evaluate_date / confirm_date）
-    ("balance_holder_rank",    "confirm_date  = %s AND port_id = ANY(%s)"),
+    ("balance_holder_by_channel","confirm_date  = %s AND port_id = ANY(%s)"),
+    ("balance_holder_rank",      "confirm_date  = %s AND port_id = ANY(%s)"),
     ("balance_holder_summary", "confirm_date  = %s AND port_id = ANY(%s)"),
     ("balance_valuation_sheet","evaluate_date = %s AND port_id = ANY(%s)"),
     ("balance_repo",           "evaluate_date = %s AND port_id = ANY(%s)"),
@@ -35,8 +36,9 @@ CLEANUP_SQL = [
     ("balance_bond",           "evaluate_date = %s AND port_id = ANY(%s)"),
     ("balance_portfolio_asset","evaluate_date = %s AND port_id = ANY(%s)"),
     ("balance_portfolio_mmf",  "evaluate_date = %s AND port_id = ANY(%s)"),  # 貨基專有
-    ("balance_portfolio_nav",  "evaluate_date = %s AND port_id = ANY(%s)"),
-    ("svc_risk_perf",          "as_of_date    = %s AND port_id = ANY(%s)"),
+    ("transact_portfolio_cashflow","evaluate_date = %s AND port_id = ANY(%s)"),
+    ("balance_portfolio_nav",     "evaluate_date = %s AND port_id = ANY(%s)"),
+    ("svc_risk_perf",             "as_of_date    = %s AND port_id = ANY(%s)"),
     # 主數據表（僅刪測試組合）
     ("para_portfolio",         "port_id = ANY(%s)"),
 ]
@@ -45,11 +47,18 @@ CLEANUP_SQL = [
 def cleanup(conn):
     cur = conn.cursor()
     total = 0
+    # 日期範圍：TEST_DATE-2 ~ TEST_DATE+1（含歷史和T+1數據）
+    from datetime import timedelta, date
+    base = date.fromisoformat(TEST_DATE) if isinstance(TEST_DATE, str) else TEST_DATE
+    date_range = [str(base + timedelta(days=d)) for d in range(-2, 2)]
+
     for tbl, where in CLEANUP_SQL:
         if any(k in where for k in ("confirm_date", "evaluate_date", "as_of_date")):
+            # 清所有相關日期的測試數據
+            date_col = next(k for k in ("confirm_date","evaluate_date","as_of_date") if k in where)
             cur.execute(
-                f"DELETE FROM fsi.{tbl} WHERE {where}",
-                (TEST_DATE, list(PORT_IDS))
+                f"DELETE FROM fsi.{tbl} WHERE {date_col} = ANY(%s::date[]) AND port_id = ANY(%s)",
+                (date_range, list(PORT_IDS))
             )
         else:
             cur.execute(

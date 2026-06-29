@@ -11,16 +11,16 @@
   "sheet_layout": {
     "日报-sql导入数据": {
       "note": "SQL 標籤在行3（01~07）、行23（08/04/05）、行42（06）、行60（09/11/40）、行78（13）、行94（10/12/16）、行116（03）",
-      "row3_area":  "01.sql@A3→A5 | 02.sql@I3→I5 | 07.sql@L3→L5（流通受限，暫無）",
+      "row3_area": "01.sql@A3→A5 | 02.sql@I3→I5 | 07.sql@L3→L5（流通受限，暫無）",
       "row23_area": "08.sql@A23→A26 | 04.sql@D23→D26 | 05.sql@I23→I26",
       "row42_area": "06.sql@A42→A44",
       "row60_area": "09.sql@A60→A62（暫無） | 11.sql@D60→D62（暫無） | 40.sql@F60→F62（暫無）",
       "row78_area": "13.sql@A78→A80（暫無）",
       "row94_area": "10.sql@A94→A96（暫無） | 12.sql@E94→E96 | 16.sql@K94→K96",
-      "row116_area":"03.sql@A116→A118"
+      "row116_area": "03.sql@A116→A118"
     },
-    "持仓数据":           "17.sql@R2（標記），A1=表頭 → 數據從 A2 開始",
-    "回购明细":           "15.sql@M2（標記），A1=表頭 → 數據從 A2 開始",
+    "持仓数据": "17.sql@R2（標記），A1=表頭 → 數據從 A2 開始",
+    "回购明细": "15.sql@M2（標記），A1=表頭 → 數據從 A2 開始",
     "其他监控-sql导入数据": "18.sql@A2→A4 | 19.sql@D2→D4 | 39.sql@A14→A16 | 42.sql@A551→A553（暫無）"
   },
   "queries": [
@@ -29,7 +29,7 @@
       "name": "NAV偏離概況",
       "sql": "01_nav_deviation.sql",
       "sheet": "日报-sql导入数据",
-      "start_cell": "A5",
+      "start_cell": "A6",
       "header": false,
       "description": "01.sql@A3，表頭A4，數據A5：NAV/偏差/WAM/WAL/每萬份/7日年化"
     },
@@ -38,9 +38,18 @@
       "name": "一個月以內流動性",
       "sql": "02_liquidity_1m.sql",
       "sheet": "日报-sql导入数据",
-      "start_cell": "I5",
+      "start_cell": "I6",
       "header": false,
       "description": "02.sql@I3，表頭I4，數據I5：現金 + 一年期以內利率債"
+    },
+    {
+      "id": "03_07",
+      "name": "流通受限資產",
+      "sql": "07_restricted_liquidity.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "L6",
+      "header": false,
+      "description": "07.sql@L3，表頭L4，數據L5：提前支取有罰息存款+逆回購+ABS（10個工作日以上）"
     },
     {
       "id": "03_08",
@@ -79,6 +88,15 @@
       "description": "06.sql@A42，表頭A43，數據A44：NAV/現金/債券/存款/CD/回購細分"
     },
     {
+      "id": "03_10",
+      "name": "前三日申贖金額",
+      "sql": "10_sub_redeem_3d.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "A96",
+      "header": false,
+      "description": "10.sql@A94，表頭A95，數據A96：明日確認/今昨合計/T-2日淨值"
+    },
+    {
       "id": "03_12",
       "name": "T+1至T+5到期",
       "sql": "12_maturity_t1t5.sql",
@@ -97,6 +115,33 @@
       "description": "16.sql@K94，表頭K95，數據K96：T+14/T+30/月末/季末/年末到期分佈"
     },
     {
+      "id": "03_09",
+      "name": "AAA以下持倉合計",
+      "sql": "09_sub_aaa_total.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "A62",
+      "header": false,
+      "description": "09.sql@A60，表頭A61，數據A62：AAA以下機構存款+存單+債券市值及佔NAV比"
+    },
+    {
+      "id": "03_11",
+      "name": "AAA以下單一發行人最大",
+      "sql": "11_sub_aaa_single_max.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "D62",
+      "header": false,
+      "description": "11.sql@D60，表頭D61，數據D62：單一AAA以下發行人佔NAV最大比率"
+    },
+    {
+      "id": "03_40",
+      "name": "AAA以下發行人明細",
+      "sql": "40_sub_aaa_detail.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "F62",
+      "header": false,
+      "description": "40.sql@F60，表頭F61，數據F62：按發行人展開的AAA以下持倉佔比明細"
+    },
+    {
       "id": "03_03",
       "name": "偏差拆分",
       "sql": "03_deviation_breakdown.sql",
@@ -104,6 +149,15 @@
       "start_cell": "A118",
       "header": false,
       "description": "03.sql@A116，表頭A117，數據A118：偏差按品種拆解（CD/企業債/政府債）"
+    },
+    {
+      "id": "03_13",
+      "name": "存款最大利差損",
+      "sql": "13_deposit_rate_loss.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "A80",
+      "header": false,
+      "description": "13.sql@A78，表頭A79，數據A80：有罰息存款提前支取的最大利差損金額"
     },
     {
       "id": "03_17",
@@ -124,13 +178,13 @@
       "description": "15.sql@M2（標記），A1=表頭，數據A2：所有回購持倉明細"
     },
     {
-      "id": "03_41",
-      "name": "存款/CD銀行分佈",
-      "sql": "41_bank_deposit_dist.sql",
+      "id": "03_18",
+      "name": "網商渠道存量",
+      "sql": "18_online_channel.sql",
       "sheet": "其他监控-sql导入数据",
       "start_cell": "A4",
       "header": false,
-      "description": "18.sql@A2，表頭A3，數據A4：存款+CD按銀行/期限分佈"
+      "description": "18.sql@A2，表頭A3，數據A4：網商渠道（螞蟻財富）存量份額規模"
     },
     {
       "id": "03_19",
@@ -149,6 +203,15 @@
       "start_cell": "A16",
       "header": false,
       "description": "39.sql@A14，表頭A15，數據A16：銀行間市場隔夜逆回購明細"
+    },
+    {
+      "id": "03_41",
+      "name": "存款存單銀行期限分佈",
+      "sql": "41_bank_deposit_dist.sql",
+      "sheet": "其他监控-sql导入数据",
+      "start_cell": "A27",
+      "header": false,
+      "description": "41.sql@A25，表頭A26，數據A27：存款+CD 按銀行分組、按期限段（3M/6M/1Y/1Y+）統計"
     }
   ]
 }

@@ -462,3 +462,23 @@ COMMENT ON COLUMN fsi.balance_valuation_sheet.weight_pct   IS '估值系統輸�
 
 CREATE INDEX IF NOT EXISTS idx_bal_vs_port_date ON fsi.balance_valuation_sheet(port_id, evaluate_date DESC);
 CREATE INDEX IF NOT EXISTS idx_bal_vs_subject   ON fsi.balance_valuation_sheet(subject_code);
+
+-- ────────────────────────────────────────────────────────────
+-- 15. 按銷售渠道持有人份額快照
+--   對應 T_Balance_Port_Holder_FundShare_SalesChannel
+--   用途：監控各渠道（螞蟻財富/銀行直銷/機構）的每日存量份額
+-- ────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS fsi.balance_holder_by_channel (
+    confirm_date    DATE          NOT NULL,
+    port_id         VARCHAR(16)   NOT NULL,
+    class_id        VARCHAR(32),
+    channel_id      VARCHAR(16)   NOT NULL,   -- 渠道代碼（000392=螞蟻財富）
+    channel_name    VARCHAR(120),
+    shares          NUMERIC(24,6),            -- 持有份額（份）；T_Balance_Port_Holder_FundShare_SalesChannel.Shares
+    amount          NUMERIC(24,2),            -- 持有金額（元）
+    unit_nav        NUMERIC(16,8),
+    PRIMARY KEY (confirm_date, port_id, channel_id)
+);
+COMMENT ON TABLE fsi.balance_holder_by_channel IS
+    '按銷售渠道持有人份額快照：對應 T_Balance_Port_Holder_FundShare_SalesChannel，
+     監控各渠道（螞蟻財富/銀行直銷/機構）每日存量份額，SalesChannelId=000392為網商渠道';

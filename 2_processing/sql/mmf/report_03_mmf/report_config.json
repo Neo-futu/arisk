@@ -1,0 +1,208 @@
+{
+  "report_id": "report_03_mmf",
+  "report_name": "MMF整體分析日報（xlsx版）",
+  "description": "report_03 的 xlsx 格式版本，去除 VBA/Wind 依賴，SQL 共用 report_03 目錄",
+  "excel_template": "Template.xlsx",
+  "params": {
+    "evaluate_date": "DATE — 估值日期",
+    "trade_days_ahead": "INT — 默認5，用於05_assets_5y.sql",
+    "rate_shock_bps": "NUMERIC — 默認50，用於17_stress_test.sql"
+  },
+  "sheet_layout": {
+    "日报-sql导入数据": "01~13/16/40.sql 數據",
+    "持仓数据": "17.sql 壓力測試持倉明細",
+    "回购明细": "15.sql 回購明細",
+    "其他监控-sql导入数据": "18/19/39/41.sql 監控數據"
+  },
+  "queries": [
+    {
+      "id": "03_01",
+      "name": "NAV偏離概況",
+      "sql": "01_nav_deviation.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "A6",
+      "header": false,
+      "description": "01.sql@A3，表頭A4，數據A5：NAV/偏差/WAM/WAL/每萬份/7日年化"
+    },
+    {
+      "id": "03_02",
+      "name": "一個月以內流動性",
+      "sql": "02_liquidity_1m.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "I6",
+      "header": false,
+      "description": "02.sql@I3，表頭I4，數據I5"
+    },
+    {
+      "id": "03_07",
+      "name": "流通受限資產",
+      "sql": "07_restricted_liquidity.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "L6",
+      "header": false,
+      "description": "07.sql@L3"
+    },
+    {
+      "id": "03_08",
+      "name": "期限結構（按評級）",
+      "sql": "08_duration_structure.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "A26",
+      "header": false,
+      "description": "08.sql@A23"
+    },
+    {
+      "id": "03_04",
+      "name": "前十大持有人",
+      "sql": "04_top_holders.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "D26",
+      "header": false,
+      "description": "04.sql@D23"
+    },
+    {
+      "id": "03_05",
+      "name": "T+N到期資產",
+      "sql": "05_assets_5y.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "I26",
+      "header": false,
+      "description": "05.sql@I23"
+    },
+    {
+      "id": "03_06",
+      "name": "資產組合月度",
+      "sql": "06_asset_portfolio.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "A44",
+      "header": false,
+      "description": "06.sql@A42"
+    },
+    {
+      "id": "03_10",
+      "name": "前三日申贖金額",
+      "sql": "10_sub_redeem_3d.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "A96",
+      "header": false,
+      "description": "10.sql@A94"
+    },
+    {
+      "id": "03_12",
+      "name": "T+1至T+5到期",
+      "sql": "12_maturity_t1t5.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "E96",
+      "header": false,
+      "description": "12.sql@E94"
+    },
+    {
+      "id": "03_16",
+      "name": "月季年末到期",
+      "sql": "16_maturity_buckets.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "K96",
+      "header": false,
+      "description": "16.sql@K94"
+    },
+    {
+      "id": "03_09",
+      "name": "AAA以下持倉合計",
+      "sql": "09_sub_aaa_total.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "A62",
+      "header": false,
+      "description": "09.sql@A60"
+    },
+    {
+      "id": "03_11",
+      "name": "AAA以下單一發行人最大",
+      "sql": "11_sub_aaa_single_max.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "D62",
+      "header": false,
+      "description": "11.sql@D60"
+    },
+    {
+      "id": "03_40",
+      "name": "AAA以下發行人明細",
+      "sql": "40_sub_aaa_detail.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "F62",
+      "header": false,
+      "description": "40.sql@F60"
+    },
+    {
+      "id": "03_03",
+      "name": "偏差拆分",
+      "sql": "03_deviation_breakdown.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "A118",
+      "header": false,
+      "description": "03.sql@A116"
+    },
+    {
+      "id": "03_13",
+      "name": "存款最大利差損",
+      "sql": "13_deposit_rate_loss.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "A80",
+      "header": false,
+      "description": "13.sql@A78"
+    },
+    {
+      "id": "03_17",
+      "name": "壓力測試持倉明細",
+      "sql": "17_stress_test.sql",
+      "sheet": "持仓数据",
+      "start_cell": "A2",
+      "header": false,
+      "description": "17.sql@R2（標記），A1=表頭，數據A2"
+    },
+    {
+      "id": "03_15",
+      "name": "回購持倉明細",
+      "sql": "15_overnight_repo.sql",
+      "sheet": "回购明细",
+      "start_cell": "A2",
+      "header": false,
+      "description": "15.sql@M2（標記），A1=表頭，數據A2"
+    },
+    {
+      "id": "03_18",
+      "name": "網商渠道存量",
+      "sql": "18_online_channel.sql",
+      "sheet": "其他监控-sql导入数据",
+      "start_cell": "A4",
+      "header": false,
+      "description": "18.sql@A2"
+    },
+    {
+      "id": "03_19",
+      "name": "債券存單加權平均期限",
+      "sql": "19_wam_detail.sql",
+      "sheet": "其他监控-sql导入数据",
+      "start_cell": "D4",
+      "header": false,
+      "description": "19.sql@D2"
+    },
+    {
+      "id": "03_39",
+      "name": "銀行間隔夜回購",
+      "sql": "39_ib_overnight_repo.sql",
+      "sheet": "其他监控-sql导入数据",
+      "start_cell": "A16",
+      "header": false,
+      "description": "39.sql@A14"
+    },
+    {
+      "id": "03_41",
+      "name": "存款存單銀行期限分佈",
+      "sql": "41_bank_deposit_dist.sql",
+      "sheet": "其他监控-sql导入数据",
+      "start_cell": "A27",
+      "header": false,
+      "description": "41.sql@A25"
+    }
+  ]
+}

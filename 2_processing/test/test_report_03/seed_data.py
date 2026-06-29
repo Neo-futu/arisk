@@ -162,16 +162,19 @@ def seed(conn):
 
     # ── balance_deposit ──────────────────────────────────────
     deposits = [
+        # value_date 設為較早日期，使持有天數>0，令利差損計算有意義
+        # 格式：(port_id, deposit_id, name, bank_id, bank_name, bank_group, ccy,
+        #        value_date, maturity_date, principal, interest_rate, penalty, weight)
         ("BHMMF001","DEP_BOCHK_01","中銀香港定存3M", "BOCHK","中國銀行(香港)","中銀集團","HKD",
-         TEST_DATE,TEST_DATE+timedelta(91), 150_000_000,0.0415,True, 0.0554),
+         TEST_DATE-timedelta(45), TEST_DATE+timedelta(46), 150_000_000,0.0415,True, 0.0554),  # 已持有45天
         ("BHMMF001","DEP_HSBC_01", "匯豐定存6M",    "HSBC", "匯豐銀行",      "匯豐集團","HKD",
-         TEST_DATE,TEST_DATE+timedelta(182),100_000_000,0.0428,True, 0.0370),
+         TEST_DATE-timedelta(30), TEST_DATE+timedelta(152),100_000_000,0.0428,True, 0.0370),  # 已持有30天
         ("BHMMF001","DEP_SCB_ON",  "渣打隔夜存款",  "SCB",  "渣打銀行",      "渣打集團","HKD",
-         TEST_DATE,TEST_DATE+timedelta(1),  50_000_000, 0.0410,False,0.0185),
+         TEST_DATE,               TEST_DATE+timedelta(1),  50_000_000, 0.0410,False,0.0185),  # 隔夜，無罰息
         ("BHMMF002","DEP_BOCHK_02","中銀香港定存6M","BOCHK","中國銀行(香港)","中銀集團","HKD",
-         TEST_DATE,TEST_DATE+timedelta(180),120_000_000,0.0420,True, 0.0648),
+         TEST_DATE-timedelta(60), TEST_DATE+timedelta(120),120_000_000,0.0420,True, 0.0648),  # 已持有60天
         ("BHMMF002","DEP_HSBC_02", "匯豐定存3M",   "HSBC", "匯豐銀行",      "匯豐集團","HKD",
-         TEST_DATE,TEST_DATE+timedelta(92), 80_000_000, 0.0425,True, 0.0432),
+         TEST_DATE-timedelta(20), TEST_DATE+timedelta(72), 80_000_000, 0.0425,True, 0.0432),  # 已持有20天
     ]
     for d in deposits:
         (pid,did,dname,bid,bname,bgrp,ccy,vd,md,princ,rate,penalty,wt) = d
@@ -294,6 +297,55 @@ def seed(conn):
             VALUES (%s, NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT DO NOTHING
         """, (pid, TEST_DATE, period, fr, br, ar, te, sharpe, info, maxdd))
+
+    # ── balance_holder_by_channel（網商渠道份額，供 18.sql 使用）────
+    channel_data = [
+        # port_id   channel_id  channel_name      shares（份）          amount（元）
+        ("BHMMF001","000392","螞蟻財富（網商）",  8_500_000_000, 8_500_000_000.0),  # 85億份≈85億元
+        ("BHMMF002","000392","螞蟻財富（網商）",  3_200_000_000, 3_200_000_000.0),  # 32億份
+        ("BHMMF001","000001","銀行直銷",           500_000_000,   500_000_000.0),
+        ("BHMMF002","000001","銀行直銷",           200_000_000,   200_000_000.0),
+    ]
+    for pid, cid, cname, shares, amount in channel_data:
+        cur.execute("""
+            INSERT INTO fsi.balance_holder_by_channel
+                (confirm_date, port_id, channel_id, channel_name,
+                 shares, amount, unit_nav)
+            VALUES (%s,%s,%s,%s,%s,%s,1.0)
+            ON CONFLICT DO NOTHING
+        """, (TEST_DATE, pid, cid, cname, shares, amount))
+
+    # ── balance_portfolio_nav 歷史（T-1/T-2，供 10.sql 申贖計算用）────
+    hist_nav = [
+        # port_id   ccy   date               net_asset
+        ("BHMMF001","HKD", TEST_DATE-timedelta(1), 2_692_000_000),  # T-1 NAV
+        ("BHMMF001","HKD", TEST_DATE-timedelta(2), 2_705_000_000),  # T-2 NAV
+        ("BHMMF002","HKD", TEST_DATE-timedelta(1), 1_843_000_000),  # T-1 NAV
+        ("BHMMF002","HKD", TEST_DATE-timedelta(2), 1_860_000_000),  # T-2 NAV
+    ]
+    for port_id, ccy, d, nav in hist_nav:
+        cur.execute("""
+            INSERT INTO fsi.balance_portfolio_nav
+                (evaluate_date, port_id, currency, net_asset,
+                 shares_outstanding, unit_nav, acc_unit_nav, day_return, loaded_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+            ON CONFLICT DO NOTHING
+        """, (d, port_id, ccy, nav, nav/1.0, 1.0, 1.0, 0.000118))
+
+    # ── transact_portfolio_cashflow（T+1申購數據，供 10.sql 明日確認）───
+    t1_cashflow = [
+        # port_id  currency  date(T+1)           net_purchase(淨申購，正=申購>贖回)
+        ("BHMMF001","HKD", TEST_DATE+timedelta(1),  80_000_000),   # 明日確認淨申購+8000萬
+        ("BHMMF002","HKD", TEST_DATE+timedelta(1), -50_000_000),   # 明日確認淨贖回-5000萬
+    ]
+    for port_id, ccy, d, net_pur in t1_cashflow:
+        cur.execute("""
+            INSERT INTO fsi.transact_portfolio_cashflow
+                (evaluate_date, port_id, currency,
+                 net_purchase, data_source, loaded_at)
+            VALUES (%s,%s,%s,%s,'TEST',NOW())
+            ON CONFLICT DO NOTHING
+        """, (d, port_id, ccy, net_pur))
 
     conn.commit()
     print(f"[OK] seed data inserted. evaluate_date={TEST_DATE}  port_ids={PORT_IDS}")

@@ -17,3 +17,4 @@ artefacts/
 *.xlsx
 *.pdf
 !tests/fixtures/*.xlsx
+!2_processing/sql/mmf/**/Template.xlsx
