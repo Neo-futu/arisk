@@ -342,8 +342,6 @@ ws16.column_dimensions['A'].width = 60
 # ══════════════════════════════════════════════════════════
 ws17 = wb.create_sheet('参数')
 ws17.sheet_properties.tabColor = TAB_RED
-
-# A~C：基礎參數
 for i, h in enumerate(['参数名称', '参数值', '说明'], 1):
     hdr(ws17, 1, i, h)
 params = [
@@ -358,27 +356,9 @@ for row, (name, val, desc) in enumerate(params, 2):
     ws17.cell(row=row, column=1, value=name)
     ws17.cell(row=row, column=2, value=val)
     ws17.cell(row=row, column=3, value=desc)
-
-# F：月末倒數第5交易日
-ws17['F1'] = '当前日期所在月倒数第5个交易日'
-ws17['F2'] = '=IF(DATE(YEAR(WORKDAY(TODAY(),-1)),MONTH(WORKDAY(TODAY(),-1)),1)=DATE(YEAR(TODAY()),MONTH(TODAY()),1),WORKDAY(EOMONTH(TODAY(),0),-5),WORKDAY(EOMONTH(TODAY(),-1),-5))'
-
-# K~N：今日 / 5交易日後 / HKEX 交易日曆（Wind TDays 函數，需在 Wind 環境刷新）
-ws17['K1'] = '今天'
-ws17['L1'] = '=TODAY()'
-ws17['M1'] = '=TODAY()'
-ws17['K2'] = '5个交易日后'
-ws17['L2'] = '=N5'
-ws17['N1'] = '=[1]!TDays(L1,"2026-12-15","HKEX","cols=1;rows=115")'
-
 ws17.column_dimensions['A'].width = 20
 ws17.column_dimensions['B'].width = 12
 ws17.column_dimensions['C'].width = 40
-ws17.column_dimensions['F'].width = 30
-ws17.column_dimensions['N'].width = 16
-
-# 注：N 欄的交易日曆靜態值（N2:N115）在首次 Wind 連線後自動填充，
-#     之後即使 Wind 未連線也會保留快取值
 
 # ── 保存 ─────────────────────────────────────────────────
 dest = Path('D:/vsproject/fsi-risk-platform/2_processing/sql/mmf/report_03_mmf/Template.xlsx')
