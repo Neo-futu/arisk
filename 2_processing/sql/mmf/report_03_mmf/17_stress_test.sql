@@ -16,8 +16,7 @@
 --   J  pct_nav              市值占净值比（%）
 --   K  dev_10k              偏离金额（万元）
 --   L  maturity_date        到期日
---   M  coupon_type          利率类型（FI=固息 FL=浮息 ZC=零息 0=存款）
---                          ↑ 輸出值對齊 Excel 模板 M$1="FI" 的判斷邏輯
+--   M  coupon_type          利率类型（FIXED=固息 FLOAT=浮息 ZERO=零息）
 --   N  duration             久期（年）：浮息債 = 0.5×剩餘全期 + 0.5×距下次付息日
 --   O  rating               评级
 --   P  is_current_quarter   是否当季到期
@@ -63,14 +62,7 @@ bonds AS (
         ROUND(COALESCE(b.market_value,0) / NULLIF(n.net_asset,0) * 100, 6) AS pct_nav,
         ROUND((COALESCE(b.market_value,0) - COALESCE(b.cost,0)) / 10000, 4) AS dev_10k,
         b.maturity_date,
-        -- 轉換為 Excel 模板格式：FI/FL/ZC/0，與 M$1="FI" 判斷對齊
-        CASE COALESCE(b.coupon_type, 'FIXED')
-            WHEN 'FIXED' THEN 'FI'
-            WHEN 'FLOAT' THEN 'FL'
-            WHEN 'ZERO'  THEN 'ZC'
-            WHEN 'ZC'    THEN 'ZC'
-            ELSE COALESCE(b.coupon_type, 'FI')
-        END                                                         AS coupon_type,
+        COALESCE(b.coupon_type, 'FIXED')                            AS coupon_type,
         -- 浮息債久期 = 0.5×剩餘全期天數/365 + 0.5×距下次付息日天數/365（同原始17.sql）
         -- 固定/零息債：直接使用存儲久期，缺失時用剩餘天數估算
         ROUND(
@@ -127,7 +119,7 @@ cds AS (
         ROUND(COALESCE(c.market_value,0) / NULLIF(n.net_asset,0) * 100, 6),
         ROUND((COALESCE(c.market_value,0) - COALESCE(c.cost,0)) / 10000, 4),
         c.maturity_date,
-        'FI'                                                        AS coupon_type,  -- CD 為固定利率
+        'FIXED'                                                     AS coupon_type,
         ROUND(COALESCE(c.duration, c.remaining_days / 365.0), 4),
         COALESCE(c.issuer_rating, 'NR'),
         CASE WHEN c.maturity_date <= qe.qend THEN '是' ELSE '否' END,
@@ -158,7 +150,7 @@ deposits AS (
         ROUND(COALESCE(d.principal,0) / NULLIF(n.net_asset,0) * 100, 6),
         0::NUMERIC,
         d.maturity_date,
-        '0'                                                         AS coupon_type,  -- 存款不重定價
+        'DEPOSIT'                                                   AS coupon_type,
         0::NUMERIC,
         COALESCE(d.bank_rating, 'NR'),
         CASE WHEN d.maturity_date <= qe.qend THEN '是' ELSE '否' END,
