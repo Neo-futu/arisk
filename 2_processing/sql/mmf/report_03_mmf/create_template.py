@@ -320,13 +320,94 @@ ws14['A1'].font = Font(color='808080', size=9)
 ws14.column_dimensions['A'].width = 50
 
 # ══════════════════════════════════════════════════════════
-# 8. 债券及存单新
+# 8. 债券及存单新  (完整壓力測試計算層，按 Template 精確還原)
 # ══════════════════════════════════════════════════════════
 ws15 = wb.create_sheet('债券及存单新')
 ws15.sheet_properties.tabColor = TAB_RED
-ws15['A1'] = '【債券及存單新】壓力測試計算層 — 引用「持仓数据」sheet，使用者填入公式'
-ws15['A1'].font = Font(color='808080', size=9)
-ws15.column_dimensions['A'].width = 60
+
+YEL = PatternFill('solid', fgColor='FFFF00')
+MAX_DATA_ROWS = 5570   # 預留行數，與 Template 一致
+
+# ── Row 1：參數行 ────────────────────────────────────────
+# A1：TDaysOffset 為 Wind DDE 公式，用 WORKDAY 近似替代；
+#      Wind 環境下可手動改回 =[1]!TDaysOffset(TODAY(),"Offset=-1")
+c = ws15['A1']; c.value = '=WORKDAY(TODAY(),-1)'; c.fill = YEL
+c.number_format = 'yyyy\\-mm\\-dd'; c.font = Font(bold=True)
+c = ws15['B1']; c.value = '=参数!L2'; c.fill = YEL
+c.number_format = 'mm-dd-yy'; c.font = Font(bold=True)
+c = ws15['M1']; c.value = 'FI'; c.fill = YEL; c.font = Font(bold=True)
+c = ws15['N1']; c.value = '0.005'; c.fill = YEL
+c.number_format = '0.00%'; c.font = Font(bold=True)
+c = ws15['Q1']; c.value = '公式列'
+c.number_format = '0.0000_ '; c.font = Font(bold=True)
+
+# ── Row 2：表頭 ──────────────────────────────────────────
+HDR = [
+    ('A','组合名称','0.00_ ',None), ('B','证券类型','0.00_ ',None),
+    ('C','证券代码','0.00_ ',None), ('D','证券名称','0.00_ ',None),
+    ('E','数量','0.00_ ',None),     ('F','成本','0.00_ ',None),
+    ('G','市值净价','0.00_ ',None), ('H','成本全价','0.00_ ',None),
+    ('I','影价偏离度','0.00_ ',None),('J','市值占净值比（%）','0.00_ ',None),
+    ('K','偏离金额（万元）','0.00_ ',None),('L','到期日','mm-dd-yy',None),
+    ('M','利率类型','0.00_ ',None), ('N','久期','0.00_ ',None),
+    ('O','评级','0.00_ ',None),     ('P','是否当季到期','0.00_ ',None),
+    ('Q','压力情景净价(亿元)','0.0000_ ','FFFF00'),
+    ('R','压力情景全价(亿元)','0.0000_ ','FFFF00'),
+    ('S','压力情景偏离金额(万元)','#,##0.00','FFFF00'),
+    ('T','压力情景偏离金额绝对值(万元)','#,##0.00','FFFF00'),
+    ('U','债券类别','0.00_ ','FFFF00'),
+    ('V','变现系数','0.00_ ','FFFF00'),
+    ('W','压力情景全价修正(亿元)','0.0000_ ','FFFF00'),
+    ('X','压力情景偏离金额修正(万元)','0.00_ ','FFFF00'),
+    ('Y','需变现偏离资产金额（亿元）','0.00_ ','FFFF00'),
+]
+for col_letter, text, fmt, fill_color in HDR:
+    c = ws15[f'{col_letter}2']
+    c.value = text; c.number_format = fmt; c.font = Font(bold=True)
+    if fill_color:
+        c.fill = PatternFill('solid', fgColor=fill_color)
+
+# ── Rows 3~MAX_DATA_ROWS：公式行 ─────────────────────────
+# Q 欄壓力淨價公式（與 Template 完全相同）
+Q_TMPL = (
+    '=IF(M{n}=$M$1,G{n}-$N$1*N{n}*G{n},'
+    'IF(C{n}="160309",VLOOKUP($A$1,shibor债定价!$A:$F,6,FALSE)*E{n},'
+    'IF(C{n}="130208",VLOOKUP($A$1,shibor债定价!$AQ:$BC,6,FALSE)*E{n},'
+    'IF(C{n}="160305",VLOOKUP($A$1,shibor债定价!$O:$T,6,FALSE)*E{n},'
+    'IF(C{n}="110236",VLOOKUP($A$1,shibor债定价!#REF!,6,FALSE)*E{n},'
+    'IF(C{n}="160202",VLOOKUP($A$1,shibor债定价!$AC:$AO,6,FALSE)*E{n},'
+    'IF(C{n}="110236",VLOOKUP($A$1,shibor债定价!#REF!,6,FALSE)*E{n},'
+    'IF(C{n}="150315",VLOOKUP($A$1,shibor债定价!$AQ:$AZ,6,FALSE)*E{n},'
+    'IF(C{n}="130235",VLOOKUP($A$1,shibor债定价!$BE:$BN,6,FALSE)*E{n},'
+    '0)))))))))/10^8'
+)
+DATA_COLS = list('ABCDEFGHIJKLMNOP')   # 16 欄引用持仓数据
+print('  生成 债券及存单新 公式行...')
+for row in range(3, MAX_DATA_ROWS + 1):
+    src = row - 1   # 持仓数据 從 A2 開始，對應 row=3 → src=2
+    n   = row
+    # A:P — 引用持仓数据
+    for ci, cl in enumerate(DATA_COLS, 1):
+        ws15.cell(row=row, column=ci).value = f'=持仓数据!{cl}{src}'
+    ws15.cell(row=row, column=12).number_format = 'mm-dd-yy'   # L 欄日期格式
+    # Q:Y — 壓力測試計算公式
+    c = ws15.cell(row=row, column=17); c.value = Q_TMPL.format(n=n); c.number_format = '0.0000_ '
+    c = ws15.cell(row=row, column=18); c.value = f'=(H{n}-F{n}+Q{n}*10^8)/10^8'; c.number_format = '0.0000_ '
+    c = ws15.cell(row=row, column=19); c.value = f'=IF(Q{n}=0,0,Q{n}*10^8-F{n})/10^4'; c.number_format = '#,##0.00'
+    c = ws15.cell(row=row, column=20); c.value = f'=ABS(S{n})'; c.number_format = '#,##0.00'
+    c = ws15.cell(row=row, column=21); c.value = f'=IF(ISNUMBER(FIND("CD",D{n})),"同业存单",IF(O{n}="利率品种","利率债","其他"))'
+    c = ws15.cell(row=row, column=22); c.value = f'=IF(M{n}=0,0,IF(M{n}="FL",0.05,IF(U{n}="其他",0.2,0.8)))'
+    c = ws15.cell(row=row, column=23); c.value = f'=R{n}*V{n}'; c.number_format = '0.0000_ '
+    c = ws15.cell(row=row, column=24); c.value = f'=V{n}*S{n}'; c.number_format = '0.00_ '
+    c = ws15.cell(row=row, column=25); c.value = f'=VLOOKUP(A{n},组合!$M$19:$X$32,10,FALSE)'; c.number_format = '0.00'
+    if row % 1000 == 0:
+        print(f'    {row}/{MAX_DATA_ROWS} 行完成')
+
+# ── AA 欄：組合名稱參考列表（共12筆）────────────────────
+AA_DATA = ['组合名称','薪金宝','现金增利','现金宝','沃利货币',
+           '天利货币','收益宝','快线货币','惠利货币','华夏货币','财富宝','保证金货币']
+for i, val in enumerate(AA_DATA, 3):
+    ws15.cell(row=i, column=27, value=val).number_format = '0.00_ '
 
 # ══════════════════════════════════════════════════════════
 # 9. 债券及存单新程序结果NEW
