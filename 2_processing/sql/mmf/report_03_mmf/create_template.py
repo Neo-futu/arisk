@@ -7,7 +7,7 @@ sys.stdout.reconfigure(encoding='utf-8')
 warnings.filterwarnings('ignore')
 
 from openpyxl import Workbook
-from openpyxl.styles import PatternFill, Font, Alignment
+from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from pathlib import Path
 
@@ -328,54 +328,60 @@ ws15.sheet_properties.tabColor = TAB_RED
 YEL  = PatternFill('solid', fgColor='FFFF00')
 NFMT = '0.00_ '   # 通用數值格式
 MAX_ROWS = 5570   # 預留行數
+_THIN = Side(border_style='thin')
+_BORDER_THIN = Border(top=_THIN, bottom=_THIN, left=_THIN, right=_THIN)
+_ALIGN_CTR = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
 # ── Row 1：參數行 ─────────────────────────────────────────
-def _r1(ws, col, val, fmt='General', bold=True, fill=None):
+def _r1(ws, col, val, fmt='General', bold=True, fill=None, border=None):
     c = ws[col + '1']
     c.value = val
     c.number_format = fmt
     c.font = Font(bold=bold)
-    if fill: c.fill = fill
+    if fill:   c.fill   = fill
+    if border: c.border = border
 
 _r1(ws15, 'A', '=TDaysOffset(TODAY(),"Offset=-1")', 'yyyy\\-mm\\-dd', fill=YEL)
 _r1(ws15, 'B', '=参数!L2',  'mm-dd-yy', fill=YEL)
 _r1(ws15, 'M', 'FI',        fill=YEL)
 _r1(ws15, 'N', '0.005',     '0.00%',    fill=YEL)
-_r1(ws15, 'Q', '公式列',    '0.0000_ ')
+_r1(ws15, 'Q', '公式列',    '0.0000_ ', border=_BORDER_THIN)  # Q1 有邊框
 
-# ── Row 2：表頭 ───────────────────────────────────────────
+# ── Row 2：表頭（thin 四邊框 + center/wrap + size=10）────
 _H2 = [
-    ('A','组合名称',     NFMT,      None),
-    ('B','证券类型',     NFMT,      None),
-    ('C','证券代码',     NFMT,      None),
-    ('D','证券名称',     NFMT,      None),
-    ('E','数量',         NFMT,      None),
-    ('F','成本',         NFMT,      None),
-    ('G','市值净价',     NFMT,      None),
-    ('H','成本全价',     NFMT,      None),
-    ('I','影价偏离度',   NFMT,      None),
-    ('J','市值占净值比（%）', NFMT, None),
-    ('K','偏离金额（万元）',  NFMT, None),
-    ('L','到期日',       NFMT,      None),
-    ('M','利率类型',     NFMT,      None),
-    ('N','久期',         NFMT,      None),
-    ('O','评级',         NFMT,      None),
-    ('P','是否当季到期', NFMT,      None),
-    ('Q','压力情景净价(亿元)',        '0.0000_ ', 'FFFF00'),
-    ('R','压力情景全价(亿元)',        '0.0000_ ', 'FFFF00'),
-    ('S','压力情景偏离金额(万元)',    '#,##0.00', 'FFFF00'),
+    ('A','组合名称',               NFMT,       None),
+    ('B','证券类型',               NFMT,       None),
+    ('C','证券代码',               NFMT,       None),
+    ('D','证券名称',               NFMT,       None),
+    ('E','数量',                   NFMT,       None),
+    ('F','成本',                   NFMT,       None),
+    ('G','市值净价',               NFMT,       None),
+    ('H','成本全价',               NFMT,       None),
+    ('I','影价偏离度',             NFMT,       None),
+    ('J','市值占净值比（%）',      NFMT,       None),
+    ('K','偏离金额（万元）',       NFMT,       None),
+    ('L','到期日',                 NFMT,       None),
+    ('M','利率类型',               NFMT,       None),
+    ('N','久期',                   NFMT,       None),
+    ('O','评级',                   NFMT,       None),
+    ('P','是否当季到期',           NFMT,       None),
+    ('Q','压力情景净价(亿元)',     '0.0000_ ', 'FFFF00'),
+    ('R','压力情景全价(亿元)',     '0.0000_ ', 'FFFF00'),
+    ('S','压力情景偏离金额(万元)', '#,##0.00', 'FFFF00'),
     ('T','压力情景偏离金额绝对值(万元)', '#,##0.00', 'FFFF00'),
-    ('U','债券类别',                 NFMT,       'FFFF00'),
-    ('V','变现系数',                 NFMT,       'FFFF00'),
-    ('W','压力情景全价修正(亿元)',   '0.0000_ ', 'FFFF00'),
-    ('X','压力情景偏离金额修正(万元)', NFMT,     'FFFF00'),
-    ('Y','需变现偏离资产金额（亿元）', NFMT,     'FFFF00'),
+    ('U','债券类别',               NFMT,       'FFFF00'),
+    ('V','变现系数',               NFMT,       'FFFF00'),
+    ('W','压力情景全价修正(亿元)', '0.0000_ ', 'FFFF00'),
+    ('X','压力情景偏离金额修正(万元)', NFMT,   'FFFF00'),
+    ('Y','需变现偏离资产金额（亿元）', NFMT,   'FFFF00'),
 ]
 for col, text, fmt, fill_color in _H2:
     c = ws15[col + '2']
-    c.value = text
+    c.value         = text
     c.number_format = fmt
-    c.font = Font(bold=True)
+    c.font          = Font(bold=True, size=10)
+    c.border        = _BORDER_THIN
+    c.alignment     = _ALIGN_CTR
     if fill_color:
         c.fill = PatternFill('solid', fgColor=fill_color)
 
