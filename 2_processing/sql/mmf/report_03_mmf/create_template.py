@@ -359,26 +359,29 @@ for row, (name, val, desc) in enumerate(base_params, 2):
     ws17.cell(row=row, column=2, value=val)
     ws17.cell(row=row, column=3, value=desc)
 
-# ── F1:F2：月末倒數第5交易日（純 Excel 公式，無 Wind 依賴）─
+# ── F1:N1 / F2:L2：按 Template 參数 sheet 精確對應 ────────
+BLUE_FILL = PatternFill('solid', fgColor='00B0F0')
+
+# Row 1
 ws17['F1'] = '当前日期所在月倒数第5个交易日'
-ws17['F1'].font = Font(bold=True, size=9)
-ws17['F2'] = ('=IF(DATE(YEAR(WORKDAY(TODAY(),-1)),MONTH(WORKDAY(TODAY(),-1))+1,1)-1'
-              '=WORKDAY(DATE(YEAR(WORKDAY(TODAY(),-1)),MONTH(WORKDAY(TODAY(),-1))+1,1),-1),'
-              'WORKDAY(DATE(YEAR(WORKDAY(TODAY(),-1)),MONTH(WORKDAY(TODAY(),-1))+1,1)-1,-4),'
-              'WORKDAY(DATE(YEAR(WORKDAY(TODAY(),-1)),MONTH(WORKDAY(TODAY(),-1))+1,1)-1,-5))')
-
-# ── K1:M2：今天 / 5交易日後（純 Excel 公式）─────────────
 ws17['K1'] = '今天'
-ws17['K1'].font = Font(bold=True, size=9)
-ws17['K2'] = '5个交易日后'
-ws17['K2'].font = Font(bold=True, size=9)
-ws17['L1'] = '=TODAY()'
-ws17['L2'] = '=N5'     # N5 = 今天起第5個交易日（來自 N 列交易日曆）
-ws17['M1'] = '=TODAY()'
+ws17['L1'].value          = '=TODAY()'
+ws17['L1'].number_format  = 'mm-dd-yy'
+ws17['M1'].value          = '=TODAY()'
+ws17['M1'].number_format  = 'mm-dd-yy'
+ws17['N1'].value          = '=[1]!TDays(L1,"2026-12-15","tradingcalendar=HKEX","cols=1;rows=118")'
+ws17['N1'].number_format  = 'yyyy\\-mm\\-dd'
 
-# ── N1 說明 / N2:N118 靜態 HKEX 交易日（Wind 取得後固化）─
-ws17['N1'] = 'HKEX Trading Days'
-ws17['N1'].font = Font(bold=True, size=9)
+# Row 2
+ws17['F2'].value          = ('=IF(DATE(YEAR(WORKDAY(TODAY(),-1)),MONTH(WORKDAY(TODAY(),-1))+1,1)-1'
+                              '=WORKDAY(DATE(YEAR(WORKDAY(TODAY(),-1)),MONTH(WORKDAY(TODAY(),-1))+1,1),-1),'
+                              'WORKDAY(DATE(YEAR(WORKDAY(TODAY(),-1)),MONTH(WORKDAY(TODAY(),-1))+1,1)-1,-4),'
+                              'WORKDAY(DATE(YEAR(WORKDAY(TODAY(),-1)),MONTH(WORKDAY(TODAY(),-1))+1,1)-1,-5))')
+ws17['F2'].fill           = BLUE_FILL
+ws17['F2'].number_format  = 'mm-dd-yy'
+ws17['K2'] = '5个交易日后'
+ws17['L2'].value          = '=N5'
+ws17['L2'].number_format  = 'mm-dd-yy'
 # N2:N118 = 117 個 HKEX 交易日（2026-07-02 至 2026-12-15）
 from datetime import date
 hkex_days = [
