@@ -6,12 +6,10 @@ import sys, warnings
 sys.stdout.reconfigure(encoding='utf-8')
 warnings.filterwarnings('ignore')
 
-from openpyxl import Workbook, load_workbook
+from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Font, Alignment
 from openpyxl.utils import get_column_letter
 from pathlib import Path
-
-dest = Path('D:/vsproject/fsi-risk-platform/2_processing/sql/mmf/report_03_mmf/Template.xlsx')
 
 # ── 儲存格填充色 ──────────────────────────────────────────
 YELLOW = PatternFill('solid', fgColor='FFFF99')   # SQL 數據區
@@ -322,54 +320,13 @@ ws14['A1'].font = Font(color='808080', size=9)
 ws14.column_dimensions['A'].width = 50
 
 # ══════════════════════════════════════════════════════════
-# 8. 债券及存单新  — 直接從現有 Template.xlsx 複製，原封不動
+# 8. 债券及存单新
 # ══════════════════════════════════════════════════════════
-# 策略：先讀取目前 Template.xlsx 的 债券及存单新 sheet 到記憶體，
-#       再把所有儲存格（值、格式、欄寬）逐一寫入新 workbook。
-#       這樣保證 100% 原封不動，不因手寫公式而有任何差異。
-import copy as _copy
-
-_src_wb  = load_workbook(str(dest), data_only=False)
-_src_ws  = _src_wb['债券及存单新']
-
 ws15 = wb.create_sheet('债券及存单新')
 ws15.sheet_properties.tabColor = TAB_RED
-
-# 欄寬 / 行高
-for col_letter, dim in _src_ws.column_dimensions.items():
-    ws15.column_dimensions[col_letter].width = dim.width
-for row_idx, dim in _src_ws.row_dimensions.items():
-    ws15.row_dimensions[row_idx].height = dim.height
-
-# 凍結窗格
-if _src_ws.freeze_panes:
-    ws15.freeze_panes = _src_ws.freeze_panes
-
-# 逐格複製（值 + 格式）
-print('  複製 债券及存单新 (約139K 格)...')
-count = 0
-for row in _src_ws.iter_rows():
-    for src_cell in row:
-        if src_cell.value is None:
-            continue
-        dst = ws15.cell(row=src_cell.row, column=src_cell.column)
-        dst.value = src_cell.value
-        if src_cell.has_style:
-            dst.font          = _copy.copy(src_cell.font)
-            dst.fill          = _copy.copy(src_cell.fill)
-            dst.alignment     = _copy.copy(src_cell.alignment)
-            dst.border        = _copy.copy(src_cell.border)
-            dst.number_format = src_cell.number_format
-        count += 1
-        if count % 50000 == 0:
-            print(f'    {count} 格已複製...')
-
-# 合併儲存格
-for merge in _src_ws.merged_cells.ranges:
-    ws15.merge_cells(str(merge))
-
-_src_wb.close()
-print(f'  完成，共複製 {count} 格')
+ws15['A1'] = '【債券及存單新】壓力測試計算層 — 引用「持仓数据」sheet，使用者填入公式'
+ws15['A1'].font = Font(color='808080', size=9)
+ws15.column_dimensions['A'].width = 60
 
 # ══════════════════════════════════════════════════════════
 # 9. 债券及存单新程序结果NEW
@@ -431,6 +388,7 @@ ws17.column_dimensions['M'].width = 14
 ws17.column_dimensions['N'].width = 14
 
 # ── 保存 ─────────────────────────────────────────────────
+dest = Path('D:/vsproject/fsi-risk-platform/2_processing/sql/mmf/report_03_mmf/Template.xlsx')
 wb.save(dest)
 print(f'已創建: {dest}')
 print(f'Sheets ({len(wb.sheetnames)}):')
