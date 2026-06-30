@@ -8,6 +8,7 @@ warnings.filterwarnings('ignore')
 
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+from openpyxl.styles.colors import Color
 from openpyxl.utils import get_column_letter
 from pathlib import Path
 
@@ -326,6 +327,8 @@ ws15 = wb.create_sheet('债券及存单新')
 ws15.sheet_properties.tabColor = TAB_RED
 
 YEL      = PatternFill('solid', fgColor='FFFF00')
+YEL_ARGB = PatternFill('solid', fgColor='FFFF00')          # Row 1 黃
+THEME9   = PatternFill('solid', fgColor=Color(theme=9))    # Row 2 A-P 主題色9
 NFMT     = '0.00_ '
 MAX_ROWS = 5570
 _THIN        = Side(border_style='thin')
@@ -364,41 +367,41 @@ ws15['Q1'].border         = _BORDER_THIN
 # A-P: Microsoft Sans Serif；Q-Y: 宋体
 ws15.row_dimensions[2].height = 48.0
 _H2 = [
-    # (col, text, fmt, fill_color, font_name)
-    ('A','组合名称',                     NFMT,       None,     'Microsoft Sans Serif'),
-    ('B','证券类型',                     NFMT,       None,     'Microsoft Sans Serif'),
-    ('C','证券代码',                     NFMT,       None,     'Microsoft Sans Serif'),
-    ('D','证券名称',                     NFMT,       None,     'Microsoft Sans Serif'),
-    ('E','数量',                         NFMT,       None,     'Microsoft Sans Serif'),
-    ('F','成本',                         NFMT,       None,     'Microsoft Sans Serif'),
-    ('G','市值净价',                     NFMT,       None,     'Microsoft Sans Serif'),
-    ('H','成本全价',                     NFMT,       None,     'Microsoft Sans Serif'),
-    ('I','影价偏离度',                   NFMT,       None,     'Microsoft Sans Serif'),
-    ('J','市值占净值比（%）',            NFMT,       None,     'Microsoft Sans Serif'),
-    ('K','偏离金额（万元）',             NFMT,       None,     'Microsoft Sans Serif'),
-    ('L','到期日',                       NFMT,       None,     'Microsoft Sans Serif'),
-    ('M','利率类型',                     NFMT,       None,     'Microsoft Sans Serif'),
-    ('N','久期',                         NFMT,       None,     'Microsoft Sans Serif'),
-    ('O','评级',                         NFMT,       None,     'Microsoft Sans Serif'),
-    ('P','是否当季到期',                 NFMT,       None,     'Microsoft Sans Serif'),
-    ('Q','压力情景净价(亿元)',           '0.0000_ ', 'FFFF00', '宋体'),
-    ('R','压力情景全价(亿元)',           '0.0000_ ', 'FFFF00', '宋体'),
-    ('S','压力情景偏离金额(万元)',       '#,##0.00', 'FFFF00', '宋体'),
-    ('T','压力情景偏离金额绝对值(万元)', '#,##0.00', 'FFFF00', '宋体'),
-    ('U','债券类别',                     NFMT,       'FFFF00', '宋体'),
-    ('V','变现系数',                     NFMT,       'FFFF00', '宋体'),
-    ('W','压力情景全价修正(亿元)',       '0.0000_ ', 'FFFF00', '宋体'),
-    ('X','压力情景偏离金额修正(万元)',   NFMT,       'FFFF00', '宋体'),
-    ('Y','需变现偏离资产金额（亿元）',   NFMT,       'FFFF00', '宋体'),
+    # (col, text, fmt, fill, font_name)
+    # A-P: theme color 9；Q-Y: 黃色 FFFF00
+    ('A','组合名称',                     NFMT,       THEME9, 'Microsoft Sans Serif'),
+    ('B','证券类型',                     NFMT,       THEME9, 'Microsoft Sans Serif'),
+    ('C','证券代码',                     NFMT,       THEME9, 'Microsoft Sans Serif'),
+    ('D','证券名称',                     NFMT,       THEME9, 'Microsoft Sans Serif'),
+    ('E','数量',                         NFMT,       THEME9, 'Microsoft Sans Serif'),
+    ('F','成本',                         NFMT,       THEME9, 'Microsoft Sans Serif'),
+    ('G','市值净价',                     NFMT,       THEME9, 'Microsoft Sans Serif'),
+    ('H','成本全价',                     NFMT,       THEME9, 'Microsoft Sans Serif'),
+    ('I','影价偏离度',                   NFMT,       THEME9, 'Microsoft Sans Serif'),
+    ('J','市值占净值比（%）',            NFMT,       THEME9, 'Microsoft Sans Serif'),
+    ('K','偏离金额（万元）',             NFMT,       THEME9, 'Microsoft Sans Serif'),
+    ('L','到期日',                       NFMT,       THEME9, 'Microsoft Sans Serif'),
+    ('M','利率类型',                     NFMT,       THEME9, 'Microsoft Sans Serif'),
+    ('N','久期',                         NFMT,       THEME9, 'Microsoft Sans Serif'),
+    ('O','评级',                         NFMT,       THEME9, 'Microsoft Sans Serif'),
+    ('P','是否当季到期',                 NFMT,       THEME9, 'Microsoft Sans Serif'),
+    ('Q','压力情景净价(亿元)',           '0.0000_ ', PatternFill('solid', fgColor='FFFF00'), '宋体'),
+    ('R','压力情景全价(亿元)',           '0.0000_ ', PatternFill('solid', fgColor='FFFF00'), '宋体'),
+    ('S','压力情景偏离金额(万元)',       '#,##0.00', PatternFill('solid', fgColor='FFFF00'), '宋体'),
+    ('T','压力情景偏离金额绝对值(万元)', '#,##0.00', PatternFill('solid', fgColor='FFFF00'), '宋体'),
+    ('U','债券类别',                     NFMT,       PatternFill('solid', fgColor='FFFF00'), '宋体'),
+    ('V','变现系数',                     NFMT,       PatternFill('solid', fgColor='FFFF00'), '宋体'),
+    ('W','压力情景全价修正(亿元)',       '0.0000_ ', PatternFill('solid', fgColor='FFFF00'), '宋体'),
+    ('X','压力情景偏离金额修正(万元)',   NFMT,       PatternFill('solid', fgColor='FFFF00'), '宋体'),
+    ('Y','需变现偏离资产金额（亿元）',   NFMT,       PatternFill('solid', fgColor='FFFF00'), '宋体'),
 ]
-for col, text, fmt, fill_color, font_name in _H2:
+for col, text, fmt, fill, font_name in _H2:
     c = ws15[col + '2']
     c.value = text; c.number_format = fmt
     c.font      = Font(name=font_name, size=10, bold=True)
     c.border    = _BORDER_THIN
     c.alignment = _ALIGN_CTR
-    if fill_color:
-        c.fill = PatternFill('solid', fgColor=fill_color)
+    c.fill      = fill
 
 # ── AA 欄：組合名稱參考列表 ───────────────────────────────
 _AA = ['组合名称','薪金宝','现金增利','现金宝','沃利货币',
