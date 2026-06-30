@@ -2,73 +2,14 @@
 create_template.py  —  全新建立 report_03_mmf/Template.xlsx
 執行：python 2_processing/sql/mmf/report_03_mmf/create_template.py
 """
-import sys, warnings, copy
+import sys, warnings
 sys.stdout.reconfigure(encoding='utf-8')
 warnings.filterwarnings('ignore')
 
-from openpyxl import Workbook, load_workbook
+from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Font, Alignment
 from openpyxl.utils import get_column_letter
 from pathlib import Path
-
-# ══════════════════════════════════════════════════════════
-# 步驟0：預先讀取 Template.xlsx 中需保留的 sheet 到記憶體
-#        （必須在建立新 Workbook 前讀，避免覆蓋循環）
-# ══════════════════════════════════════════════════════════
-_TMPL_PATH = Path('D:/vsproject/fsi-risk-platform/2_processing/sql/mmf/report_03_mmf/Template.xlsx')
-
-def _snapshot_sheet(wb_src, sheet_name):
-    """把指定 sheet 的所有儲存格資料快照到 list，供之後寫入新 sheet。"""
-    ws = wb_src[sheet_name]
-    cells = []
-    for row in ws.iter_rows():
-        for c in row:
-            if c.value is None:
-                continue
-            cells.append(dict(
-                row=c.row, col=c.column, value=c.value,
-                font      = copy.copy(c.font)          if c.has_style else None,
-                fill      = copy.copy(c.fill)          if c.has_style else None,
-                alignment = copy.copy(c.alignment)     if c.has_style else None,
-                border    = copy.copy(c.border)        if c.has_style else None,
-                number_format = c.number_format,
-            ))
-    col_widths  = {k: v.width  for k, v in ws.column_dimensions.items()}
-    row_heights = {k: v.height for k, v in ws.row_dimensions.items()}
-    merges      = [str(m) for m in ws.merged_cells.ranges]
-    freeze      = ws.freeze_panes
-    tab_color   = ws.sheet_properties.tabColor.value if ws.sheet_properties.tabColor else None
-    return dict(cells=cells, col_widths=col_widths, row_heights=row_heights,
-                merges=merges, freeze=freeze, tab_color=tab_color)
-
-def _restore_sheet(wb_dst, sheet_name, snap):
-    """把快照資料寫入新 workbook 的指定 sheet。"""
-    ws = wb_dst.create_sheet(sheet_name)
-    if snap['tab_color']:
-        ws.sheet_properties.tabColor = snap['tab_color']
-    if snap['freeze']:
-        ws.freeze_panes = snap['freeze']
-    for k, v in snap['col_widths'].items():
-        ws.column_dimensions[k].width = v
-    for k, v in snap['row_heights'].items():
-        ws.row_dimensions[k].height = v
-    for c in snap['cells']:
-        dc = ws.cell(row=c['row'], column=c['col'], value=c['value'])
-        if c['font']:      dc.font          = c['font']
-        if c['fill']:      dc.fill          = c['fill']
-        if c['alignment']: dc.alignment     = c['alignment']
-        if c['border']:    dc.border        = c['border']
-        dc.number_format = c['number_format']
-    for m in snap['merges']:
-        ws.merge_cells(m)
-    return ws
-
-# 讀取需保留的 sheet 快照
-print('讀取 Template.xlsx 中需保留的 sheet...')
-_tmpl_wb = load_workbook(str(_TMPL_PATH), data_only=False)
-_snap_bonds = _snapshot_sheet(_tmpl_wb, '债券及存单新')
-_tmpl_wb.close()
-print(f'  债券及存单新：{len(_snap_bonds["cells"])} 個儲存格已快照')
 
 # ── 儲存格填充色 ──────────────────────────────────────────
 YELLOW = PatternFill('solid', fgColor='FFFF99')   # SQL 數據區
@@ -379,11 +320,13 @@ ws14['A1'].font = Font(color='808080', size=9)
 ws14.column_dimensions['A'].width = 50
 
 # ══════════════════════════════════════════════════════════
-# 8. 债券及存单新  — 原封不動從 Template.xlsx 快照還原
+# 8. 债券及存单新
 # ══════════════════════════════════════════════════════════
-print('  還原 债券及存单新...')
-ws15 = _restore_sheet(wb, '债券及存单新', _snap_bonds)
-print(f'  完成，共 {len(_snap_bonds["cells"])} 格')
+ws15 = wb.create_sheet('债券及存单新')
+ws15.sheet_properties.tabColor = TAB_RED
+ws15['A1'] = '【債券及存單新】壓力測試計算層 — 引用「持仓数据」sheet，使用者填入公式'
+ws15['A1'].font = Font(color='808080', size=9)
+ws15.column_dimensions['A'].width = 60
 
 # ══════════════════════════════════════════════════════════
 # 9. 债券及存单新程序结果NEW
