@@ -7,8 +7,7 @@ sys.stdout.reconfigure(encoding='utf-8')
 warnings.filterwarnings('ignore')
 
 from openpyxl import Workbook
-from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
-from openpyxl.styles.colors import Color
+from openpyxl.styles import PatternFill, Font, Alignment
 from openpyxl.utils import get_column_letter
 from pathlib import Path
 
@@ -321,172 +320,13 @@ ws14['A1'].font = Font(color='808080', size=9)
 ws14.column_dimensions['A'].width = 50
 
 # ══════════════════════════════════════════════════════════
-# 8. 债券及存单新  (壓力測試計算層，按 Template 精確生成)
+# 8. 债券及存单新
 # ══════════════════════════════════════════════════════════
 ws15 = wb.create_sheet('债券及存单新')
 ws15.sheet_properties.tabColor = TAB_RED
-
-YEL      = PatternFill('solid', fgColor='FFFF00')
-YEL_ARGB = PatternFill('solid', fgColor='FFFF00')          # Row 1 黃
-THEME9   = PatternFill('solid', fgColor=Color(theme=9))    # Row 2 A-P 主題色9
-NFMT     = '0.00_ '
-MAX_ROWS = 5570
-_THIN        = Side(border_style='thin')
-_BORDER_THIN = Border(top=_THIN, bottom=_THIN, left=_THIN, right=_THIN)
-_ALIGN_CTR   = Alignment(horizontal='center', vertical='center', wrap_text=True)
-_ALIGN_H_CTR = Alignment(horizontal='center')   # 水平置中，無垂直設定
-
-# ── Row 1：參數行 ─────────────────────────────────────────
-ws15.row_dimensions[1].height = 14.5
-# A1: Arial bold 紅色; B1/M1/N1: Arial bold; Q1: 宋体 bold
-ws15['A1'].value          = '=TDaysOffset(TODAY(),"Offset=-1")'
-ws15['A1'].number_format  = 'yyyy\\-mm\\-dd'
-ws15['A1'].fill           = YEL
-ws15['A1'].font           = Font(name='Arial', size=10, bold=True, color='FF0000')
-
-ws15['B1'].value          = '=参数!L2'
-ws15['B1'].number_format  = 'mm-dd-yy'
-ws15['B1'].fill           = YEL
-ws15['B1'].font           = Font(name='Arial', size=10, bold=True)
-
-ws15['M1'].value          = 'FI'
-ws15['M1'].fill           = YEL
-ws15['M1'].font           = Font(name='Arial', size=10, bold=True)
-
-ws15['N1'].value          = '0.005'
-ws15['N1'].number_format  = '0.00%'
-ws15['N1'].fill           = YEL
-ws15['N1'].font           = Font(name='Arial', size=10, bold=True)
-
-ws15['Q1'].value          = '公式列'
-ws15['Q1'].number_format  = '0.0000_ '
-ws15['Q1'].font           = Font(name='宋体', size=10, bold=True)
-ws15['Q1'].border         = _BORDER_THIN
-
-# ── Row 2：表頭（thin 四邊框 + center/wrap + size=10）────
-# A-P: Microsoft Sans Serif；Q-Y: 宋体
-ws15.row_dimensions[2].height = 48.0
-_H2 = [
-    # (col, text, fmt, fill, font_name)
-    # A-P: theme color 9；Q-Y: 黃色 FFFF00
-    ('A','组合名称',                     NFMT,       THEME9, 'Microsoft Sans Serif'),
-    ('B','证券类型',                     NFMT,       THEME9, 'Microsoft Sans Serif'),
-    ('C','证券代码',                     NFMT,       THEME9, 'Microsoft Sans Serif'),
-    ('D','证券名称',                     NFMT,       THEME9, 'Microsoft Sans Serif'),
-    ('E','数量',                         NFMT,       THEME9, 'Microsoft Sans Serif'),
-    ('F','成本',                         NFMT,       THEME9, 'Microsoft Sans Serif'),
-    ('G','市值净价',                     NFMT,       THEME9, 'Microsoft Sans Serif'),
-    ('H','成本全价',                     NFMT,       THEME9, 'Microsoft Sans Serif'),
-    ('I','影价偏离度',                   NFMT,       THEME9, 'Microsoft Sans Serif'),
-    ('J','市值占净值比（%）',            NFMT,       THEME9, 'Microsoft Sans Serif'),
-    ('K','偏离金额（万元）',             NFMT,       THEME9, 'Microsoft Sans Serif'),
-    ('L','到期日',                       NFMT,       THEME9, 'Microsoft Sans Serif'),
-    ('M','利率类型',                     NFMT,       THEME9, 'Microsoft Sans Serif'),
-    ('N','久期',                         NFMT,       THEME9, 'Microsoft Sans Serif'),
-    ('O','评级',                         NFMT,       THEME9, 'Microsoft Sans Serif'),
-    ('P','是否当季到期',                 NFMT,       THEME9, 'Microsoft Sans Serif'),
-    ('Q','压力情景净价(亿元)',           '0.0000_ ', PatternFill('solid', fgColor='FFFF00'), '宋体'),
-    ('R','压力情景全价(亿元)',           '0.0000_ ', PatternFill('solid', fgColor='FFFF00'), '宋体'),
-    ('S','压力情景偏离金额(万元)',       '#,##0.00', PatternFill('solid', fgColor='FFFF00'), '宋体'),
-    ('T','压力情景偏离金额绝对值(万元)', '#,##0.00', PatternFill('solid', fgColor='FFFF00'), '宋体'),
-    ('U','债券类别',                     NFMT,       PatternFill('solid', fgColor='FFFF00'), '宋体'),
-    ('V','变现系数',                     NFMT,       PatternFill('solid', fgColor='FFFF00'), '宋体'),
-    ('W','压力情景全价修正(亿元)',       '0.0000_ ', PatternFill('solid', fgColor='FFFF00'), '宋体'),
-    ('X','压力情景偏离金额修正(万元)',   NFMT,       PatternFill('solid', fgColor='FFFF00'), '宋体'),
-    ('Y','需变现偏离资产金额（亿元）',   NFMT,       PatternFill('solid', fgColor='FFFF00'), '宋体'),
-]
-for col, text, fmt, fill, font_name in _H2:
-    c = ws15[col + '2']
-    c.value = text; c.number_format = fmt
-    c.font      = Font(name=font_name, size=10, bold=True)
-    c.border    = _BORDER_THIN
-    c.alignment = _ALIGN_CTR
-    c.fill      = fill
-
-# ── AA 欄：組合名稱參考列表 ───────────────────────────────
-_AA = ['组合名称','薪金宝','现金增利','现金宝','沃利货币',
-       '天利货币','收益宝','快线货币','惠利货币','华夏货币','财富宝','保证金货币']
-for i, v in enumerate(_AA, 3):
-    c = ws15.cell(row=i, column=27, value=v)
-    c.number_format = NFMT
-    c.border        = _BORDER_THIN
-    c.alignment     = _ALIGN_CTR
-
-# ── Q 欄公式模板（Row n，n >= 3）────────────────────────
-_Q = (
-    '=IF(M{n}=$M$1,G{n}-$N$1*N{n}*G{n},'
-    'IF(C{n}="160309",VLOOKUP($A$1,shibor债定价!$A:$F,6,FALSE)*E{n},'
-    'IF(C{n}="130208",VLOOKUP($A$1,shibor债定价!$AQ:$BC,6,FALSE)*E{n},'
-    'IF(C{n}="160305",VLOOKUP($A$1,shibor债定价!$O:$T,6,FALSE)*E{n},'
-    'IF(C{n}="110236",VLOOKUP($A$1,shibor债定价!#REF!,6,FALSE)*E{n},'
-    'IF(C{n}="160202",VLOOKUP($A$1,shibor债定价!$AC:$AO,6,FALSE)*E{n},'
-    'IF(C{n}="110236",VLOOKUP($A$1,shibor债定价!#REF!,6,FALSE)*E{n},'
-    'IF(C{n}="150315",VLOOKUP($A$1,shibor债定价!$AQ:$AZ,6,FALSE)*E{n},'
-    'IF(C{n}="130235",VLOOKUP($A$1,shibor债定价!$BE:$BN,6,FALSE)*E{n},'
-    '0)))))))))/10^8'
-)
-_DATA_COLS = list('ABCDEFGHIJKLMNOP')
-
-# ── Rows 3~MAX_ROWS：公式行 ───────────────────────────────
-# 每欄的格式設定（col索引, fmt, alignment）
-# A-P(1-16): General, center水平; Q/R(17-18): 0.0000_, 無align;
-# S/T(19-20): #,##0.00, 無align; U/V(21-22): General, center;
-# W(23): 0.0000_, center; X(24): 0.00_, center; Y(25): 0.00, center
-_COL_CFG = {
-    **{ci: ('General',   _ALIGN_H_CTR) for ci in range(1, 17)},   # A-P
-    17: ('0.0000_ ',  None),          # Q
-    18: ('0.0000_ ',  None),          # R
-    19: ('#,##0.00',  None),          # S
-    20: ('#,##0.00',  None),          # T
-    21: ('General',   _ALIGN_H_CTR),  # U
-    22: ('General',   _ALIGN_H_CTR),  # V
-    23: ('0.0000_ ',  _ALIGN_H_CTR),  # W
-    24: ('0.00_ ',    _ALIGN_H_CTR),  # X
-    25: ('0.00',      _ALIGN_H_CTR),  # Y
-}
-
-print('  生成 债券及存单新 公式行...')
-for row in range(3, MAX_ROWS + 1):
-    src = row - 1
-    n   = row
-    # A:P — 引用持仓数据（宋体 size=10）
-    for ci, cl in enumerate(_DATA_COLS, 1):
-        c = ws15.cell(row=row, column=ci, value=f'=持仓数据!{cl}{src}')
-        c.font      = Font(name='宋体', size=10)
-        c.border    = _BORDER_THIN
-        c.alignment = _ALIGN_H_CTR
-
-    # Q:Y — 壓力公式（宋体 size=11）
-    formulas = {
-        17: _Q.format(n=n),
-        18: f'=(H{n}-F{n}+Q{n}*10^8)/10^8',
-        19: f'=IF(Q{n}=0,0,Q{n}*10^8-F{n})/10^4',
-        20: f'=ABS(S{n})',
-        21: f'=IF(ISNUMBER(FIND("CD",D{n})),"同业存单",IF(O{n}="利率品种","利率债","其他"))',
-        22: f'=IF(M{n}=0,0,IF(M{n}="FL",0.05,IF(U{n}="其他",0.2,0.8)))',
-        23: f'=R{n}*V{n}',
-        24: f'=V{n}*S{n}',
-        25: f'=VLOOKUP(A{n},组合!$M$19:$X$32,10,FALSE)',
-    }
-    for ci, val in formulas.items():
-        fmt, align = _COL_CFG[ci]
-        c = ws15.cell(row=row, column=ci, value=val)
-        c.font          = Font(name='宋体', size=11)
-        c.number_format = fmt
-        c.border        = _BORDER_THIN
-        if align: c.alignment = align
-
-    if row % 1000 == 0:
-        print(f'    {row}/{MAX_ROWS}')
-
-# ── 欄寬 ──────────────────────────────────────────────────
-_CW = {'A':13.18,'B':10.36,'C':16.18,'E':11.0,
-       'F':15.36,'G':15.09,'H':14.27,'I':11.45,'J':9.82,
-       'L':16.45,'M':9.82,'P':10.91,
-       'Q':12.36,'R':9.82,'S':10.36,'T':9.82,
-       'W':9.82,'X':11.0,'Y':11.45}
-for col, w in _CW.items():
-    ws15.column_dimensions[col].width = w
+ws15['A1'] = '【債券及存單新】壓力測試計算層 — 引用「持仓数据」sheet，使用者填入公式'
+ws15['A1'].font = Font(color='808080', size=9)
+ws15.column_dimensions['A'].width = 60
 
 # ══════════════════════════════════════════════════════════
 # 9. 债券及存单新程序结果NEW
