@@ -335,52 +335,68 @@ _ALIGN_H_CTR = Alignment(horizontal='center')   # 水平置中，無垂直設定
 
 # ── Row 1：參數行 ─────────────────────────────────────────
 ws15.row_dimensions[1].height = 14.5
-def _r1(ws, col, val, fmt='General', bold=True, fill=None, border=None):
-    c = ws[col + '1']
-    c.value = val; c.number_format = fmt; c.font = Font(bold=bold)
-    if fill:   c.fill   = fill
-    if border: c.border = border
+# A1: Arial bold 紅色; B1/M1/N1: Arial bold; Q1: 宋体 bold
+ws15['A1'].value          = '=TDaysOffset(TODAY(),"Offset=-1")'
+ws15['A1'].number_format  = 'yyyy\\-mm\\-dd'
+ws15['A1'].fill           = YEL
+ws15['A1'].font           = Font(name='Arial', size=10, bold=True, color='FF0000')
 
-_r1(ws15, 'A', '=TDaysOffset(TODAY(),"Offset=-1")', 'yyyy\\-mm\\-dd', fill=YEL)
-_r1(ws15, 'B', '=参数!L2',  'mm-dd-yy', fill=YEL)
-_r1(ws15, 'M', 'FI',        fill=YEL)
-_r1(ws15, 'N', '0.005',     '0.00%',    fill=YEL)
-_r1(ws15, 'Q', '公式列',    '0.0000_ ', border=_BORDER_THIN)
+ws15['B1'].value          = '=参数!L2'
+ws15['B1'].number_format  = 'mm-dd-yy'
+ws15['B1'].fill           = YEL
+ws15['B1'].font           = Font(name='Arial', size=10, bold=True)
+
+ws15['M1'].value          = 'FI'
+ws15['M1'].fill           = YEL
+ws15['M1'].font           = Font(name='Arial', size=10, bold=True)
+
+ws15['N1'].value          = '0.005'
+ws15['N1'].number_format  = '0.00%'
+ws15['N1'].fill           = YEL
+ws15['N1'].font           = Font(name='Arial', size=10, bold=True)
+
+ws15['Q1'].value          = '公式列'
+ws15['Q1'].number_format  = '0.0000_ '
+ws15['Q1'].font           = Font(name='宋体', size=10, bold=True)
+ws15['Q1'].border         = _BORDER_THIN
 
 # ── Row 2：表頭（thin 四邊框 + center/wrap + size=10）────
+# A-P: Microsoft Sans Serif；Q-Y: 宋体
 ws15.row_dimensions[2].height = 48.0
 _H2 = [
-    ('A','组合名称',                    NFMT,       None),
-    ('B','证券类型',                    NFMT,       None),
-    ('C','证券代码',                    NFMT,       None),
-    ('D','证券名称',                    NFMT,       None),
-    ('E','数量',                        NFMT,       None),
-    ('F','成本',                        NFMT,       None),
-    ('G','市值净价',                    NFMT,       None),
-    ('H','成本全价',                    NFMT,       None),
-    ('I','影价偏离度',                  NFMT,       None),
-    ('J','市值占净值比（%）',           NFMT,       None),
-    ('K','偏离金额（万元）',            NFMT,       None),
-    ('L','到期日',                      NFMT,       None),
-    ('M','利率类型',                    NFMT,       None),
-    ('N','久期',                        NFMT,       None),
-    ('O','评级',                        NFMT,       None),
-    ('P','是否当季到期',                NFMT,       None),
-    ('Q','压力情景净价(亿元)',          '0.0000_ ', 'FFFF00'),
-    ('R','压力情景全价(亿元)',          '0.0000_ ', 'FFFF00'),
-    ('S','压力情景偏离金额(万元)',      '#,##0.00', 'FFFF00'),
-    ('T','压力情景偏离金额绝对值(万元)','#,##0.00', 'FFFF00'),
-    ('U','债券类别',                    NFMT,       'FFFF00'),
-    ('V','变现系数',                    NFMT,       'FFFF00'),
-    ('W','压力情景全价修正(亿元)',      '0.0000_ ', 'FFFF00'),
-    ('X','压力情景偏离金额修正(万元)',  NFMT,       'FFFF00'),
-    ('Y','需变现偏离资产金额（亿元）',  NFMT,       'FFFF00'),
+    # (col, text, fmt, fill_color, font_name)
+    ('A','组合名称',                     NFMT,       None,     'Microsoft Sans Serif'),
+    ('B','证券类型',                     NFMT,       None,     'Microsoft Sans Serif'),
+    ('C','证券代码',                     NFMT,       None,     'Microsoft Sans Serif'),
+    ('D','证券名称',                     NFMT,       None,     'Microsoft Sans Serif'),
+    ('E','数量',                         NFMT,       None,     'Microsoft Sans Serif'),
+    ('F','成本',                         NFMT,       None,     'Microsoft Sans Serif'),
+    ('G','市值净价',                     NFMT,       None,     'Microsoft Sans Serif'),
+    ('H','成本全价',                     NFMT,       None,     'Microsoft Sans Serif'),
+    ('I','影价偏离度',                   NFMT,       None,     'Microsoft Sans Serif'),
+    ('J','市值占净值比（%）',            NFMT,       None,     'Microsoft Sans Serif'),
+    ('K','偏离金额（万元）',             NFMT,       None,     'Microsoft Sans Serif'),
+    ('L','到期日',                       NFMT,       None,     'Microsoft Sans Serif'),
+    ('M','利率类型',                     NFMT,       None,     'Microsoft Sans Serif'),
+    ('N','久期',                         NFMT,       None,     'Microsoft Sans Serif'),
+    ('O','评级',                         NFMT,       None,     'Microsoft Sans Serif'),
+    ('P','是否当季到期',                 NFMT,       None,     'Microsoft Sans Serif'),
+    ('Q','压力情景净价(亿元)',           '0.0000_ ', 'FFFF00', '宋体'),
+    ('R','压力情景全价(亿元)',           '0.0000_ ', 'FFFF00', '宋体'),
+    ('S','压力情景偏离金额(万元)',       '#,##0.00', 'FFFF00', '宋体'),
+    ('T','压力情景偏离金额绝对值(万元)', '#,##0.00', 'FFFF00', '宋体'),
+    ('U','债券类别',                     NFMT,       'FFFF00', '宋体'),
+    ('V','变现系数',                     NFMT,       'FFFF00', '宋体'),
+    ('W','压力情景全价修正(亿元)',       '0.0000_ ', 'FFFF00', '宋体'),
+    ('X','压力情景偏离金额修正(万元)',   NFMT,       'FFFF00', '宋体'),
+    ('Y','需变现偏离资产金额（亿元）',   NFMT,       'FFFF00', '宋体'),
 ]
-for col, text, fmt, fill_color in _H2:
+for col, text, fmt, fill_color, font_name in _H2:
     c = ws15[col + '2']
     c.value = text; c.number_format = fmt
-    c.font = Font(bold=True, size=10)
-    c.border = _BORDER_THIN; c.alignment = _ALIGN_CTR
+    c.font      = Font(name=font_name, size=10, bold=True)
+    c.border    = _BORDER_THIN
+    c.alignment = _ALIGN_CTR
     if fill_color:
         c.fill = PatternFill('solid', fgColor=fill_color)
 
@@ -430,13 +446,14 @@ print('  生成 债券及存单新 公式行...')
 for row in range(3, MAX_ROWS + 1):
     src = row - 1
     n   = row
-    # A:P — 引用持仓数据
+    # A:P — 引用持仓数据（宋体 size=10）
     for ci, cl in enumerate(_DATA_COLS, 1):
         c = ws15.cell(row=row, column=ci, value=f'=持仓数据!{cl}{src}')
+        c.font      = Font(name='宋体', size=10)
         c.border    = _BORDER_THIN
         c.alignment = _ALIGN_H_CTR
 
-    # Q:Y — 壓力公式
+    # Q:Y — 壓力公式（宋体 size=11）
     formulas = {
         17: _Q.format(n=n),
         18: f'=(H{n}-F{n}+Q{n}*10^8)/10^8',
@@ -451,6 +468,7 @@ for row in range(3, MAX_ROWS + 1):
     for ci, val in formulas.items():
         fmt, align = _COL_CFG[ci]
         c = ws15.cell(row=row, column=ci, value=val)
+        c.font          = Font(name='宋体', size=11)
         c.number_format = fmt
         c.border        = _BORDER_THIN
         if align: c.alignment = align
