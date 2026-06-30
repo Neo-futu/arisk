@@ -489,7 +489,22 @@ for col, w in _CW.items():
     ws15.column_dimensions[col].width = w
 
 # ══════════════════════════════════════════════════════════
-# 9. 债券及存单新程序结果NEW
+# 9. 压力测试结果  (42_stress_result.sql → A2，SQL 直接計算)
+# ══════════════════════════════════════════════════════════
+ws42 = wb.create_sheet('压力测试结果')
+ws42.sheet_properties.tabColor = TAB_BLUE
+_H42 = ['组合名称','证券代码','证券名称','资产类型','利率类型',
+        '当前市值(元)','有效久期(年)','压力市值(元)',
+        '压力损失(万元)','债券类别','变现系数','压力损失修正(万元)']
+for i, h in enumerate(_H42, 1):
+    hdr(ws42, 1, i, h)
+yell(ws42, 2, 1, 200, len(_H42))
+for col in range(1, len(_H42) + 1):
+    ws42.column_dimensions[get_column_letter(col)].width = 16
+ws42.freeze_panes = 'A2'
+
+# ══════════════════════════════════════════════════════════
+# 10. 债券及存单新程序结果NEW
 # ══════════════════════════════════════════════════════════
 ws16 = wb.create_sheet('债券及存单新程序结果NEW')
 ws16.sheet_properties.tabColor = TAB_BLUE

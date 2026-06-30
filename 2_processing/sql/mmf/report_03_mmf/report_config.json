@@ -203,6 +203,15 @@
       "start_cell": "A27",
       "header": false,
       "description": "41.sql@A25"
+    },
+    {
+      "id": "03_42",
+      "name": "壓力測試結果",
+      "sql": "42_stress_result.sql",
+      "sheet": "压力测试结果",
+      "start_cell": "A2",
+      "header": false,
+      "description": "+50bp壓力測試：各持倉壓力損失/修正損失，A1=表頭，數據A2起"
     }
   ]
 }
