@@ -329,9 +329,8 @@ YEL = PatternFill('solid', fgColor='FFFF00')
 MAX_DATA_ROWS = 5570   # 預留行數，與 Template 一致
 
 # ── Row 1：參數行 ────────────────────────────────────────
-# A1：TDaysOffset 為 Wind DDE 公式，用 WORKDAY 近似替代；
-#      Wind 環境下可手動改回 =[1]!TDaysOffset(TODAY(),"Offset=-1")
-c = ws15['A1']; c.value = '=WORKDAY(TODAY(),-1)'; c.fill = YEL
+# A1：Wind add-in 函數（非 DDE），Wind 未載入時顯示 #NAME?，不影響 Excel 開啟
+c = ws15['A1']; c.value = '=TDaysOffset(TODAY(),"Offset=-1")'; c.fill = YEL
 c.number_format = 'yyyy\\-mm\\-dd'; c.font = Font(bold=True)
 c = ws15['B1']; c.value = '=参数!L2'; c.fill = YEL
 c.number_format = 'mm-dd-yy'; c.font = Font(bold=True)
@@ -408,6 +407,20 @@ AA_DATA = ['组合名称','薪金宝','现金增利','现金宝','沃利货币',
            '天利货币','收益宝','快线货币','惠利货币','华夏货币','财富宝','保证金货币']
 for i, val in enumerate(AA_DATA, 3):
     ws15.cell(row=i, column=27, value=val).number_format = '0.00_ '
+
+# ── Row 2 L 欄格式修正（按 Template 實際格式）───────────
+ws15['L2'].number_format = '0.00_ '
+
+# ── 欄寬（按 Template 精確值）───────────────────────────
+COL_WIDTHS = {
+    'A': 10.45, 'B': 10.36, 'C': 16.18, 'D': 16.18, 'E': 11.0,
+    'F': 15.36, 'G': 15.09, 'H': 14.27, 'I': 11.45, 'J': 9.82,
+    'L': 16.45, 'M': 9.82,  'N': 9.82,  'P': 10.91,
+    'Q': 12.36, 'R': 9.82,  'S': 10.36, 'T': 9.82,
+    'W': 9.82,  'X': 11.0,  'Y': 11.45,
+}
+for col, width in COL_WIDTHS.items():
+    ws15.column_dimensions[col].width = width
 
 # ══════════════════════════════════════════════════════════
 # 9. 债券及存单新程序结果NEW
