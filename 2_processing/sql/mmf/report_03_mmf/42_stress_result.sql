@@ -145,21 +145,31 @@ stress AS (
 )
 
 SELECT
-    port_name                                                   AS port_name,
+    -- A: 組合鍵（VLOOKUP 用）= port_name | security_code
+    port_name || '|' || security_code                          AS lookup_key,
+    -- B~L: 各欄數據（對應 债券及存单新 Q~X 的 VLOOKUP 取值）
+    port_name,
     security_code,
     security_name,
     bond_type,
     coupon_type,
     market_value,
     duration,
-    stressed_mv,
-    -- 壓力損失（萬元）
+    -- H: 壓力市值（億元）
+    ROUND(stressed_mv / 100000000.0, 6)                        AS stressed_mv_100m,
+    -- I: 壓力損失（萬元）= S列
     ROUND((market_value - stressed_mv) / 10000, 4)             AS stressed_loss,
+    -- J: 偏離絕對值（萬元）= T列
+    ROUND(ABS(market_value - stressed_mv) / 10000, 4)          AS stressed_loss_abs,
+    -- K: 債券類別 = U列
     bond_category,
+    -- L: 變現係數 = V列
     liq_ratio,
-    -- 壓力損失修正（考慮變現係數）
+    -- M: 壓力全價修正（億元）= W列（MMF 淨價≈全價，同 H × 變現係數）
+    ROUND(stressed_mv / 100000000.0 * liq_ratio, 6)            AS stressed_mv_adj_100m,
+    -- N: 偏離修正（萬元）= X列
     ROUND((market_value - stressed_mv) / 10000 * liq_ratio, 4) AS stressed_loss_adj
 FROM stress
 ORDER BY port_name DESC,
-         (market_value - stressed_mv) DESC,  -- 損失最大排前
+         (market_value - stressed_mv) DESC,
          bond_type;

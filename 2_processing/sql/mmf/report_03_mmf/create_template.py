@@ -456,25 +456,28 @@ for row in range(3, MAX_ROWS + 1):
         c.border    = _BORDER_THIN
         c.alignment = _ALIGN_H_CTR
 
-    # Q:Y — 壓力公式（宋体 size=11）
-    formulas = {
-        17: _Q.format(n=n),
-        18: f'=(H{n}-F{n}+Q{n}*10^8)/10^8',
-        19: f'=IF(Q{n}=0,0,Q{n}*10^8-F{n})/10^4',
-        20: f'=ABS(S{n})',
-        21: f'=IF(ISNUMBER(FIND("CD",D{n})),"同业存单",IF(O{n}="利率品种","利率债","其他"))',
-        22: f'=IF(M{n}=0,0,IF(M{n}="FL",0.05,IF(U{n}="其他",0.2,0.8)))',
-        23: f'=R{n}*V{n}',
-        24: f'=V{n}*S{n}',
-        25: f'=VLOOKUP(A{n},组合!$M$19:$X$32,10,FALSE)',
-    }
-    for ci, val in formulas.items():
-        fmt, align = _COL_CFG[ci]
-        c = ws15.cell(row=row, column=ci, value=val)
-        c.font          = Font(name='宋体', size=11)
-        c.number_format = fmt
-        c.border        = _BORDER_THIN
-        if align: c.alignment = align
+    # Q~X — VLOOKUP 引用 压力测试结果 sheet（組合鍵 = port_name | security_code）
+    # 压力测试结果 欄位：A=key, B=port, C=sec_code, ...,
+    #   I(9)=stressed_mv_100m, J(10)=stressed_loss, K(11)=abs,
+    #   L(12)=bond_category, M(13)=liq_ratio, N(14)=stressed_mv_adj_100m, O(15)=stressed_loss_adj
+    _key = f'A{n}&"|"&C{n}'
+    _lkp = lambda col: f'=IFERROR(VLOOKUP({_key},压力测试结果!$A:$O,{col},0),0)'
+
+    def _qcell(ws_col, src_col, fmt=None, align=None):
+        c = ws15.cell(row=row, column=ws_col, value=_lkp(src_col))
+        c.font   = Font(name='宋体', size=11)
+        c.border = _BORDER_THIN
+        if fmt:   c.number_format = fmt
+        if align: c.alignment     = align
+
+    _qcell(17,  9, '0.0000_ ')                  # Q: 压力情景净价(亿元)
+    _qcell(18,  9, '0.0000_ ')                  # R: 压力情景全价(亿元) ≈ Q
+    _qcell(19, 10, '#,##0.00')                  # S: 压力偏离金额(万元)
+    _qcell(20, 11, '#,##0.00')                  # T: 偏离绝对值(万元)
+    _qcell(21, 12, 'General', _ALIGN_H_CTR)     # U: 债券类别
+    _qcell(22, 13, 'General', _ALIGN_H_CTR)     # V: 变现系数
+    _qcell(23, 14, '0.0000_ ', _ALIGN_H_CTR)   # W: 全价修正(亿元)
+    _qcell(24, 15, NFMT,       _ALIGN_H_CTR)   # X: 偏离修正(万元)
 
     if row % 1000 == 0:
         print(f'    {row}/{MAX_ROWS}')
