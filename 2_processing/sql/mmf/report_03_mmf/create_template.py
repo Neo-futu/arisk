@@ -6,10 +6,12 @@ import sys, warnings
 sys.stdout.reconfigure(encoding='utf-8')
 warnings.filterwarnings('ignore')
 
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 from openpyxl.styles import PatternFill, Font, Alignment
 from openpyxl.utils import get_column_letter
 from pathlib import Path
+
+dest = Path('D:/vsproject/fsi-risk-platform/2_processing/sql/mmf/report_03_mmf/Template.xlsx')
 
 # ── 儲存格填充色 ──────────────────────────────────────────
 YELLOW = PatternFill('solid', fgColor='FFFF99')   # SQL 數據區
@@ -320,107 +322,54 @@ ws14['A1'].font = Font(color='808080', size=9)
 ws14.column_dimensions['A'].width = 50
 
 # ══════════════════════════════════════════════════════════
-# 8. 债券及存单新  (完整壓力測試計算層，按 Template 精確還原)
+# 8. 债券及存单新  — 直接從現有 Template.xlsx 複製，原封不動
 # ══════════════════════════════════════════════════════════
+# 策略：先讀取目前 Template.xlsx 的 债券及存单新 sheet 到記憶體，
+#       再把所有儲存格（值、格式、欄寬）逐一寫入新 workbook。
+#       這樣保證 100% 原封不動，不因手寫公式而有任何差異。
+import copy as _copy
+
+_src_wb  = load_workbook(str(dest), data_only=False)
+_src_ws  = _src_wb['债券及存单新']
+
 ws15 = wb.create_sheet('债券及存单新')
 ws15.sheet_properties.tabColor = TAB_RED
 
-YEL = PatternFill('solid', fgColor='FFFF00')
-MAX_DATA_ROWS = 5570   # 預留行數，與 Template 一致
+# 欄寬 / 行高
+for col_letter, dim in _src_ws.column_dimensions.items():
+    ws15.column_dimensions[col_letter].width = dim.width
+for row_idx, dim in _src_ws.row_dimensions.items():
+    ws15.row_dimensions[row_idx].height = dim.height
 
-# ── Row 1：參數行 ────────────────────────────────────────
-# A1：Wind add-in 函數（非 DDE），Wind 未載入時顯示 #NAME?，不影響 Excel 開啟
-c = ws15['A1']; c.value = '=TDaysOffset(TODAY(),"Offset=-1")'; c.fill = YEL
-c.number_format = 'yyyy\\-mm\\-dd'; c.font = Font(bold=True)
-c = ws15['B1']; c.value = '=参数!L2'; c.fill = YEL
-c.number_format = 'mm-dd-yy'; c.font = Font(bold=True)
-c = ws15['M1']; c.value = 'FI'; c.fill = YEL; c.font = Font(bold=True)
-c = ws15['N1']; c.value = '0.005'; c.fill = YEL
-c.number_format = '0.00%'; c.font = Font(bold=True)
-c = ws15['Q1']; c.value = '公式列'
-c.number_format = '0.0000_ '; c.font = Font(bold=True)
+# 凍結窗格
+if _src_ws.freeze_panes:
+    ws15.freeze_panes = _src_ws.freeze_panes
 
-# ── Row 2：表頭 ──────────────────────────────────────────
-HDR = [
-    ('A','组合名称','0.00_ ',None), ('B','证券类型','0.00_ ',None),
-    ('C','证券代码','0.00_ ',None), ('D','证券名称','0.00_ ',None),
-    ('E','数量','0.00_ ',None),     ('F','成本','0.00_ ',None),
-    ('G','市值净价','0.00_ ',None), ('H','成本全价','0.00_ ',None),
-    ('I','影价偏离度','0.00_ ',None),('J','市值占净值比（%）','0.00_ ',None),
-    ('K','偏离金额（万元）','0.00_ ',None),('L','到期日','mm-dd-yy',None),
-    ('M','利率类型','0.00_ ',None), ('N','久期','0.00_ ',None),
-    ('O','评级','0.00_ ',None),     ('P','是否当季到期','0.00_ ',None),
-    ('Q','压力情景净价(亿元)','0.0000_ ','FFFF00'),
-    ('R','压力情景全价(亿元)','0.0000_ ','FFFF00'),
-    ('S','压力情景偏离金额(万元)','#,##0.00','FFFF00'),
-    ('T','压力情景偏离金额绝对值(万元)','#,##0.00','FFFF00'),
-    ('U','债券类别','0.00_ ','FFFF00'),
-    ('V','变现系数','0.00_ ','FFFF00'),
-    ('W','压力情景全价修正(亿元)','0.0000_ ','FFFF00'),
-    ('X','压力情景偏离金额修正(万元)','0.00_ ','FFFF00'),
-    ('Y','需变现偏离资产金额（亿元）','0.00_ ','FFFF00'),
-]
-for col_letter, text, fmt, fill_color in HDR:
-    c = ws15[f'{col_letter}2']
-    c.value = text; c.number_format = fmt; c.font = Font(bold=True)
-    if fill_color:
-        c.fill = PatternFill('solid', fgColor=fill_color)
+# 逐格複製（值 + 格式）
+print('  複製 债券及存单新 (約139K 格)...')
+count = 0
+for row in _src_ws.iter_rows():
+    for src_cell in row:
+        if src_cell.value is None:
+            continue
+        dst = ws15.cell(row=src_cell.row, column=src_cell.column)
+        dst.value = src_cell.value
+        if src_cell.has_style:
+            dst.font          = _copy.copy(src_cell.font)
+            dst.fill          = _copy.copy(src_cell.fill)
+            dst.alignment     = _copy.copy(src_cell.alignment)
+            dst.border        = _copy.copy(src_cell.border)
+            dst.number_format = src_cell.number_format
+        count += 1
+        if count % 50000 == 0:
+            print(f'    {count} 格已複製...')
 
-# ── Rows 3~MAX_DATA_ROWS：公式行 ─────────────────────────
-# Q 欄壓力淨價公式（與 Template 完全相同）
-Q_TMPL = (
-    '=IF(M{n}=$M$1,G{n}-$N$1*N{n}*G{n},'
-    'IF(C{n}="160309",VLOOKUP($A$1,shibor债定价!$A:$F,6,FALSE)*E{n},'
-    'IF(C{n}="130208",VLOOKUP($A$1,shibor债定价!$AQ:$BC,6,FALSE)*E{n},'
-    'IF(C{n}="160305",VLOOKUP($A$1,shibor债定价!$O:$T,6,FALSE)*E{n},'
-    'IF(C{n}="110236",VLOOKUP($A$1,shibor债定价!#REF!,6,FALSE)*E{n},'
-    'IF(C{n}="160202",VLOOKUP($A$1,shibor债定价!$AC:$AO,6,FALSE)*E{n},'
-    'IF(C{n}="110236",VLOOKUP($A$1,shibor债定价!#REF!,6,FALSE)*E{n},'
-    'IF(C{n}="150315",VLOOKUP($A$1,shibor债定价!$AQ:$AZ,6,FALSE)*E{n},'
-    'IF(C{n}="130235",VLOOKUP($A$1,shibor债定价!$BE:$BN,6,FALSE)*E{n},'
-    '0)))))))))/10^8'
-)
-DATA_COLS = list('ABCDEFGHIJKLMNOP')   # 16 欄引用持仓数据
-print('  生成 债券及存单新 公式行...')
-for row in range(3, MAX_DATA_ROWS + 1):
-    src = row - 1   # 持仓数据 從 A2 開始，對應 row=3 → src=2
-    n   = row
-    # A:P — 引用持仓数据
-    for ci, cl in enumerate(DATA_COLS, 1):
-        ws15.cell(row=row, column=ci).value = f'=持仓数据!{cl}{src}'
-    ws15.cell(row=row, column=12).number_format = 'mm-dd-yy'   # L 欄日期格式
-    # Q:Y — 壓力測試計算公式
-    c = ws15.cell(row=row, column=17); c.value = Q_TMPL.format(n=n); c.number_format = '0.0000_ '
-    c = ws15.cell(row=row, column=18); c.value = f'=(H{n}-F{n}+Q{n}*10^8)/10^8'; c.number_format = '0.0000_ '
-    c = ws15.cell(row=row, column=19); c.value = f'=IF(Q{n}=0,0,Q{n}*10^8-F{n})/10^4'; c.number_format = '#,##0.00'
-    c = ws15.cell(row=row, column=20); c.value = f'=ABS(S{n})'; c.number_format = '#,##0.00'
-    c = ws15.cell(row=row, column=21); c.value = f'=IF(ISNUMBER(FIND("CD",D{n})),"同业存单",IF(O{n}="利率品种","利率债","其他"))'
-    c = ws15.cell(row=row, column=22); c.value = f'=IF(M{n}=0,0,IF(M{n}="FL",0.05,IF(U{n}="其他",0.2,0.8)))'
-    c = ws15.cell(row=row, column=23); c.value = f'=R{n}*V{n}'; c.number_format = '0.0000_ '
-    c = ws15.cell(row=row, column=24); c.value = f'=V{n}*S{n}'; c.number_format = '0.00_ '
-    c = ws15.cell(row=row, column=25); c.value = f'=VLOOKUP(A{n},组合!$M$19:$X$32,10,FALSE)'; c.number_format = '0.00'
-    if row % 1000 == 0:
-        print(f'    {row}/{MAX_DATA_ROWS} 行完成')
+# 合併儲存格
+for merge in _src_ws.merged_cells.ranges:
+    ws15.merge_cells(str(merge))
 
-# ── AA 欄：組合名稱參考列表（共12筆）────────────────────
-AA_DATA = ['组合名称','薪金宝','现金增利','现金宝','沃利货币',
-           '天利货币','收益宝','快线货币','惠利货币','华夏货币','财富宝','保证金货币']
-for i, val in enumerate(AA_DATA, 3):
-    ws15.cell(row=i, column=27, value=val).number_format = '0.00_ '
-
-# ── Row 2 L 欄格式修正（按 Template 實際格式）───────────
-ws15['L2'].number_format = '0.00_ '
-
-# ── 欄寬（按 Template 精確值）───────────────────────────
-COL_WIDTHS = {
-    'A': 10.45, 'B': 10.36, 'C': 16.18, 'D': 16.18, 'E': 11.0,
-    'F': 15.36, 'G': 15.09, 'H': 14.27, 'I': 11.45, 'J': 9.82,
-    'L': 16.45, 'M': 9.82,  'N': 9.82,  'P': 10.91,
-    'Q': 12.36, 'R': 9.82,  'S': 10.36, 'T': 9.82,
-    'W': 9.82,  'X': 11.0,  'Y': 11.45,
-}
-for col, width in COL_WIDTHS.items():
-    ws15.column_dimensions[col].width = width
+_src_wb.close()
+print(f'  完成，共複製 {count} 格')
 
 # ══════════════════════════════════════════════════════════
 # 9. 债券及存单新程序结果NEW
@@ -482,7 +431,6 @@ ws17.column_dimensions['M'].width = 14
 ws17.column_dimensions['N'].width = 14
 
 # ── 保存 ─────────────────────────────────────────────────
-dest = Path('D:/vsproject/fsi-risk-platform/2_processing/sql/mmf/report_03_mmf/Template.xlsx')
 wb.save(dest)
 print(f'已創建: {dest}')
 print(f'Sheets ({len(wb.sheetnames)}):')
