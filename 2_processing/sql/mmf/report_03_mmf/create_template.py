@@ -360,20 +360,16 @@ ws17.column_dimensions['A'].width = 20
 ws17.column_dimensions['B'].width = 12
 ws17.column_dimensions['C'].width = 40
 
-# ── F1:N1 行（按 Template 参数 sheet）────────────────────
-# 注意：N1 的 Wind DDE 公式 =[1]!TDays(...) 不由 openpyxl 寫入
-# 原因：openpyxl 建立的新 workbook 無 Wind 外部連結註冊，
-#       Excel 開啟時會報「不可讀取」錯誤。
-#       N2:N118 的靜態交易日是實際計算來源，N1 留空即可。
+# ── F1:N1 行 ─────────────────────────────────────────────
 ws17['F1'] = '当前日期所在月倒数第5个交易日'
 ws17['K1'] = '今天'
 ws17['L1'].value         = '=TODAY()'
 ws17['L1'].number_format = 'mm-dd-yy'
 ws17['M1'].value         = '=TODAY()'
 ws17['M1'].number_format = 'mm-dd-yy'
-# N1 留空（Wind 公式由使用者在 Excel+Wind 環境手動輸入）
+ws17['N1'] = '=TDays(G1,"2026-12-15","TradingCalendar=HKEX")'
 
-# ── F2:L2 行（按 Template 参数 sheet）────────────────────
+# ── F2:L2 行 ─────────────────────────────────────────────
 BLUE_CELL = PatternFill('solid', fgColor='00B0F0')
 ws17['F2'].value         = ('=IF(DATE(YEAR(WORKDAY(TODAY(),-1)),MONTH(WORKDAY(TODAY(),-1))+1,1)-1'
                              '=WORKDAY(DATE(YEAR(WORKDAY(TODAY(),-1)),MONTH(WORKDAY(TODAY(),-1))+1,1),-1),'
@@ -384,44 +380,6 @@ ws17['F2'].number_format = 'mm-dd-yy'
 ws17['K2'] = '5个交易日后'
 ws17['L2'].value         = '=N5'
 ws17['L2'].number_format = 'mm-dd-yy'
-
-# ── N2:N118 HKEX 靜態交易日（2026-07-02 至 2026-12-15）──
-from datetime import date as _date
-_hkex = [
-    _date(2026,7,2),  _date(2026,7,3),  _date(2026,7,6),  _date(2026,7,7),
-    _date(2026,7,8),  _date(2026,7,9),  _date(2026,7,10), _date(2026,7,13),
-    _date(2026,7,14), _date(2026,7,15), _date(2026,7,16), _date(2026,7,17),
-    _date(2026,7,20), _date(2026,7,21), _date(2026,7,22), _date(2026,7,23),
-    _date(2026,7,24), _date(2026,7,27), _date(2026,7,28), _date(2026,7,29),
-    _date(2026,7,30), _date(2026,7,31), _date(2026,8,3),  _date(2026,8,4),
-    _date(2026,8,5),  _date(2026,8,6),  _date(2026,8,7),  _date(2026,8,10),
-    _date(2026,8,11), _date(2026,8,12), _date(2026,8,13), _date(2026,8,14),
-    _date(2026,8,17), _date(2026,8,18), _date(2026,8,19), _date(2026,8,20),
-    _date(2026,8,21), _date(2026,8,24), _date(2026,8,25), _date(2026,8,26),
-    _date(2026,8,27), _date(2026,8,28), _date(2026,8,31), _date(2026,9,1),
-    _date(2026,9,2),  _date(2026,9,3),  _date(2026,9,4),  _date(2026,9,7),
-    _date(2026,9,8),  _date(2026,9,9),  _date(2026,9,10), _date(2026,9,11),
-    _date(2026,9,14), _date(2026,9,15), _date(2026,9,16), _date(2026,9,17),
-    _date(2026,9,18), _date(2026,9,21), _date(2026,9,22), _date(2026,9,23),
-    _date(2026,9,24), _date(2026,9,25), _date(2026,9,28), _date(2026,9,29),
-    _date(2026,9,30), _date(2026,10,2), _date(2026,10,5), _date(2026,10,6),
-    _date(2026,10,7), _date(2026,10,8), _date(2026,10,9), _date(2026,10,12),
-    _date(2026,10,13),_date(2026,10,14),_date(2026,10,15),_date(2026,10,16),
-    _date(2026,10,20),_date(2026,10,21),_date(2026,10,22),_date(2026,10,23),
-    _date(2026,10,26),_date(2026,10,27),_date(2026,10,28),_date(2026,10,29),
-    _date(2026,10,30),_date(2026,11,2), _date(2026,11,3), _date(2026,11,4),
-    _date(2026,11,5), _date(2026,11,6), _date(2026,11,9), _date(2026,11,10),
-    _date(2026,11,11),_date(2026,11,12),_date(2026,11,13),_date(2026,11,16),
-    _date(2026,11,17),_date(2026,11,18),_date(2026,11,19),_date(2026,11,20),
-    _date(2026,11,23),_date(2026,11,24),_date(2026,11,25),_date(2026,11,26),
-    _date(2026,11,27),_date(2026,11,30),_date(2026,12,1), _date(2026,12,2),
-    _date(2026,12,3), _date(2026,12,4), _date(2026,12,7), _date(2026,12,8),
-    _date(2026,12,9), _date(2026,12,10),_date(2026,12,11),_date(2026,12,14),
-    _date(2026,12,15),
-]
-for i, d in enumerate(_hkex, 2):
-    c = ws17.cell(row=i, column=14, value=d)
-    c.number_format = 'yyyy\\-mm\\-dd'
 
 ws17.column_dimensions['F'].width = 30
 ws17.column_dimensions['K'].width = 14
