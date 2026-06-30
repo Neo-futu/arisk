@@ -407,7 +407,7 @@ for row in range(3, MAX_ROWS + 1):
     n   = row
     for ci, cl in enumerate(_DATA_COLS, 1):
         ws15.cell(row=row, column=ci).value = f'=持仓数据!{cl}{src}'
-    ws15.cell(row=row, column=12).number_format = NFMT  # L
+    # L 欄（col 12）保持 General 格式，與 Template 一致
 
     def _f(col, val, fmt=None):
         c = ws15.cell(row=row, column=col, value=val)
@@ -425,9 +425,9 @@ for row in range(3, MAX_ROWS + 1):
         print(f'    {row}/{MAX_ROWS}')
 
 # ── 欄寬 ──────────────────────────────────────────────────
-_CW = {'A':10.45,'B':10.36,'C':16.18,'D':16.18,'E':11.0,
+_CW = {'A':13.18,'B':10.36,'C':16.18,'E':11.0,
        'F':15.36,'G':15.09,'H':14.27,'I':11.45,'J':9.82,
-       'L':16.45,'M':9.82,'N':9.82,'P':10.91,
+       'L':16.45,'M':9.82,'P':10.91,
        'Q':12.36,'R':9.82,'S':10.36,'T':9.82,
        'W':9.82,'X':11.0,'Y':11.45}
 for col, w in _CW.items():
