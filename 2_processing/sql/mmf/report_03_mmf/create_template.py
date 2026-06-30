@@ -349,7 +349,7 @@ ws15['B1'].number_format  = 'mm-dd-yy'
 ws15['B1'].fill           = YEL
 ws15['B1'].font           = Font(name='Arial', size=10, bold=True)
 
-ws15['M1'].value          = 'FI'
+ws15['M1'].value          = 'FIXED'   # 對應 SQL 輸出 coupon_type=FIXED
 ws15['M1'].fill           = YEL
 ws15['M1'].font           = Font(name='Arial', size=10, bold=True)
 
