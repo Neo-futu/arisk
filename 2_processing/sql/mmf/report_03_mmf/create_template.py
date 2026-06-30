@@ -342,9 +342,11 @@ ws16.column_dimensions['A'].width = 60
 # ══════════════════════════════════════════════════════════
 ws17 = wb.create_sheet('参数')
 ws17.sheet_properties.tabColor = TAB_RED
+
+# ── A~C：基礎參數 ──────────────────────────────────────
 for i, h in enumerate(['参数名称', '参数值', '说明'], 1):
     hdr(ws17, 1, i, h)
-params = [
+base_params = [
     ('rate_shock_bps',  50,       '利率衝擊幅度（基點），壓力測試用'),
     ('evaluate_date',   '',       '估值日期，由 run_report.py 注入'),
     ('coupon_type_fi',  'FIXED',  '固定利率類型代碼'),
@@ -352,32 +354,77 @@ params = [
     ('coupon_type_zc',  'ZERO',   '零息/貼現券類型代碼'),
     ('shock_50bp',      0.005,    '+50bp（小數），= rate_shock_bps / 10000'),
 ]
-for row, (name, val, desc) in enumerate(params, 2):
+for row, (name, val, desc) in enumerate(base_params, 2):
     ws17.cell(row=row, column=1, value=name)
     ws17.cell(row=row, column=2, value=val)
     ws17.cell(row=row, column=3, value=desc)
-ws17.column_dimensions['A'].width = 20
-ws17.column_dimensions['B'].width = 12
-ws17.column_dimensions['C'].width = 40
 
-# ── F1:I2：日期計算輔助區（來自 output 的 参数 sheet）─────
+# ── F1:F2：月末倒數第5交易日（純 Excel 公式，無 Wind 依賴）─
 ws17['F1'] = '当前日期所在月倒数第5个交易日'
 ws17['F1'].font = Font(bold=True, size=9)
 ws17['F2'] = ('=IF(DATE(YEAR(WORKDAY(TODAY(),-1)),MONTH(WORKDAY(TODAY(),-1))+1,1)-1'
               '=WORKDAY(DATE(YEAR(WORKDAY(TODAY(),-1)),MONTH(WORKDAY(TODAY(),-1))+1,1),-1),'
               'WORKDAY(DATE(YEAR(WORKDAY(TODAY(),-1)),MONTH(WORKDAY(TODAY(),-1))+1,1)-1,-4),'
               'WORKDAY(DATE(YEAR(WORKDAY(TODAY(),-1)),MONTH(WORKDAY(TODAY(),-1))+1,1)-1,-5))')
-ws17['G1'] = '今天'
-ws17['G1'].font = Font(bold=True, size=9)
-ws17['G2'] = '=TODAY()'
-ws17['H1'] = '5个交易日后'
-ws17['H1'].font = Font(bold=True, size=9)
-ws17['H2'] = '=TODAY()'
-ws17['I1'] = '=[1]!TDays(G2,"2026-12-15","HKEX","cols=1;rows=115")'
+
+# ── K1:M2：今天 / 5交易日後（純 Excel 公式）─────────────
+ws17['K1'] = '今天'
+ws17['K1'].font = Font(bold=True, size=9)
+ws17['K2'] = '5个交易日后'
+ws17['K2'].font = Font(bold=True, size=9)
+ws17['L1'] = '=TODAY()'
+ws17['L2'] = '=N5'     # N5 = 今天起第5個交易日（來自 N 列交易日曆）
+ws17['M1'] = '=TODAY()'
+
+# ── N1 說明 / N2:N118 靜態 HKEX 交易日（Wind 取得後固化）─
+ws17['N1'] = 'HKEX Trading Days'
+ws17['N1'].font = Font(bold=True, size=9)
+# N2:N118 = 117 個 HKEX 交易日（2026-07-02 至 2026-12-15）
+from datetime import date
+hkex_days = [
+    date(2026,7,2),  date(2026,7,3),  date(2026,7,6),  date(2026,7,7),
+    date(2026,7,8),  date(2026,7,9),  date(2026,7,10), date(2026,7,13),
+    date(2026,7,14), date(2026,7,15), date(2026,7,16), date(2026,7,17),
+    date(2026,7,20), date(2026,7,21), date(2026,7,22), date(2026,7,23),
+    date(2026,7,24), date(2026,7,27), date(2026,7,28), date(2026,7,29),
+    date(2026,7,30), date(2026,7,31), date(2026,8,3),  date(2026,8,4),
+    date(2026,8,5),  date(2026,8,6),  date(2026,8,7),  date(2026,8,10),
+    date(2026,8,11), date(2026,8,12), date(2026,8,13), date(2026,8,14),
+    date(2026,8,17), date(2026,8,18), date(2026,8,19), date(2026,8,20),
+    date(2026,8,21), date(2026,8,24), date(2026,8,25), date(2026,8,26),
+    date(2026,8,27), date(2026,8,28), date(2026,8,31), date(2026,9,1),
+    date(2026,9,2),  date(2026,9,3),  date(2026,9,4),  date(2026,9,7),
+    date(2026,9,8),  date(2026,9,9),  date(2026,9,10), date(2026,9,11),
+    date(2026,9,14), date(2026,9,15), date(2026,9,16), date(2026,9,17),
+    date(2026,9,18), date(2026,9,21), date(2026,9,22), date(2026,9,23),
+    date(2026,9,24), date(2026,9,25), date(2026,9,28), date(2026,9,29),
+    date(2026,9,30), date(2026,10,2), date(2026,10,5), date(2026,10,6),
+    date(2026,10,7), date(2026,10,8), date(2026,10,9), date(2026,10,12),
+    date(2026,10,13),date(2026,10,14),date(2026,10,15),date(2026,10,16),
+    date(2026,10,20),date(2026,10,21),date(2026,10,22),date(2026,10,23),
+    date(2026,10,26),date(2026,10,27),date(2026,10,28),date(2026,10,29),
+    date(2026,10,30),date(2026,11,2), date(2026,11,3), date(2026,11,4),
+    date(2026,11,5), date(2026,11,6), date(2026,11,9), date(2026,11,10),
+    date(2026,11,11),date(2026,11,12),date(2026,11,13),date(2026,11,16),
+    date(2026,11,17),date(2026,11,18),date(2026,11,19),date(2026,11,20),
+    date(2026,11,23),date(2026,11,24),date(2026,11,25),date(2026,11,26),
+    date(2026,11,27),date(2026,11,30),date(2026,12,1), date(2026,12,2),
+    date(2026,12,3), date(2026,12,4), date(2026,12,7), date(2026,12,8),
+    date(2026,12,9), date(2026,12,10),date(2026,12,11),date(2026,12,14),
+    date(2026,12,15),
+]
+for i, d in enumerate(hkex_days, 2):
+    c = ws17.cell(row=i, column=14, value=d)
+    c.number_format = 'YYYY-MM-DD'
+
+ws17.column_dimensions['A'].width = 20
+ws17.column_dimensions['B'].width = 12
+ws17.column_dimensions['C'].width = 40
 ws17.column_dimensions['F'].width = 30
-ws17.column_dimensions['G'].width = 14
-ws17.column_dimensions['H'].width = 16
-ws17.column_dimensions['I'].width = 14
+ws17.column_dimensions['K'].width = 14
+ws17.column_dimensions['L'].width = 14
+ws17.column_dimensions['M'].width = 14
+ws17.column_dimensions['N'].width = 14
 
 # ── 保存 ─────────────────────────────────────────────────
 dest = Path('D:/vsproject/fsi-risk-platform/2_processing/sql/mmf/report_03_mmf/Template.xlsx')
