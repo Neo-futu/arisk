@@ -44,12 +44,14 @@ def seed(conn):
              inception_date, is_active, is_mmf,
              mmf_wam_limit_days, mmf_wal_limit_days,
              mmf_daily_liq_pct, mmf_weekly_liq_pct,
-             sfc_code)
-        VALUES (%s,%s,%s,'MMF','HKD','2020-01-15',TRUE,TRUE,60,120,7.5,15.0,%s)
-        ON CONFLICT (port_id) DO NOTHING
+             sfc_code, wind_code)
+        VALUES (%s,%s,%s,'MMF','HKD','2020-01-15',TRUE,TRUE,60,120,7.5,15.0,%s,%s)
+        ON CONFLICT (port_id) DO UPDATE SET wind_code = EXCLUDED.wind_code
     """, [
-        ("BHMMF001", PORT_NAMES[0], "Bolide HKD MMF I",  "SFC-MMF-001"),
-        ("BHMMF002", PORT_NAMES[1], "Bolide HKD MMF II", "SFC-MMF-002"),
+        # sfc_code 格式參考：AGW600 = BOCHK HK Dollar MMF（SFC 認可代碼）
+        # wind_code 為測試佔位，實際代碼待基金在 Wind 錄入後更新
+        ("BHMMF001", PORT_NAMES[0], "Bolide HKD MMF I",  "BWH001", "BHMF001.OF"),
+        ("BHMMF002", PORT_NAMES[1], "Bolide HKD MMF II", "BWH002", "BHMF002.OF"),
     ])
 
     # ── balance_portfolio_nav ────────────────────────────────
@@ -115,15 +117,59 @@ def seed(conn):
 
     # ── balance_bond ─────────────────────────────────────────
     # remaining_days 是 Generated Column（= maturity_date - evaluate_date），不能手動插入
+    # Wind 代碼來源：用戶確認的香港貨幣市場基金可交易債券清單
     bonds = [
-        # port_id   code             name                   subtype      issuer_name          ccy   qty         cost        mv          ytm    dur   cvx   cpn    maturity_date                rating   wt
-        ("BHMMF001","HK_GOVT_2026", "香港政府債券2026",    "BOND_GOVT","香港特別行政區政府","HKD",50_000_000,49_800_000,49_850_000,0.0428,0.50,0.01,0.0450,TEST_DATE+timedelta(182),"AAA", 0.1842),
-        ("BHMMF001","HKMA_TB_09",  "金管局國庫票據0926",  "BOND_GOVT","香港金融管理局",    "HKD",30_000_000,29_920_000,29_940_000,0.0431,0.25,0.005,0.0435,TEST_DATE+timedelta(91), "AAA", 0.1107),
-        ("BHMMF001","BOCHK_CP_01", "中銀香港商票0926",    "BOND_CORP","中國銀行(香港)",    "HKD",20_000_000,19_950_000,19_960_000,0.0442,0.24,0.004,0.0445,TEST_DATE+timedelta(88), "A-1", 0.0738),
-        ("BHMMF001","HSBC_MTN_01", "匯豐中期票據",        "BOND_CORP","匯豐銀行",          "HKD",15_000_000,14_910_000,14_925_000,0.0455,0.48,0.009,0.0460,TEST_DATE+timedelta(175),"A-1+",0.0552),
-        ("BHMMF002","HK_GOVT_2027","香港政府債券2027",    "BOND_GOVT","香港特別行政區政府","HKD",40_000_000,39_720_000,39_760_000,0.0432,0.75,0.02, 0.0440,TEST_DATE+timedelta(273),"AAA", 0.2147),
-        ("BHMMF002","HKMA_TB_12",  "金管局國庫票據1226",  "BOND_GOVT","香港金融管理局",    "HKD",25_000_000,24_940_000,24_950_000,0.0429,0.49,0.01, 0.0433,TEST_DATE+timedelta(180),"AAA", 0.1348),
-        ("BHMMF002","STAN_CP_01",  "渣打商票0926",        "BOND_CORP","渣打銀行",          "HKD",18_000_000,17_960_000,17_965_000,0.0448,0.24,0.004,0.0450,TEST_DATE+timedelta(87), "A-1", 0.0970),
+        # ── BHMMF001 持倉 ────────────────────────────────────
+        # code               name                              subtype      issuer                    ccy   qty          cost         mv           ytm     dur    cvx    cpn     maturity             rating  wt
+        # 4701.HK：香港機場管理局 4.25% 到期 2026-08-05（41天，AAA，HKD）
+        ("BHMMF001","4701.HK",
+         "Airport Authority HK 4.25% 20260805",
+         "BOND_GOVT","Airport Authority Hong Kong","HKD",
+         50_000_000, 49_975_000, 49_980_000, 0.0428, 0.11, 0.001, 0.0425,
+         date(2026,8,5), "AAA", 0.1847),
+
+        # BNYHFN26213.CMU：香港大學 3.8% 到期 2036-06-22（AAA，HKD，CMU）
+        ("BHMMF001","BNYHFN26213.CMU",
+         "HKU 3.8% 20360622",
+         "BOND_CORP","University of Hong Kong","HKD",
+         30_000_000, 28_500_000, 28_560_000, 0.0450, 7.80, 0.85, 0.0380,
+         date(2036,6,22), "AAA", 0.1056),
+
+        # DBANFN25034.CMU：Scentre 4.03% 到期 2035-06-18（A，HKD，CMU）
+        ("BHMMF001","DBANFN25034.CMU",
+         "SCENTRE 4.03% 20350618",
+         "BOND_CORP","Scentre Group","HKD",
+         20_000_000, 19_200_000, 19_250_000, 0.0460, 6.90, 0.72, 0.0403,
+         date(2035,6,18), "A", 0.0711),
+
+        # 40032.HK：香港電燈 3.3% 到期 2031-01-11（AA-，HKD，聯交所）
+        ("BHMMF001","40032.HK",
+         "HK Electric 3.3% 20310111",
+         "BOND_CORP","CLP Power Hong Kong","HKD",
+         15_000_000, 13_800_000, 13_850_000, 0.0455, 3.95, 0.22, 0.0330,
+         date(2031,1,11), "AA-", 0.0512),
+
+        # ── BHMMF002 持倉 ────────────────────────────────────
+        # 4701.HK：同一隻機管局債，BHMMF002 也持有
+        ("BHMMF002","4701.HK",
+         "Airport Authority HK 4.25% 20260805",
+         "BOND_GOVT","Airport Authority Hong Kong","HKD",
+         40_000_000, 39_980_000, 39_984_000, 0.0428, 0.11, 0.001, 0.0425,
+         date(2026,8,5), "AAA", 0.2159),
+
+        # DBANFN25028.CMU：RE1 4.205% 到期 2035-05-07（A+，HKD，CMU）
+        ("BHMMF002","DBANFN25028.CMU",
+         "RE1 4.205% 20350507",
+         "BOND_CORP","Link REIT","HKD",
+         25_000_000, 24_100_000, 24_150_000, 0.0448, 6.50, 0.62, 0.0421,
+         date(2035,5,7), "A+", 0.1303),
+
+        # 40198.HK：IFCDCN 2.67% 到期 2030-04-08（AA，HKD，聯交所）
+        ("BHMMF002","40198.HK",
+         "IFCDCN 2.67% 20300408",
+         "BOND_CORP","IFC Development China","HKD",
+         18_000_000, 16_200_000, 16_250_000, 0.0442, 3.20, 0.16, 0.0267,
+         date(2030,4,8), "AA", 0.0877),
     ]
     for b in bonds:
         (pid,code,name,subtype,issuer,ccy,qty,cost,mv,ytm,dur,cvx,cpn,matdt,rating,wt) = b
