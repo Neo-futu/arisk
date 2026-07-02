@@ -1,6 +1,53 @@
 """
 create_template.py  —  全新建立 report_03_mmf/Template.xlsx
 執行：python 2_processing/sql/mmf/report_03_mmf/create_template.py
+
+功能說明
+--------
+生成貨幣基金（MMF）日報 xlsx 模版，共 12 個工作表：
+
+  日报-表格汇总        匯總報表（6 大業務區塊，VLOOKUP 取數自 SQL 導入表）
+  日报-sql导入数据     SQL 原始數據落地區（各 .sql 輸出按固定起始格寫入）
+  持仓数据             17_stress_test.sql 壓力測試持倉明細
+  回购明细             15_overnight_repo.sql 回購持倉
+  其他监控-sql导入数据 18/19/39/41.sql 監控數據
+  shibor债定价         浮息債 Wind 公式預留區
+  计算过程             WAM/WAL、流動性、壓力測試中間計算輔助層
+  组合                 組合參數與匯總（使用者自行設計）
+  债券及存单新         壓力測試計算層，含 VLOOKUP 引用 压力测试结果 sheet
+  压力测试结果         42_stress_result.sql 輸出（15 列，含 lookup_key）
+  债券及存单新程序结果NEW  新版壓力測試結果（使用者自行設計）
+  参数                 rate_shock_bps 等運行參數
+
+業務邏輯重點
+-----------
+1. 偏離度 (bp) = (市場價值 - 攤余成本) / 淨資產 × 10000
+   正值：市價 > 成本（債券升值）；負值：市價 < 成本（收益率上行）
+
+2. 壓力測試（+50bp 利率衝擊）
+   壓力市值 = 市值 × (1 - 久期 × 0.005)
+   壓力損失 = 市值 - 壓力市值
+   壓力損失修正 = 壓力損失 × 變現係數（DEPOSIT=0, FLOAT=0.05, BOND_GOVT=CD=0.20, BOND_CORP=0.80）
+
+3. 收益率曲線壓力情景（風險觀察指標表）
+   利率上行 X bp 後偏離度 = 當前偏離度 - X × WAM年
+   WAM年 = WAM天 / 365（修正久期近似）
+
+4. 偏離度分解 (bp)
+   各資產偏離度貢獻 = 該資產佔總偏差比例 × 基金整體偏離度
+   來源：03_deviation_breakdown.sql col8-12（cd_pct/scp_pct/mtn_pct/treasury_pct/policy_pct）
+
+5. 06_asset_portfolio.sql 欄位順序（無估值日列）
+   col1=port_name, col2=net_asset亿, col3=cash, col4=bond, col5=bond_interest,
+   col6=deposit, col7=deposit_interest, col8=cd, col9=rev_repo, col10=repo,
+   col11=interest_rate_bond, col12=fl_bond, col13=credit_bond,
+   col14=deposit_y(提支罚息), col15=deposit_n
+
+邊框規則
+--------
+  _pre_thin()：合併前對範圍所有格寫入 thin，使非錨格保有 XML 邊框數據
+  _frame()   ：外框 medium，內部 thin，純按位置決定，不保留既有樣式
+               合併格用 merge_map 查詢真實 max_col/max_row 判斷外邊界
 """
 import sys, warnings
 sys.stdout.reconfigure(encoding='utf-8')
@@ -128,7 +175,10 @@ _STR_S = '压力测试结果'
 
 def _pre_thin(r0, c0, rs=1, cs=1):
     """合並前先對範圍內所有格寫入 thin 四邊框。
-    合並後非錨格在 XML 中仍保有此邊框數據，Excel 據此顯示相鄰格線。
+
+    openpyxl 合併後非錨格變為 MergedCell 代理，無法再設樣式，
+    但合併前寫入的邊框數據仍保留在 xlsx XML 中。
+    Excel 渲染相鄰格線時讀取這些數據，因此必須在 merge_cells() 之前呼叫。
     """
     for ri in range(r0, r0 + rs):
         for ci in range(c0, c0 + cs):
@@ -254,14 +304,19 @@ for i, fund in enumerate(FUNDS_S):
     _d(r, 2,  vl(f'A{r}', _N, 2, '10^8'),    '0.00_ ')   # 净值亿元
     _d(r, 3,  vl(f'A{r}', _N, 3),             '0.00_ ')   # 偏离度bp
     _d(r, 4,  vl(f'A{r}', _N, 4, '10^4'),    '0_ ')       # 偏离金额万元
-    # 收益率曲线压力测试：利率上行 X bp 后的组合偏离度(bp)
-    #   新偏离度 = 当前偏离度 − X × WAM年
-    #   其中 WAM年 = WAM天/365（用作修正久期近似）
-    # 含义：WAM年越长，同样利率冲击造成的偏离度下移越大
+    # ── 收益率曲線壓力測試（E/F/G 列）────────────────────────
+    # 業務含義：利率分別上行 0/+25/+50 bp 後，組合偏離度變為多少
+    #
+    # 推導：
+    #   利率上行 X bp → 市值下跌 ≈ duration × X/10000 × MV
+    #   偏離度變化(bp) ≈ −X × duration ≈ −X × WAM年
+    #   （MMF 修正久期 ≈ WAM，WAM年 = WAM天/365）
+    # 公式：新偏離度 = 當前偏離度 − X × WAM年
+    #   X=0  → 基準狀態；X=25 → 警示線；X=50 → 監管壓力情景
     _wam = f"IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_N},7,0)/365,1)"
-    _d(r, 5, f'=IFERROR(C{r}-0*({_wam}),0)',    '0.00_ ')   # +0bp：当前偏离度（不变）
-    _d(r, 6, f'=IFERROR(C{r}-25*({_wam}),0)',   '0.00_ ')   # +25bp冲击后偏离度
-    _d(r, 7, f'=IFERROR(C{r}-50*({_wam}),0)',   '0.00_ ')   # +50bp冲击后偏离度
+    _d(r, 5, f'=IFERROR(C{r}-0*({_wam}),0)',    '0.00_ ')   # +0bp：當前偏離度（基準）
+    _d(r, 6, f'=IFERROR(C{r}-25*({_wam}),0)',   '0.00_ ')   # +25bp 衝擊後偏離度
+    _d(r, 7, f'=IFERROR(C{r}-50*({_wam}),0)',   '0.00_ ')   # +50bp 衝擊後偏離度
     _d(r, 8,  vl(f'A{r}', _N, 5),             '0.0000_ ') # 万份收益
     _d(r, 9,  vl(f'A{r}', _N, 6),             '0.00_ ')   # 7日年化
     # 流动性监管指标：(现金+1M利率债)/净值×100  /  受限资产/净值×100
@@ -320,8 +375,11 @@ _shl(h1, 14, '回购质押品资产/正回购')
 
 for i, fund in enumerate(FUNDS_S):
     r = S2['ds'] + i
-    # col2=净资产亿，col3=现金，col4=债券，col6=存款，col8=存单CD
-    # col9=逆回购，col10=正回购，col11=利率债
+    # ── 06_asset_portfolio 欄位映射（注意：SQL 無 估值日 列）────
+    # col2=净资产亿, col3=现金, col4=债券, col5=债券利息, col6=存款,
+    # col7=存款利息, col8=存单CD, col9=逆回购(融出), col10=正回购(融入),
+    # col11=利率债, col12=浮息债, col13=信用债, col14=存款提支罚息
+    # 分母統一用 col2（净资产），比例 > 100% 屬正常（基金使用正回購槓桿）
     nav_e2 = f"IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_AP},2,0),1)"   # col2=净资产亿
     t5_sum = (f"IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_T5},2,0)"
               f"+VLOOKUP(A{r},'{_SRC_S}'!{_T5},3,0)"
@@ -443,13 +501,18 @@ for ci, text in enumerate(['偏离度（bp）', '基金整体', '存单', '短�
 for i, fund in enumerate(FUNDS_S):
     r = S4['ds'] + i
     _d(r, 1, fund, bold=True, algn='center')
-    # 仿 report_03：各资产偏离度(bp) = 该资产占总偏差比例 × 基金整体偏离度(bp)
-    #   = _DV col_pct × B{r}（B{r}=基金整体bp）
-    # 03_deviation_breakdown.sql 列映射：
+    # ── 偏離度分解（各資產類別 bp 貢獻）───────────────────────
+    # 業務含義：基金整體偏離度 = 各資產類別偏離度貢獻之和
+    #   各資產偏離度貢獻(bp) = 該資產佔總偏差比例 × 基金整體偏離度(bp)
+    #
+    # 注意：各子項方向可能不同（存單升值、中票貶值），子項絕對值可 > 整體，
+    #       這是正常的「對沖抵消」效果，非計算錯誤。
+    #
+    # 03_deviation_breakdown.sql 列映射（_DV 範圍）：
     #   col2=total_deviation(元), col3=cd_dev(元), col4=scp_dev(元),
     #   col5=mtn_dev(元), col6=treasury_dev(元), col7=policy_dev(元),
     #   col8=cd_pct, col9=scp_pct, col10=mtn_pct, col11=treasury_pct, col12=policy_pct
-    # 为0时数字格式自动显示"-"
+    # 零值由數字格式自動顯示 "-"（格式：'0.00_ ;-0.00_ ;"-"'）
     _FMT_DV = '0.00_ ;-0.00_ ;"-"'
     _d(r, 2, vl(f'A{r}', _N, 3),               '0.00_ ')   # 基金整体bp（来自01_nav col3）
     _d(r, 3, f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_DV},8,0)*B{r},0)",  _FMT_DV)  # 存单: cd_pct×bp
@@ -592,11 +655,15 @@ for col, w in [('A', 14), ('B', 12), ('C', 14), ('D', 12), ('E', 14),
 
 # ── 每張表格加邊框：inner=thin，outer=medium ─────────────────
 def _frame(sec, ncols):
-    """為整個 section（標題行→合計行，第1列→ncols列）統一邊框：
-    • 外框（四週邊界）：medium
-    • 內部（所有其餘邊）：thin
-    完全按位置決定，不保留既有樣式，確保全表粗細一致。
-    合併格用實際 max_col/max_row 判斷右/下外邊界。
+    """為整個 section（標題行→合計行，第1列→ncols列）統一邊框。
+
+    規則：外框（四週）medium，內部 thin，完全按位置決定，不保留既有樣式。
+
+    合併格處理：
+      普通格  → 用自身 (r, c) 判斷是否在邊界
+      合併錨格 → 用 merge_map 查詢該合併範圍的 max_col/max_row，
+                確保跨列合併格（如標題行 A1:K1）的右/下外框也升為 medium。
+      MergedCell 佔位格 → 跳過，由錨格統一代表整個合併範圍的邊框。
     """
     r1, r2 = sec['t'], sec['s']
 
