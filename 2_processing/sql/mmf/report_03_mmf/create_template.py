@@ -53,15 +53,586 @@ wb = Workbook()
 wb.remove(wb.active)
 
 # ══════════════════════════════════════════════════════════
-# 1. 日报-表格汇总
+# 1. 日报-表格汇总  (仿 report_03 六大區塊，VLOOKUP 取數)
 # ══════════════════════════════════════════════════════════
 ws = wb.create_sheet('日报-表格汇总')
 ws.sheet_properties.tabColor = TAB_BLUE
-ws['A1'] = '【日報 - 表格彙總】'
-ws['A1'].font = Font(bold=True, size=14)
-ws['A2'] = '此頁由使用者自行設計，引用「日报-sql导入数据」的數據'
-ws['A2'].font = Font(color='808080', size=10)
-ws.column_dimensions['A'].width = 60
+
+# ── 局部樣式（與全局 hdr/lbl/yell 不衝突）──────────────
+_MYH12  = Font(name='微软雅黑', size=12, bold=True)
+_MYH11H = Font(name='微软雅黑', size=11, bold=True)
+_ST10N  = Font(name='宋体', size=10.5)
+_ST10BN = Font(name='宋体', size=10.5, bold=True)
+_MS     = Side(border_style='medium')
+_TS     = Side(border_style='thin')
+_CTR_WP = Alignment(horizontal='center', vertical='center', wrap_text=True)
+_RT_H   = Alignment(horizontal='right')
+_CTR_H2 = Alignment(horizontal='center')
+_LT_H2  = Alignment(horizontal='left')
+
+def _bd(t=None, b=None, l=None, r=None):
+    return Border(top=t, bottom=b, left=l, right=r)
+
+# ── 從 DB 取 MMF 組合名稱，失敗時降級到預設列表 ─────────
+try:
+    import os as _os
+    import psycopg2 as _pg
+    from dotenv import load_dotenv as _ld
+    _ld()
+    _conn = _pg.connect(
+        host     = _os.getenv('POSTGRES_HOST', 'localhost'),
+        port     = int(_os.getenv('POSTGRES_PORT', '5432')),
+        dbname   = _os.getenv('POSTGRES_DB',   'fsi_risk'),
+        user     = _os.getenv('POSTGRES_USER', 'fsi_user'),
+        password = _os.getenv('POSTGRES_PASSWORD', 'change_me'),
+    )
+    with _conn.cursor() as _cur:
+        _cur.execute(
+            'SELECT port_name FROM fsi.para_portfolio '
+            'WHERE is_mmf = TRUE AND is_active = TRUE '
+            'ORDER BY port_name'
+        )
+        FUNDS_S = [row[0] for row in _cur.fetchall()]
+    _conn.close()
+    print(f'  DB 組合名稱 ({len(FUNDS_S)}): {FUNDS_S}')
+except Exception as _e:
+    FUNDS_S = ['薪金宝', '现金增利', '现金宝', '沃利货币', '天利货币',
+               '收益宝', '快线货币', '惠利货币', '华夏货币', '财富宝', '保证金货币']
+    print(f'  警告：DB 取組合名稱失敗，使用預設列表 ({_e})')
+N = len(FUNDS_S)
+
+# ── 動態行偏移（各節起始行隨 N 自動計算）────────────────
+# 每節：1行大標題 + n_hdr行表頭 + N行數據 + 1行合計 + 1行空白間隔
+def _sec(start, n_hdr=2):
+    ds = start + 1 + n_hdr          # 數據起始行
+    return {
+        't':  start,                 # 大標題行
+        'h':  start + 1,             # 表頭起始行
+        'ds': ds,                    # 數據起始行
+        'de': ds + N - 1,            # 數據結束行
+        's':  ds + N,                # 合計行
+        'nx': ds + N + 2,            # 下一節起始行（+1空行）
+    }
+
+# 節順序與 report_03 一致
+# S1 風險觀察：3行表頭（頂層組群→中層→葉）；其餘 2行/1行
+S1 = _sec(1, n_hdr=3)               # 风险观察指标：3行表頭
+S2 = _sec(S1['nx'])                  # 监管指标和内部要求：2行表頭
+S3 = _sec(S2['nx'])                  # 压力测试结果：2行表頭
+S4 = _sec(S3['nx'], n_hdr=1)        # 偏离度分解：1行表頭
+S5 = _sec(S4['nx'])                  # 申赎与流动性分析：2行表頭
+S6 = _sec(S5['nx'], n_hdr=1)        # 资产配置情况：1行表頭
+
+_SRC_S = '日报-sql导入数据'
+_STR_S = '压力测试结果'
+
+def _pre_thin(r0, c0, rs=1, cs=1):
+    """合並前先對範圍內所有格寫入 thin 四邊框。
+    合並後非錨格在 XML 中仍保有此邊框數據，Excel 據此顯示相鄰格線。
+    """
+    for ri in range(r0, r0 + rs):
+        for ci in range(c0, c0 + cs):
+            ws.cell(row=ri, column=ci).border = _bd(t=_TS, b=_TS, l=_TS, r=_TS)
+
+def _stitle(row, text, ncols=14):
+    _pre_thin(row, 1, cs=ncols)                           # 合併前所有格補 thin
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=ncols)
+    c = ws.cell(row=row, column=1, value=text)
+    c.font = _MYH12; c.alignment = _LT_H2
+    c.border = _bd(b=_MS)                                 # 錨點僅設 bottom（外框由 _frame 補）
+    ws.row_dimensions[row].height = 18.75
+
+def _sh(row, col, text, rs=2, cs=1):
+    """標準表頭格：rs×cs 合並，medium 上邊框"""
+    _pre_thin(row, col, rs=rs, cs=cs)                     # 合併前所有格補 thin
+    if rs > 1 or cs > 1:
+        ws.merge_cells(start_row=row, start_column=col,
+                       end_row=row + rs - 1, end_column=col + cs - 1)
+    c = ws.cell(row=row, column=col, value=text)
+    c.font = _MYH11H; c.alignment = _CTR_WP
+    c.border = _bd(t=_MS, b=_TS, l=_TS, r=_TS)
+
+def _shg(row, col, text, cs=1):
+    """頂層組群表頭：medium 上邊框"""
+    _pre_thin(row, col, cs=cs)
+    if cs > 1:
+        ws.merge_cells(start_row=row, start_column=col,
+                       end_row=row, end_column=col + cs - 1)
+    c = ws.cell(row=row, column=col, value=text)
+    c.font = _MYH11H; c.alignment = _CTR_WP
+    c.border = _bd(t=_MS, b=_TS, l=_TS, r=_TS)
+
+def _shi(row, col, text, cs=1):
+    """中間層表頭（頂層組群之下）：thin 邊框"""
+    _pre_thin(row, col, cs=cs)
+    if cs > 1:
+        ws.merge_cells(start_row=row, start_column=col,
+                       end_row=row, end_column=col + cs - 1)
+    c = ws.cell(row=row, column=col, value=text)
+    c.font = _MYH11H; c.alignment = _CTR_WP
+    c.border = _bd(t=_TS, b=_TS, l=_TS, r=_TS)
+
+def _shl(row, col, text):
+    """葉節點表頭：thin 邊框"""
+    c = ws.cell(row=row, column=col, value=text)
+    c.font = _MYH11H; c.alignment = _CTR_WP
+    c.border = _bd(t=_TS, b=_TS, l=_TS, r=_TS)
+
+def _d(row, col, val, fmt='General', bold=False, algn='right'):
+    c = ws.cell(row=row, column=col, value=val)
+    c.font = _ST10BN if bold else _ST10N
+    c.number_format = fmt
+    c.alignment = Alignment(horizontal=algn)
+    c.border = _bd(t=_TS, b=_TS, l=_TS, r=_TS)
+
+def _s(row, col, val, fmt='General'):
+    c = ws.cell(row=row, column=col, value=val)
+    c.font = _ST10BN; c.number_format = fmt
+    c.alignment = _RT_H
+    c.border = _bd(t=_TS, b=_MS, l=_TS, r=_TS)
+
+def _sname(row):
+    c = ws.cell(row=row, column=1, value='合计')
+    c.font = _ST10BN; c.alignment = _CTR_H2
+    c.border = _bd(t=_TS, b=_MS, l=_TS, r=_TS)
+
+def vl(ref, rng, col, div=''):
+    base = f"VLOOKUP({ref},'{_SRC_S}'!{rng},{col},0)"
+    body = f"({base})/{div}" if div else base
+    return f"=IFERROR({body},0)"
+
+def si(ref, col_letter):
+    return (f"=IFERROR(SUMIF('{_STR_S}'!$B:$B,{ref},"
+            f"'{_STR_S}'!${col_letter}:${col_letter}),0)")
+
+# ── 資料源範圍（對應 日报-sql导入数据 各 SQL 佔位）──────
+_N   = '$A$6:$H$50'      # 01: port,nav元,dev_bp,dev_元,万份,7日年化,WAM,WAL
+_L   = '$I$6:$K$50'      # 02: port,现金亿,1M利率债亿
+_RL  = '$L$6:$M$50'      # 07: port,受限资产亿
+_TH  = '$D$26:$H$50'     # 04: port,机构%,前1大%,前5大%,前10大%
+_AP  = '$A$44:$O$70'     # 06: port(1),净资产亿(2),现金(3),债券(4),债券利息(5),存款(6),存款利息(7),存单CD(8),逆回购(9),正回购(10),利率债(11),浮息债(12),信用债(13),存款提支罚息(14),存款提支不罚息(15)
+_A   = '$A$62:$C$100'    # 09: port,AAA以下市值亿,占NAV%
+_AM  = '$D$62:$E$100'    # 11: port,单一最大%
+_DL  = '$A$80:$C$100'    # 13: port,code,最大利差损(元)
+_RD  = '$A$96:$D$120'    # 10: port,明日确认亿,当日&昨日亿,T-2净值亿
+_T5  = '$E$96:$J$120'    # 12: port,T+1,T+2,T+3,T+4,T+5 (亿)
+_BKT = '$K$96:$R$120'    # 16: port,T+14,T+30,月末,季末,年末,明年末,后年末+ (亿)
+_DV  = '$A$118:$L$140'   # 03: port,CD偏差万,企债偏差万,政债偏差万,CD市值亿,企债亿,政债亿,存款亿,利率×4
+
+# ═══ Section 1：风险观察指标 ════════════════════════════
+# 三行表頭仿 report_03：
+#   行h  : 頂層組群（收益率曲线压力测试 / 流动性监管指标）
+#   行h+1: 中間層（收益率上行幅度BP / 现金及1y以内利率债 / 流通受限资产）
+#   行h+2: 葉層（偏离度跌至0/-25/-50 / 下限5% / 上限10%）
+_stitle(S1['t'], '风险观察指标', 11)
+h, h1, h2 = S1['h'], S1['h'] + 1, S1['h'] + 2
+
+# 跨三行的單列表頭
+for ci, text in [(1,'组合/指标'), (2,'净值(成本,亿元)'), (3,'偏离度（bp）'),
+                  (4,'偏离金额（万元）'), (8,'万份收益'), (9,'七日收益率（%）')]:
+    _sh(h, ci, text, rs=3)
+
+# 組群「收益率曲线压力测试」→「利率冲击情景」→ 冲击后偏离度(bp)
+# 含义：利率分别上行 0/+25/+50 bp 后，组合偏离度变为多少
+# 公式：新偏离度 = 当前偏离度 − 利率冲击(bp) × WAM年
+_shg(h,  5, '收益率曲线压力测试', cs=3)
+_shi(h1, 5, '利率冲击→偏离度(bp)', cs=3)
+_shl(h2, 5, '利率上行+0bp\n(当前状态)')
+_shl(h2, 6, '利率上行+25bp\n(警示线)')
+_shl(h2, 7, '利率上行+50bp\n(监管线)')
+
+# 組群「流动性监管指标」→ 子指标 → 监管門檻
+_shg(h,  10, '流动性监管指标', cs=2)
+_shi(h1, 10, '现金及1y以内利率债')
+_shi(h1, 11, '流通受限资产')
+_shl(h2, 10, '下限5%')
+_shl(h2, 11, '上限10%')
+
+for i, fund in enumerate(FUNDS_S):
+    r = S1['ds'] + i
+    _d(r, 1,  fund,                           bold=True, algn='center')
+    _d(r, 2,  vl(f'A{r}', _N, 2, '10^8'),    '0.00_ ')   # 净值亿元
+    _d(r, 3,  vl(f'A{r}', _N, 3),             '0.00_ ')   # 偏离度bp
+    _d(r, 4,  vl(f'A{r}', _N, 4, '10^4'),    '0_ ')       # 偏离金额万元
+    # 收益率曲线压力测试：利率上行 X bp 后的组合偏离度(bp)
+    #   新偏离度 = 当前偏离度 − X × WAM年
+    #   其中 WAM年 = WAM天/365（用作修正久期近似）
+    # 含义：WAM年越长，同样利率冲击造成的偏离度下移越大
+    _wam = f"IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_N},7,0)/365,1)"
+    _d(r, 5, f'=IFERROR(C{r}-0*({_wam}),0)',    '0.00_ ')   # +0bp：当前偏离度（不变）
+    _d(r, 6, f'=IFERROR(C{r}-25*({_wam}),0)',   '0.00_ ')   # +25bp冲击后偏离度
+    _d(r, 7, f'=IFERROR(C{r}-50*({_wam}),0)',   '0.00_ ')   # +50bp冲击后偏离度
+    _d(r, 8,  vl(f'A{r}', _N, 5),             '0.0000_ ') # 万份收益
+    _d(r, 9,  vl(f'A{r}', _N, 6),             '0.00_ ')   # 7日年化
+    # 流动性监管指标：(现金+1M利率债)/净值×100  /  受限资产/净值×100
+    _d(r, 10,
+       f"=IFERROR((VLOOKUP(A{r},'{_SRC_S}'!{_L},2,0)"
+       f"+VLOOKUP(A{r},'{_SRC_S}'!{_L},3,0))/B{r}*100,0)", '0.00_ ')
+    _d(r, 11,
+       f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_RL},2,0)/B{r}*100,0)", '0.00_ ')
+
+ds1, de1, s1r = S1['ds'], S1['de'], S1['s']
+_sname(s1r)
+_s(s1r,  2, f'=SUM(B{ds1}:B{de1})',  '0.00_ ')
+_s(s1r,  3,
+   f'=IFERROR(SUMPRODUCT($C${ds1}:$C${de1},$B${ds1}:$B${de1})/$B${s1r},0)', '0.00_ ')
+_s(s1r,  4, f'=SUM(D{ds1}:D{de1})',  '0_ ')
+# 压力测试合计：NAV加权平均偏离度（各组合利率冲击后的加权偏离度）
+_s(s1r,  5, f'=IFERROR(SUMPRODUCT($E${ds1}:$E${de1},$B${ds1}:$B${de1})/$B${s1r},0)', '0.00_ ')  # +0bp
+_s(s1r,  6, f'=IFERROR(SUMPRODUCT($F${ds1}:$F${de1},$B${ds1}:$B${de1})/$B${s1r},0)', '0.00_ ')  # +25bp
+_s(s1r,  7, f'=IFERROR(SUMPRODUCT($G${ds1}:$G${de1},$B${ds1}:$B${de1})/$B${s1r},0)', '0.00_ ')  # +50bp
+_s(s1r,  8,
+   f'=IFERROR(SUMPRODUCT($H${ds1}:$H${de1},$B${ds1}:$B${de1})/$B${s1r},0)', '0.0000_ ')
+_s(s1r,  9,
+   f'=IFERROR(SUMPRODUCT($I${ds1}:$I${de1},$B${ds1}:$B${de1})/$B${s1r},0)', '0.00_ ')
+_s(s1r, 10,
+   f'=IFERROR(SUMPRODUCT($J${ds1}:$J${de1},$B${ds1}:$B${de1})/$B${s1r},0)', '0.00_ ')
+_s(s1r, 11,
+   f'=IFERROR(SUMPRODUCT($K${ds1}:$K${de1},$B${ds1}:$B${de1})/$B${s1r},0)', '0.00_ ')
+
+# ═══ Section 2：监管指标和内部要求 ════════════════════════
+# 仿 report_03（14列）：机构投资者/前10大投资者/监管指标/内部要求
+_stitle(S2['t'], '监管指标和内部要求', 14)
+h, h1 = S2['h'], S2['h'] + 1
+
+_sh(h, 1, '基金名称', rs=2)
+
+_shg(h, 2, '机构投资者', cs=2)
+_shl(h1, 2, '总占比（%）')
+_shl(h1, 3, '单一最大占比（%）')
+
+_shg(h, 4, '前10大投资者', cs=2)
+_shl(h1, 4, '总占比（%）')
+_shl(h1, 5, '扣除固有资金占比（%）')
+
+_shg(h, 6, '监管指标', cs=6)
+_shl(h1, 6,  '剩余期限')
+_shl(h1, 7,  '剩余存续期')
+_shl(h1, 8,  '现金及5个交易日到期\n资产占比（%）')
+_shl(h1, 9,  'AAA以下机构发行的\n金融工具合计')
+_shl(h1, 10, '单一AAA以下机构发行\n金融工具最大比率(%)')
+_shl(h1, 11, '银行存款与同业存单\n合计占比(%)')
+
+_shg(h, 12, '内部要求', cs=3)
+_shl(h1, 12, '现金及利率债占比（%）')
+_shl(h1, 13, '杠杆比例（%）')
+_shl(h1, 14, '回购质押品资产/正回购')
+
+for i, fund in enumerate(FUNDS_S):
+    r = S2['ds'] + i
+    # col2=净资产亿，col3=现金，col4=债券，col6=存款，col8=存单CD
+    # col9=逆回购，col10=正回购，col11=利率债
+    nav_e2 = f"IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_AP},2,0),1)"   # col2=净资产亿
+    t5_sum = (f"IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_T5},2,0)"
+              f"+VLOOKUP(A{r},'{_SRC_S}'!{_T5},3,0)"
+              f"+VLOOKUP(A{r},'{_SRC_S}'!{_T5},4,0)"
+              f"+VLOOKUP(A{r},'{_SRC_S}'!{_T5},5,0)"
+              f"+VLOOKUP(A{r},'{_SRC_S}'!{_T5},6,0),0)")
+    _d(r, 1,  fund, bold=True, algn='center')
+    _d(r, 2,  vl(f'A{r}', _TH, 2),             '0.00_ ')  # 机构总占比
+    _d(r, 3,  vl(f'A{r}', _TH, 3),             '0.00_ ')  # 单一最大
+    _d(r, 4,  vl(f'A{r}', _TH, 5),             '0.00_ ')  # 前10大总占比
+    _d(r, 5,  vl(f'A{r}', _TH, 5),             '0.00_ ')  # 扣除固有(近似前10大)
+    _d(r, 6,  vl(f'A{r}', _N,  7),             '0_ ')      # 剩余期限WAM天
+    _d(r, 7,  vl(f'A{r}', _N,  8),             '0_ ')      # 剩余存续期WAL天
+    _d(r, 8,  f'=IFERROR(({t5_sum})/({nav_e2})*100,0)', '0.00_ ')# 5日到期/NAV%
+    _d(r, 9,  vl(f'A{r}', _A,  3),             '0.00_ ')  # AAA以下占NAV比(%)
+    _d(r, 10, vl(f'A{r}', _AM, 2),             '0.00_ ')  # 单一AAA最大%
+    # 银行存款(col6)+存单CD(col8) / 净资产(col2) × 100
+    _d(r, 11,
+       f"=IFERROR((VLOOKUP(A{r},'{_SRC_S}'!{_AP},6,0)"
+       f"+VLOOKUP(A{r},'{_SRC_S}'!{_AP},8,0))/({nav_e2})*100,0)", '0.00_ ')
+    # 现金(col3)+利率债(col11) / 净资产(col2) × 100
+    _d(r, 12,
+       f"=IFERROR((VLOOKUP(A{r},'{_SRC_S}'!{_AP},3,0)"
+       f"+VLOOKUP(A{r},'{_SRC_S}'!{_AP},11,0))/({nav_e2})*100,0)", '0.00_ ')
+    # 杠杆比例 = (净资产col2 + 正回购col10) / 净资产col2 × 100
+    _d(r, 13,
+       f"=IFERROR((VLOOKUP(A{r},'{_SRC_S}'!{_AP},2,0)"
+       f"+VLOOKUP(A{r},'{_SRC_S}'!{_AP},10,0))"
+       f"/VLOOKUP(A{r},'{_SRC_S}'!{_AP},2,0)*100,0)", '0.00_ ')
+    # 回购质押/正回购 = (债券col4+存单col8)/正回购col10
+    _d(r, 14,
+       f"=IFERROR((VLOOKUP(A{r},'{_SRC_S}'!{_AP},4,0)"
+       f"+VLOOKUP(A{r},'{_SRC_S}'!{_AP},8,0))"
+       f"/VLOOKUP(A{r},'{_SRC_S}'!{_AP},10,0),0)", '0.00_ ')
+
+ds2, de2, s2r = S2['ds'], S2['de'], S2['s']
+_sname(s2r)
+for ci, cl in enumerate(list('BCDE'), 2):
+    _s(s2r, ci,
+       f'=IFERROR(SUMPRODUCT(${cl}${ds2}:${cl}${de2},$B${ds1}:$B${de1})/$B${s1r},0)',
+       '0.00_ ')
+for ci, cl in enumerate(list('FG'), 6):
+    _s(s2r, ci,
+       f'=IFERROR(SUMPRODUCT(${cl}${ds2}:${cl}${de2},$B${ds1}:$B${de1})/$B${s1r},0)',
+       '0_ ')
+for ci, cl in enumerate(list('HIJKLMN'), 8):
+    _s(s2r, ci,
+       f'=IFERROR(SUMPRODUCT(${cl}${ds2}:${cl}${de2},$B${ds1}:$B${de1})/$B${s1r},0)',
+       '0.00_ ')
+
+# ── SUMIF 裸式（供跨字段組合公式使用）────────────────────
+def _si_raw(ref, col_letter):
+    return (f"SUMIF('{_STR_S}'!$B:$B,{ref},"
+            f"'{_STR_S}'!${col_letter}:${col_letter})")
+
+# ── 申贖資料源 ────────────────────────────────────────────
+_RD = '$A$96:$D$120'  # 10_sub_redeem: port(1),明日确认亿(2),当日&昨日亿(3),T-2净值亿(4)
+
+# ═══ Section 3：压力测试结果 ════════════════════════════
+# 仿 report_03：偏离度、前10大、压测情景、偏离资产占比、偏离金额、偏离度bp
+_stitle(S3['t'], '压力测试结果', 9)
+h, h1 = S3['h'], S3['h'] + 1
+
+for ci, text in [(1,'组合名称'), (2,'偏离度（bp）'),
+                  (3,'前10大占比\n(扣除固有资金,%)'),
+                  (6,'可卖出偏离度资产\n占偏离资产比(%)'),
+                  (7,'偏离资产占比(%)'),
+                  (8,'压力情景下偏离\n金额（万）'),
+                  (9,'压力情景下\n偏离度(bp)')]:
+    _sh(h, ci, text, rs=2)
+
+_shg(h,  4, '压力情景', cs=2)
+_shl(h1, 4, '赎回比例(%)')
+_shl(h1, 5, '收益率上行(bp)')
+
+for i, fund in enumerate(FUNDS_S):
+    r = S3['ds'] + i
+    sj = _si_raw(f'A{r}', 'J')   # stressed_loss(万元)
+    so = _si_raw(f'A{r}', 'O')   # stressed_loss_adj(万元)
+    _d(r, 1, fund,                                   bold=True, algn='center')
+    _d(r, 2, vl(f'A{r}', _N,  3),                   '0.00_ ')   # 偏离度bp
+    _d(r, 3, vl(f'A{r}', _TH, 5),                   '0.00_ ')   # 前10大占比(近似)
+    _d(r, 4, f'=IF(B{r}>=50,30,15)',                 '0_ ')      # 赎回比例
+    _d(r, 5, '50',                                    '0_ ')      # 收益率上行bp
+    # 可卖出偏离度资产占偏离资产比 = 修正损失 / 总压力损失 × 100
+    _d(r, 6, f'=IFERROR(({so})/({sj})*100,0)',       '0.00_ ')
+    # 偏离资产占比 = 压力损失(万元) / 净资产(亿元) / 100 → %
+    _d(r, 7, f'=IFERROR(({sj})/(B{r}*100),0)',       '0.00_ ')
+    _d(r, 8, f'=IFERROR({sj},0)',                     '#,##0.00') # 偏离金额(万元)
+    # 偏离度bp = 压力损失(万) / 净资产(亿)（万/亿 = 1 bp 单位换算=1）
+    _d(r, 9, f'=IFERROR(({sj})/B{r},0)',              '0.00_ ')
+
+ds3, de3, s3r = S3['ds'], S3['de'], S3['s']
+_sname(s3r)
+_s(s3r, 2,
+   f'=IFERROR(SUMPRODUCT($B${ds3}:$B${de3},$B${ds1}:$B${de1})/$B${s1r},0)', '0.00_ ')
+_s(s3r, 3,
+   f'=IFERROR(SUMPRODUCT($C${ds3}:$C${de3},$B${ds1}:$B${de1})/$B${s1r},0)', '0.00_ ')
+_s(s3r, 4, '',   'General')
+_s(s3r, 5, '50', '0_ ')
+_s(s3r, 6,
+   f'=IFERROR(SUMPRODUCT($F${ds3}:$F${de3},$B${ds1}:$B${de1})/$B${s1r},0)', '0.00_ ')
+_s(s3r, 7,
+   f'=IFERROR(SUMPRODUCT($G${ds3}:$G${de3},$B${ds1}:$B${de1})/$B${s1r},0)', '0.00_ ')
+_s(s3r, 8, f'=SUM(H{ds3}:H{de3})',  '#,##0.00')
+_s(s3r, 9,
+   f'=IFERROR(SUMPRODUCT($I${ds3}:$I${de3},$B${ds1}:$B${de1})/$B${s1r},0)', '0.00_ ')
+
+# ═══ Section 4：偏离度分解（bp）══════════════════════════
+# 仿 report_03：按資產類別分解偏離度bp
+# 列映射（03_deviation_breakdown SQL）：
+#   存单  ← CD偏差(万元)/NAV亿 = bp
+#   中票  ← 企业债偏差(万元)/NAV亿（含短融+中票）
+#   政金债 ← 政府债偏差(万元)/NAV亿（含国债+政金债）
+_stitle(S4['t'], '偏离度分解（bp）', 7)
+for ci, text in enumerate(['偏离度（bp）', '基金整体', '存单', '短融', '中票', '国债', '政金债'], 1):
+    _sh(S4['h'], ci, text, rs=1)
+
+for i, fund in enumerate(FUNDS_S):
+    r = S4['ds'] + i
+    _d(r, 1, fund, bold=True, algn='center')
+    # 仿 report_03：各资产偏离度(bp) = 该资产占总偏差比例 × 基金整体偏离度(bp)
+    #   = _DV col_pct × B{r}（B{r}=基金整体bp）
+    # 03_deviation_breakdown.sql 列映射：
+    #   col2=total_deviation(元), col3=cd_dev(元), col4=scp_dev(元),
+    #   col5=mtn_dev(元), col6=treasury_dev(元), col7=policy_dev(元),
+    #   col8=cd_pct, col9=scp_pct, col10=mtn_pct, col11=treasury_pct, col12=policy_pct
+    # 为0时数字格式自动显示"-"
+    _FMT_DV = '0.00_ ;-0.00_ ;"-"'
+    _d(r, 2, vl(f'A{r}', _N, 3),               '0.00_ ')   # 基金整体bp（来自01_nav col3）
+    _d(r, 3, f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_DV},8,0)*B{r},0)",  _FMT_DV)  # 存单: cd_pct×bp
+    _d(r, 4, f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_DV},9,0)*B{r},0)",  _FMT_DV)  # 短融: scp_pct×bp
+    _d(r, 5, f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_DV},10,0)*B{r},0)", _FMT_DV)  # 中票: mtn_pct×bp
+    _d(r, 6, f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_DV},11,0)*B{r},0)", _FMT_DV)  # 国债: treasury_pct×bp
+    _d(r, 7, f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_DV},12,0)*B{r},0)", _FMT_DV)  # 政金债: policy_pct×bp
+
+# ═══ Section 5：申赎与流动性分析 ════════════════════════
+# 仿 report_03：各列独立2行表頭，按用户指定列标题
+_stitle(S5['t'], '申赎与流动性分析', 14)
+h = S5['h']
+
+for ci, text in enumerate([
+    '基金名称',
+    '净值(亿元)',
+    '前日净申赎金额（亿元）',
+    '前日净申赎占比(%)',
+    '前三日净申赎金额*（亿元）',
+    '前三日净申赎占比(%)',
+    '未来5日最大\n流动性缺口（亿元）',
+    'T+14\n流入现金流(%)',
+    'T+30\n流入现金流(%)',
+    'T日至本月末\n流入现金流(%)',
+    'T日至下月末\n流入现金流(%)',
+    'T日至第3月月末\n流入现金流(%)',
+    'T日至本季末\n流入现金流(%)',
+    'T日至本年末\n流入现金流(%)',
+], 1):
+    _sh(h, ci, text, rs=2)
+
+for i, fund in enumerate(FUNDS_S):
+    r = S5['ds'] + i
+    nav_e = f"IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_N},2,0)/10^8,1)"
+    _d(r, 1, fund, bold=True, algn='center')
+    _d(r, 2, vl(f'A{r}', _N, 2, '10^8'),             '0.00_ ')
+    # 申贖：前日 = 当日&昨日(col3)；前三日 ≈ 明日确认+当日&昨日(col2+col3)
+    _d(r, 3, vl(f'A{r}', _RD, 3),                    '0.00_ ')   # 前日净申赎金额
+    _d(r, 4, f'=IFERROR(C{r}/B{r}*100,0)',            '0.00_ ')   # 前日占比
+    _d(r, 5, f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_RD},2,0)"
+             f"+VLOOKUP(A{r},'{_SRC_S}'!{_RD},3,0),0)", '0.00_ ')# 前三日近似
+    _d(r, 6, f'=IFERROR(E{r}/B{r}*100,0)',            '0.00_ ')   # 前三日占比
+    # 未来5日最大流动性缺口：取 T+1~T+5 中最小到期量作保守估计
+    _d(r, 7,
+       f"=IFERROR(MIN("
+       f"VLOOKUP(A{r},'{_SRC_S}'!{_T5},2,0),"
+       f"VLOOKUP(A{r},'{_SRC_S}'!{_T5},3,0),"
+       f"VLOOKUP(A{r},'{_SRC_S}'!{_T5},4,0),"
+       f"VLOOKUP(A{r},'{_SRC_S}'!{_T5},5,0),"
+       f"VLOOKUP(A{r},'{_SRC_S}'!{_T5},6,0)),0)",   '0.00_ ')
+    # 流動性現金流 %：到期量 / 净值 × 100
+    _d(r,  8, f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_BKT},2,0)/({nav_e})*100,0)", '0.00_ ')  # T+14
+    _d(r,  9, f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_BKT},3,0)/({nav_e})*100,0)", '0.00_ ')  # T+30
+    _d(r, 10, f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_BKT},4,0)/({nav_e})*100,0)", '0.00_ ')  # 月末
+    _d(r, 11, '0',  '0.00_ ')  # 下月末：SQL暂无分月数据
+    _d(r, 12, '0',  '0.00_ ')  # 第3月末：SQL暂无
+    _d(r, 13, f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_BKT},5,0)/({nav_e})*100,0)", '0.00_ ')  # 季末
+    _d(r, 14, f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_BKT},6,0)/({nav_e})*100,0)", '0.00_ ')  # 年末
+
+ds5, de5, s5r = S5['ds'], S5['de'], S5['s']
+_sname(s5r)
+_s(s5r, 2, f'=SUM(B{ds5}:B{de5})',  '0.00_ ')
+_s(s5r, 3, f'=SUM(C{ds5}:C{de5})',  '0.00_ ')
+_s(s5r, 4,
+   f'=IFERROR(SUMPRODUCT($D${ds5}:$D${de5},$B${ds5}:$B${de5})/$B${s5r},0)', '0.00_ ')
+_s(s5r, 5, f'=SUM(E{ds5}:E{de5})',  '0.00_ ')
+_s(s5r, 6,
+   f'=IFERROR(SUMPRODUCT($F${ds5}:$F${de5},$B${ds5}:$B${de5})/$B${s5r},0)', '0.00_ ')
+_s(s5r, 7, f'=SUM(G{ds5}:G{de5})',  '0.00_ ')
+for ci, cl in enumerate(list('HIJKLMN'), 8):
+    _s(s5r, ci,
+       f'=IFERROR(SUMPRODUCT(${cl}${ds5}:${cl}${de5},$B${ds5}:$B${de5})/$B${s5r},0)',
+       '0.00_ ')
+
+# ═══ Section 6：资产配置情况（成本占净值,%）══════════════
+# 仿 report_03「资产组合以成本摊销值,%」，按用户指定列标题
+# 06_asset_portfolio col: 1=port,3=净资产亿,5=债券,6=存款,7=CD,8=逆回购,
+#   9=正回购,10=利率债,11=信用债,12=其他债
+_stitle(S6['t'], '资产配置情况（成本占净值,%）', 13)
+for ci, text in enumerate([
+    '组合/指标',
+    '债券(%)',
+    '利率债(%)',
+    '浮息债(%)',
+    '信用债(%)',
+    '同业存单(%)',
+    '存款(%)',
+    '存款（提前支取罚息）(%)',
+    '逆回购(%)',
+    '正回购(%)',
+    '回购质押品\n资产比例(%)',
+    '净值(亿元)',
+    '最大利差损\n占NAV比(%)',
+], 1):
+    _sh(S6['h'], ci, text, rs=1)
+
+for i, fund in enumerate(FUNDS_S):
+    r = S6['ds'] + i
+    # 正确列映射（06_asset_portfolio.sql 无估值日，从col2起）：
+    # col2=净资产亿, col3=现金, col4=债券, col6=存款, col8=存单CD
+    # col9=逆回购, col10=正回购, col11=利率债, col12=浮息债, col13=信用债
+    # col14=存款提支罚息, col15=存款提支不罚息
+    nav_e = f"IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_AP},2,0),1)"   # col2=净资产亿
+    _d(r, 1,  fund, bold=True, algn='center')
+    _d(r, 2,  f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_AP},4,0)/({nav_e})*100,0)",  '0.00_ ')  # 债券col4
+    _d(r, 3,  f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_AP},11,0)/({nav_e})*100,0)", '0.00_ ')  # 利率债col11
+    _d(r, 4,  f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_AP},12,0)/({nav_e})*100,0)", '0.00_ ')  # 浮息债col12
+    _d(r, 5,  f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_AP},13,0)/({nav_e})*100,0)", '0.00_ ')  # 信用债col13
+    _d(r, 6,  f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_AP},8,0)/({nav_e})*100,0)",  '0.00_ ')  # 存单CDcol8
+    _d(r, 7,  f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_AP},6,0)/({nav_e})*100,0)",  '0.00_ ')  # 存款col6
+    _d(r, 8,  f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_AP},14,0)/({nav_e})*100,0)", '0.00_ ')  # 存款提支罚息col14
+    _d(r, 9,  f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_AP},9,0)/({nav_e})*100,0)",  '0.00_ ')  # 逆回购col9
+    _d(r, 10, f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_AP},10,0)/({nav_e})*100,0)", '0.00_ ')  # 正回购col10
+    # 回购质押品比例 = (债券col4+存单col8)/正回购col10 × 100
+    _d(r, 11,
+       f"=IFERROR((VLOOKUP(A{r},'{_SRC_S}'!{_AP},4,0)"
+       f"+VLOOKUP(A{r},'{_SRC_S}'!{_AP},8,0))"
+       f"/VLOOKUP(A{r},'{_SRC_S}'!{_AP},10,0)*100,0)", '0.00_ ')
+    _d(r, 12, vl(f'A{r}', _AP, 2),    '0.00_ ')  # 净值亿元col2
+    # 最大利差损占NAV比(%) = 利差损(元)/(净值亿col2×10^8)×100
+    _d(r, 13,
+       f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_DL},3,0)"
+       f"/(VLOOKUP(A{r},'{_SRC_S}'!{_AP},2,0)*10^8)*100,0)", '0.00_ ')
+
+ds6, de6, s6r = S6['ds'], S6['de'], S6['s']
+_sname(s6r)
+_s(s6r, 12, f'=SUM(L{ds6}:L{de6})',  '0.00_ ')
+for ci, cl in enumerate(list('BCDEFGHIJK'), 2):
+    _s(s6r, ci,
+       f'=IFERROR(SUMPRODUCT(${cl}${ds6}:${cl}${de6},$L${ds6}:$L${de6})/$L${s6r},0)',
+       '0.00_ ')
+_s(s6r, 13,
+   f'=IFERROR(SUMPRODUCT($M${ds6}:$M${de6},$L${ds6}:$L${de6})/$L${s6r},0)', '0.00_ ')
+
+# ── 列宽（A-N）─────────────────────────────────────────
+for col, w in [('A', 14), ('B', 12), ('C', 14), ('D', 12), ('E', 14),
+               ('F', 12), ('G', 12), ('H', 12), ('I', 12), ('J', 12),
+               ('K', 12), ('L', 12), ('M', 12), ('N', 12)]:
+    ws.column_dimensions[col].width = w
+
+# ── 每張表格加邊框：inner=thin，outer=medium ─────────────────
+def _frame(sec, ncols):
+    """為整個 section（標題行→合計行，第1列→ncols列）統一邊框：
+    • 外框（四週邊界）：medium
+    • 內部（所有其餘邊）：thin
+    完全按位置決定，不保留既有樣式，確保全表粗細一致。
+    合併格用實際 max_col/max_row 判斷右/下外邊界。
+    """
+    r1, r2 = sec['t'], sec['s']
+
+    # 錨點 → MergedCellRange（僅本節範圍）
+    merge_map = {
+        (mr.min_row, mr.min_col): mr
+        for mr in ws.merged_cells.ranges
+        if r1 <= mr.min_row <= r2 and 1 <= mr.min_col <= ncols
+    }
+
+    for r in range(r1, r2 + 1):
+        for c in range(1, ncols + 1):
+            cell = ws.cell(row=r, column=c)
+            if cell.__class__.__name__ == 'MergedCell':
+                continue
+
+            mr         = merge_map.get((r, c))
+            right_col  = mr.max_col if mr else c
+            bottom_row = mr.max_row if mr else r
+
+            cell.border = Border(
+                top    = _MS if r         == r1    else _TS,
+                bottom = _MS if bottom_row == r2    else _TS,
+                left   = _MS if c         == 1     else _TS,
+                right  = _MS if right_col == ncols else _TS,
+            )
+
+_frame(S1, 11)
+_frame(S2, 14)
+_frame(S3,  9)
+_frame(S4,  7)
+_frame(S5, 14)
+_frame(S6, 13)
+
+# 鎖定標題 + 表頭行（rows 1 ~ S1['ds']-1），數據行從 S1['ds'] 起滾動
+ws.freeze_panes = f'B{S1["ds"]}'
 
 # ══════════════════════════════════════════════════════════
 # 2. 日报-sql导入数据
@@ -110,8 +681,10 @@ yell(ws2, 26, 9, 32, 15)
 
 # 06 资产组合 → A44
 lbl(ws2, 41, 1, '06_asset_portfolio.sql  →  A44')
-h06 = ['组合', '估值日', '净资产(亿)', '现金', '债券', '存款', 'CD',
-       '逆回购', '正回购', '利率债', '信用债', '其他债', '存款利率', 'CD利率', '组合利率']
+# SQL 实际输出：无估值日，列顺序严格对应 06_asset_portfolio.sql SELECT
+h06 = ['组合', '净资产(亿)', '现金', '债券', '债券利息',
+       '存款', '存款利息', '存单(CD)', '逆回购', '正回购',
+       '利率债', '浮息债', '信用债', '存款提支罚息', '存款提支不罚息']
 for i, h in enumerate(h06, 1):
     hdr(ws2, 43, i, h)
 yell(ws2, 44, 1, 54, len(h06))
@@ -478,6 +1051,12 @@ for row in range(3, MAX_ROWS + 1):
     _qcell(22, 13, 'General', _ALIGN_H_CTR)     # V: 变现系数
     _qcell(23, 14, '0.0000_ ', _ALIGN_H_CTR)   # W: 全价修正(亿元)
     _qcell(24, 15, NFMT,       _ALIGN_H_CTR)   # X: 偏离修正(万元)
+    # Y: 需变现偏离资产金额（亿元）= X列（万元）÷ 10000
+    cy = ws15.cell(row=row, column=25, value=f'=IFERROR(X{row}/10000,0)')
+    cy.font          = Font(name='宋体', size=11)
+    cy.border        = _BORDER_THIN
+    cy.number_format = '0.00'
+    cy.alignment     = _ALIGN_H_CTR
 
     if row % 1000 == 0:
         print(f'    {row}/{MAX_ROWS}')
@@ -496,9 +1075,25 @@ for col, w in _CW.items():
 # ══════════════════════════════════════════════════════════
 ws42 = wb.create_sheet('压力测试结果')
 ws42.sheet_properties.tabColor = TAB_BLUE
-_H42 = ['组合名称','证券代码','证券名称','资产类型','利率类型',
-        '当前市值(元)','有效久期(年)','压力市值(元)',
-        '压力损失(万元)','债券类别','变现系数','压力损失修正(万元)']
+# 15列，严格对应 42_stress_result.sql SELECT 输出顺序
+# 债券及存单新 Q~X 的 VLOOKUP 按列号1-15引用此表
+_H42 = [
+    '组合键(lookup_key)',  # A(1)  port_name|security_code，VLOOKUP索引键
+    '组合名称',            # B(2)
+    '证券代码',            # C(3)
+    '证券名称',            # D(4)
+    '资产类型',            # E(5)  BOND_GOVT/BOND_CORP/CD/DEPOSIT
+    '利率类型',            # F(6)  FIXED/FLOAT/DEPOSIT
+    '当前市值(元)',         # G(7)
+    '有效久期(年)',         # H(8)
+    '压力市值(亿元)',       # I(9)  +50bp压力市值（亿元）
+    '压力损失(万元)',       # J(10) 市值-压力市值（万元）
+    '偏离绝对值(万元)',     # K(11) 压力损失绝对值（万元）
+    '债券类别',            # L(12) 利率债/信用债/同业存单/存款
+    '变现系数',            # M(13) 0~0.80，压力损失修正权重
+    '压力全价修正(亿元)',   # N(14) 压力市值×变现系数（亿元）
+    '压力损失修正(万元)',   # O(15) 压力损失×变现系数（万元），真实风险敞口
+]
 for i, h in enumerate(_H42, 1):
     hdr(ws42, 1, i, h)
 yell(ws42, 2, 1, 200, len(_H42))
