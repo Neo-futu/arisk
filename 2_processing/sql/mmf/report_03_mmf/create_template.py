@@ -261,6 +261,7 @@ _L   = '$I$6:$K$50'      # 02: port,现金亿,1M利率债亿
 _RL  = '$L$6:$M$50'      # 07: port,受限资产亿
 _TH  = '$D$26:$H$50'     # 04: port,机构%,前1大%,前5大%,前10大%
 _AP  = '$A$44:$O$70'     # 06: port(1),净资产亿(2),现金(3),债券(4),债券利息(5),存款(6),存款利息(7),存单CD(8),逆回购(9),正回购(10),利率债(11),浮息债(12),信用债(13),存款提支罚息(14),存款提支不罚息(15)
+_SFC = '$A$130:$G$145'   # 44_sfc_compliance: port(1),DLA%(2),WLA%(3),最大工具期限天(4),DLA合規(5),WLA合規(6),期限合規(7)
 _A   = '$A$62:$C$100'    # 09: port,AAA以下市值亿,占NAV%
 _AM  = '$D$62:$E$100'    # 11: port,单一最大%
 _DL  = '$A$80:$C$100'    # 13: port,code,最大利差损(元)
@@ -321,19 +322,11 @@ for i, fund in enumerate(FUNDS_S):
     _d(r, 7, f'=IFERROR(C{r}-50*({_wam}),0)',   '0.00_ ')   # +50bp 衝擊後偏離度
     _d(r, 8,  vl(f'A{r}', _N, 5),             '0.0000_ ') # 万份收益
     _d(r, 9,  vl(f'A{r}', _N, 6),             '0.00_ ')   # 7日年化
-    # SFC流动性监管指标
-    # DLA% = (现金 + T+1到期资产) / NAV × 100  →  须≥7.5%
-    _d(r, 10,
-       f"=IFERROR((VLOOKUP(A{r},'{_SRC_S}'!{_L},2,0)"
-       f"+VLOOKUP(A{r},'{_SRC_S}'!{_T5},2,0))/B{r}*100,0)", '0.00_ ')
-    # WLA% = (现金 + T+1~T+5到期资产) / NAV × 100  →  须≥15%
-    _d(r, 11,
-       f"=IFERROR((VLOOKUP(A{r},'{_SRC_S}'!{_L},2,0)"
-       f"+VLOOKUP(A{r},'{_SRC_S}'!{_T5},2,0)"
-       f"+VLOOKUP(A{r},'{_SRC_S}'!{_T5},3,0)"
-       f"+VLOOKUP(A{r},'{_SRC_S}'!{_T5},4,0)"
-       f"+VLOOKUP(A{r},'{_SRC_S}'!{_T5},5,0)"
-       f"+VLOOKUP(A{r},'{_SRC_S}'!{_T5},6,0))/B{r}*100,0)", '0.00_ ')
+    # SFC流动性监管指标：来自 44_sfc_compliance.sql 精确计算
+    # DLA% ≥ 7.5%（日流动资产/NAV，含现金+T+1到期政府债/CD/存款/逆回购）
+    _d(r, 10, vl(f'A{r}', _SFC, 2), '0.00_ ')
+    # WLA% ≥ 15%（周流动资产/NAV，含现金+T+1~T+5到期合格工具）
+    _d(r, 11, vl(f'A{r}', _SFC, 3), '0.00_ ')
 
 ds1, de1, s1r = S1['ds'], S1['de'], S1['s']
 _sname(s1r)
@@ -370,20 +363,20 @@ _shl(h1, 4, '总占比（%）')
 _shl(h1, 5, '扣除固有资金占比（%）')
 
 # SFC UT Code §8.2 监管指标（6列）：
-#   WAM≤60天 / WAL≤120天 / DLA≥7.5% / WLA≥15% / 信用质量 / 集中度
+#   WAM≤60天 / WAL≤120天 / DLA≥7.5% / WLA≥15% / 最大工具期限≤397天 / 信用质量
 _shg(h, 6, 'SFC监管指标（UT Code §8.2）', cs=6)
 _shl(h1, 6,  'WAM（天）\n限≤60天')
 _shl(h1, 7,  'WAL（天）\n限≤120天')
-_shl(h1, 8,  '日流动资产DLA\n≥7.5% NAV')
-_shl(h1, 9,  '週流动资产WLA\n≥15% NAV')
-_shl(h1, 10, 'AAA以下机构发行\n金融工具占比(%)')
-_shl(h1, 11, '单一AAA以下机构\n最大持仓比率(%)')
+_shl(h1, 8,  '日流动资产DLA(%)\n≥7.5% NAV')
+_shl(h1, 9,  '週流动资产WLA(%)\n≥15% NAV')
+_shl(h1, 10, '最大单一工具\n剩余期限(天/≤397)')
+_shl(h1, 11, 'AAA以下机构发行\n金融工具占比(%)')
 
-# 内部监控（3列）：流动性结构 / 杠杆 / 回购质押品
+# 内部监控（3列）：流动性结构 / 杠杆 / 集中度
 _shg(h, 12, '内部监控', cs=3)
 _shl(h1, 12, '现金及利率债\n占比（%）')
 _shl(h1, 13, '杠杆比例\n（%）')
-_shl(h1, 14, '回购质押品资产\n/正回购（%）')
+_shl(h1, 14, '单一AAA以下机构\n最大持仓比率(%)')
 
 for i, fund in enumerate(FUNDS_S):
     r = S2['ds'] + i
@@ -403,23 +396,13 @@ for i, fund in enumerate(FUNDS_S):
     _d(r, 3,  vl(f'A{r}', _TH, 3),             '0.00_ ')  # 单一最大
     _d(r, 4,  vl(f'A{r}', _TH, 5),             '0.00_ ')  # 前10大总占比
     _d(r, 5,  vl(f'A{r}', _TH, 5),             '0.00_ ')  # 扣除固有(近似前10大)
-    # SFC UT Code §8.2 监管指标
-    _d(r, 6,  vl(f'A{r}', _N,  7), '0_ ')      # WAM（天），SFC上限60天
-    _d(r, 7,  vl(f'A{r}', _N,  8), '0_ ')      # WAL（天），SFC上限120天
-    # DLA% = (现金 + T+1到期) / NAV × 100，SFC下限7.5%
-    _d(r, 8,
-       f"=IFERROR((VLOOKUP(A{r},'{_SRC_S}'!{_L},2,0)"
-       f"+VLOOKUP(A{r},'{_SRC_S}'!{_T5},2,0))/({nav_e2})*100,0)", '0.00_ ')
-    # WLA% = (现金 + T+1~T+5到期) / NAV × 100，SFC下限15%
-    _wla = (f"IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_L},2,0)"
-            f"+VLOOKUP(A{r},'{_SRC_S}'!{_T5},2,0)"
-            f"+VLOOKUP(A{r},'{_SRC_S}'!{_T5},3,0)"
-            f"+VLOOKUP(A{r},'{_SRC_S}'!{_T5},4,0)"
-            f"+VLOOKUP(A{r},'{_SRC_S}'!{_T5},5,0)"
-            f"+VLOOKUP(A{r},'{_SRC_S}'!{_T5},6,0),0)")
-    _d(r, 9,  f'=IFERROR(({_wla})/({nav_e2})*100,0)', '0.00_ ')
-    _d(r, 10, vl(f'A{r}', _A,  3), '0.00_ ')  # AAA以下机构金融工具占NAV%（信用质量指标）
-    _d(r, 11, vl(f'A{r}', _AM, 2), '0.00_ ')  # 单一AAA以下机构最大持仓%（集中度指标）
+    # SFC UT Code §8.2 监管指标（来自 44_sfc_compliance.sql 精确计算）
+    _d(r, 6,  vl(f'A{r}', _N,   7), '0_ ')    # WAM（天），SFC上限60天
+    _d(r, 7,  vl(f'A{r}', _N,   8), '0_ ')    # WAL（天），SFC上限120天
+    _d(r, 8,  vl(f'A{r}', _SFC, 2), '0.00_ ') # DLA%（精确），SFC下限7.5%
+    _d(r, 9,  vl(f'A{r}', _SFC, 3), '0.00_ ') # WLA%（精确），SFC下限15%
+    _d(r, 10, vl(f'A{r}', _SFC, 4), '0_ ')    # 最大单一工具剩余期限天，SFC上限397天
+    _d(r, 11, vl(f'A{r}', _A,   3), '0.00_ ') # AAA以下机构金融工具占NAV%（信用质量）
     # 现金(col3)+利率债(col11) / 净资产(col2) × 100
     _d(r, 12,
        f"=IFERROR((VLOOKUP(A{r},'{_SRC_S}'!{_AP},3,0)"
@@ -429,11 +412,8 @@ for i, fund in enumerate(FUNDS_S):
        f"=IFERROR((VLOOKUP(A{r},'{_SRC_S}'!{_AP},2,0)"
        f"+VLOOKUP(A{r},'{_SRC_S}'!{_AP},10,0))"
        f"/VLOOKUP(A{r},'{_SRC_S}'!{_AP},2,0)*100,0)", '0.00_ ')
-    # 回购质押/正回购 = (债券col4+存单col8)/正回购col10
-    _d(r, 14,
-       f"=IFERROR((VLOOKUP(A{r},'{_SRC_S}'!{_AP},4,0)"
-       f"+VLOOKUP(A{r},'{_SRC_S}'!{_AP},8,0))"
-       f"/VLOOKUP(A{r},'{_SRC_S}'!{_AP},10,0),0)", '0.00_ ')
+    # 单一AAA以下机构最大持仓比率（集中度内控指标）
+    _d(r, 14, vl(f'A{r}', _AM, 2), '0.00_ ')
 
 ds2, de2, s2r = S2['ds'], S2['de'], S2['s']
 _sname(s2r)
@@ -828,6 +808,20 @@ h03 = ['组合名称', 'CD偏差(万)', '企业债偏差(万)', '政府债偏差
 for i, h in enumerate(h03, 1):
     hdr(ws2, 117, i, h)
 yell(ws2, 118, 1, 125, len(h03))
+
+# 44 SFC合規流動性指標 → A130
+# DLA（日流動資產≥7.5%）/ WLA（週流動資產≥15%）/ 最大工具期限 / 合規狀態
+lbl(ws2, 127, 1, '44_sfc_compliance.sql  →  A130')
+h44 = ['組合名稱',
+       'DLA日流動資產(%)',   # 日流動資產=現金+T+1到期政府債+CD+存款+逆回購
+       'WLA週流動資產(%)',   # 週流動資產=現金+T+1~T+5到期合格工具
+       '最大工具期限(天)',   # 單一工具最大剩餘期限，SFC≤397天
+       'DLA合規',            # 合規 / 未達標(≥7.5%)
+       'WLA合規',            # 合規 / 未達標(≥15%)
+       '工具期限合規']       # 合規 / 超限(≤397天)
+for i, h in enumerate(h44, 1):
+    hdr(ws2, 129, i, h)
+yell(ws2, 130, 1, 145, len(h44))
 
 for col in range(1, 22):
     ws2.column_dimensions[get_column_letter(col)].width = 15

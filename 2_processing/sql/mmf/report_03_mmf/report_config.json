@@ -212,6 +212,15 @@
       "start_cell": "A2",
       "header": false,
       "description": "+50bp壓力測試：各持倉壓力損失/修正損失，A1=表頭，數據A2起"
+    },
+    {
+      "id": "03_44",
+      "name": "SFC合規流動性指標",
+      "sql": "44_sfc_compliance.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "A130",
+      "header": false,
+      "description": "SFC UT Code §8.2：DLA/WLA/最大工具期限/合規狀態，A129=表頭，數據A130起"
     }
   ]
 }
