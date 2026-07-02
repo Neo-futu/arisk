@@ -295,7 +295,7 @@ _shl(h2, 7, '利率上行+50bp\n(监管线)')
 # 組群「流动性监管指标」— SFC UT Code §8.2(n)：DLA≥7.5% / WLA≥15%
 # DLA (Daily Liquid Assets)   = 现金 + T+1到期资产（1个交易日内变现）
 # WLA (Weekly Liquid Assets)  = 现金 + T+1~T+5到期资产（5个交易日内变现）
-_shg(h,  10, '流动性监管指标\n(SFC UT Code §8.2(n))', cs=2)
+_shg(h,  10, '流动性监管指标①②', cs=2)
 _shi(h1, 10, '日流动资产DLA')
 _shi(h1, 11, '週流动资产WLA')
 _shl(h2, 10, '≥7.5% NAV')
@@ -364,7 +364,7 @@ _shl(h1, 5, '扣除固有资金占比（%）')
 
 # SFC UT Code §8.2 监管指标（6列）：
 #   WAM≤60天 / WAL≤120天 / DLA≥7.5% / WLA≥15% / 最大工具期限≤397天 / 信用质量
-_shg(h, 6, 'SFC监管指标（UT Code §8.2）', cs=6)
+_shg(h, 6, '监管指标③④⑤⑥', cs=6)
 _shl(h1, 6,  'WAM（天）\n限≤60天')
 _shl(h1, 7,  'WAL（天）\n限≤120天')
 _shl(h1, 8,  '日流动资产DLA(%)\n≥7.5% NAV')
@@ -700,6 +700,130 @@ _frame(S4,  7)
 _frame(S5, 14)
 _frame(S6, 13)
 
+# ══════════════════════════════════════════════════════════
+# 備註區：指標含義 + 監管要求 + 計算說明
+# ══════════════════════════════════════════════════════════
+NOTE_ROW = S6['s'] + 2          # 備註起始行（資產配置合計行下方空兩行）
+
+_NOTE_TITLE = Font(name='宋体', size=9, bold=True, color='1F3864')
+_NOTE_HDR   = Font(name='宋体', size=9, bold=True, color='2E75B6')
+_NOTE_BODY  = Font(name='宋体', size=9, color='404040')
+_NOTE_FILL  = PatternFill('solid', fgColor='F2F7FF')   # 極淺藍背景
+
+def _note_title(r, text):
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=14)
+    c = ws.cell(row=r, column=1, value=text)
+    c.font = _NOTE_TITLE
+    c.fill = PatternFill('solid', fgColor='D9E2F3')
+    c.alignment = Alignment(horizontal='left', vertical='center')
+    ws.row_dimensions[r].height = 16
+
+def _note_row(r, superscript, content):
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=14)
+    c = ws.cell(row=r, column=1, value=f'{superscript}  {content}')
+    c.font = _NOTE_BODY
+    c.fill = _NOTE_FILL
+    c.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+    ws.row_dimensions[r].height = 30
+
+def _note_hdr(r, text):
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=14)
+    c = ws.cell(row=r, column=1, value=text)
+    c.font = _NOTE_HDR
+    c.fill = _NOTE_FILL
+    c.alignment = Alignment(horizontal='left')
+    ws.row_dimensions[r].height = 14
+
+r = NOTE_ROW
+
+# ── 監管指標說明 ──────────────────────────────────────────
+_note_title(r, '▌ 監管指標說明（參考：SFC《單位信託及互惠基金守則》第8章，2024年10月版）')
+r += 1
+_note_row(r, '①', 'DLA（日流動資產 Daily Liquid Assets）：每日可變現資產佔基金淨值的比例。'
+           '監管下限：≥ 7.5% NAV。包括：現金、T+1到期政府/公共證券、T+1到期同業存單、'
+           '隔夜存款、T+1到期逆回購。（UT Code §8.2(n)）')
+r += 1
+_note_row(r, '②', 'WLA（週流動資產 Weekly Liquid Assets）：5個交易日內可變現資產佔基金淨值的比例。'
+           '監管下限：≥ 15% NAV。包括：現金及T+1~T+5到期的政府債、CD、存款、逆回購。'
+           '（UT Code §8.2(n)）')
+r += 1
+_note_row(r, '③', 'WAM（加權平均到期期限 Weighted Average Maturity）：以市值加權，'
+           '浮息債使用下次付息重設日（非到期日）。監管上限：≤ 60 天。（UT Code §8.2(f)）')
+r += 1
+_note_row(r, '④', 'WAL（加權平均存續期 Weighted Average Life）：以市值加權，所有工具統一'
+           '使用最終到期日（不考慮付息重設）。監管上限：≤ 120 天。（UT Code §8.2(f)）')
+r += 1
+_note_row(r, '⑤', '最大單一工具剩餘期限：組合中剩餘期限最長的單一工具。'
+           '監管上限：一般工具 ≤ 397 天；政府及公共機構證券 ≤ 730 天（2年）。'
+           '（UT Code §8.2(f)）')
+r += 1
+_note_row(r, '⑥', 'AAA以下機構金融工具佔比：信用質量監控指標。SFC要求投資「高質量貨幣市場工具」，'
+           '原則上不投資未評級或低投資級工具。此指標供日常信用質量追蹤，數值越低信用質量越高。'
+           '（UT Code §8.2(a) 信用質量要求）')
+
+r += 2
+
+# ── 風險觀察及壓力測試說明 ────────────────────────────────
+_note_title(r, '▌ 風險觀察及壓力測試說明')
+r += 1
+_note_row(r, '⑦', '偏離度（bp）= (市場價值 − 攤余成本) / 淨資產 × 10000。'
+           '正值表示市場估值高於成本（債券升值）；負值反之。'
+           '香港SFC無明確量化閾值，此為基金公司內部風控監控指標。'
+           '（對比：中國內地CSRC設有 ±0.5% 觸發機制，SFC不適用）')
+r += 1
+_note_row(r, '⑧', '收益率曲線壓力測試情景：計算利率分別上行 +0/+25/+50 bp 後的預期偏離度。'
+           '公式：壓力後偏離度 = 當前偏離度 − 衝擊幅度(bp) × WAM年，'
+           '其中 WAM年 = WAM天 / 365（修正久期近似）。'
+           'X=25bp 為通行警示線，X=50bp 為壓力情景上限。')
+r += 1
+_note_row(r, '⑨', '偏離度分解（bp）= 各資產類別佔總偏差比例 × 基金整體偏離度。'
+           '各子項方向可能相反（部分資產升值、部分貶值），子項絕對值可大於整體，'
+           '此屬正常的「對沖抵消」效果，非計算錯誤。')
+r += 1
+_note_row(r, '⑩', '壓力測試結果表：基於 +50bp 利率衝擊（久期近似法）計算持倉壓力損失。'
+           '變現係數反映不同資產在壓力環境下的流動性：'
+           '政府債/同業存單=0.20（流動性好），信用債=0.80（流動性差），'
+           '浮息債=0.05（利率敏感度低），存款=0（合約本金，不受市場衝擊）。'
+           '壓力損失修正 = 壓力損失 × 變現係數。')
+
+r += 2
+
+# ── 申贖及流動性說明 ─────────────────────────────────────
+_note_title(r, '▌ 申贖與流動性說明')
+r += 1
+_note_row(r, '⑪', '前日淨申贖金額：以 NAV_T 與 NAV_{T-2} 之差近似兩日累計淨申贖。'
+           '正值=淨申購（資金流入），負值=淨贖回（資金流出）。')
+r += 1
+_note_row(r, '⑫', '未來5日最大流動性缺口：取 T+1 至 T+5 每日到期金額的最小值，'
+           '代表未來5個交易日中最少的單日到期流入金額，用於評估最差情景下的流動性。')
+r += 1
+_note_row(r, '⑬', 'T+N 流入現金流（%）：未來N個交易日內到期資產佔NAV的累積比例，'
+           '包含債券到期、CD到期、存款到期及逆回購到期金額。該指標可與SFC最低'
+           'WLA要求（≥15%）對比，確認流動性充足程度。')
+
+r += 2
+
+# ── 資產配置說明 ──────────────────────────────────────────
+_note_title(r, '▌ 資產配置說明')
+r += 1
+_note_row(r, '⑭', '資產配置比例均以成本攤銷值計算（以NAV為分母）。港元MMF使用正回購'
+           '（正回購=融入資金/負債端），因此逆回購比例可能超過100%，'
+           '正回購比例反映組合槓桿程度。杠杆比例 = (NAV + 正回購) / NAV × 100%。')
+r += 1
+_note_row(r, '⑮', '存款（提前支取罰息）與一般存款的區別：前者為不可提前解約或提前解約'
+           '需支付罰息的定期存款，流動性相對較低；後者可靈活提取。'
+           '此分類影響 DLA/WLA 的計算（僅到期日≤T+1/T+5的可計入）。')
+
+r += 2
+
+# ── 數據來源 ──────────────────────────────────────────────
+_note_title(r, '▌ 數據來源及免責說明')
+r += 1
+_note_row(r, '*', '所有數據來源：FSI Risk Platform 數據庫，以估值日收盤數據為準。'
+           '參考法規：香港SFC《單位信託及互惠基金守則》第二節第8章（現行版本2024年10月2日）；'
+           'IOSCO FR07/12《貨幣市場基金政策建議》。本報告為內部風控用途，不構成投資建議。')
+
+# ══════════════════════════════════════════════════════════
 # 鎖定標題 + 表頭行（rows 1 ~ S1['ds']-1），數據行從 S1['ds'] 起滾動
 ws.freeze_panes = f'B{S1["ds"]}'
 
