@@ -117,6 +117,20 @@ _RT_H   = Alignment(horizontal='right')
 _CTR_H2 = Alignment(horizontal='center')
 _LT_H2  = Alignment(horizontal='left')
 
+# ── 指標分類色系（三類指標 + 狀態）─────────────────────
+# ⚑ 監管硬性限制  Hard Limits   深紅：SFC強制，違反=監管違規
+# ★ 內控預警指標  Early Warning 橙：基金公司自設緩衝，違反=內部升級
+# ● 補充內控指標  Internal       琥珀：信用/集中度/杠杆監控
+# ○ 報表參考指標  Reference      藍：信息性，無直接合規要求
+# ✅ 綜合合規狀態  Status         深綠：硬性限制彙總合規判斷
+_FILL_HARD   = PatternFill('solid', fgColor='C00000')  # 深紅 ⚑
+_FILL_WARN   = PatternFill('solid', fgColor='E26B0A')  # 橙  ★
+_FILL_INT    = PatternFill('solid', fgColor='B8860B')  # 琥珀 ●
+_FILL_STATUS = PatternFill('solid', fgColor='375623')  # 深綠 ✅
+_FILL_REF    = PatternFill('solid', fgColor='2E75B6')  # 藍  ○
+_FONT_WHITE  = Font(name='微软雅黑', size=11, bold=True, color='FFFFFF')
+_FONT_WHITEsm= Font(name='微软雅黑', size=10, bold=True, color='FFFFFF')
+
 def _bd(t=None, b=None, l=None, r=None):
     return Border(top=t, bottom=b, left=l, right=r)
 
@@ -212,6 +226,26 @@ def _shg(row, col, text, cs=1):
     c = ws.cell(row=row, column=col, value=text)
     c.font = _MYH11H; c.alignment = _CTR_WP
     c.border = _bd(t=_MS, b=_TS, l=_TS, r=_TS)
+
+def _shg_typed(row, col, text, cs, fill, font=None):
+    """帶顏色的組群表頭（hard/internal/status/reference 四類通用）"""
+    _pre_thin(row, col, cs=cs)
+    if cs > 1:
+        ws.merge_cells(start_row=row, start_column=col,
+                       end_row=row, end_column=col + cs - 1)
+    c = ws.cell(row=row, column=col, value=text)
+    c.font   = font if font else _FONT_WHITE
+    c.fill   = fill
+    c.alignment = _CTR_WP
+    c.border = _bd(t=_MS, b=_TS, l=_TS, r=_TS)
+
+def _shl_typed(row, col, text, fill, font=None):
+    """帶顏色的葉節點表頭"""
+    c = ws.cell(row=row, column=col, value=text)
+    c.font      = font if font else _FONT_WHITEsm
+    c.fill      = fill
+    c.alignment = _CTR_WP
+    c.border    = _bd(t=_TS, b=_TS, l=_TS, r=_TS)
 
 def _shi(row, col, text, cs=1):
     """中間層表頭（頂層組群之下）：thin 邊框"""
@@ -350,94 +384,107 @@ _s(s1r, 11,
    f'=IFERROR(SUMPRODUCT($K${ds1}:$K${de1},$B${ds1}:$B${de1})/$B${s1r},0)', '0.00_ ')
 
 # ═══ Section 2：监管指标和内部要求 ════════════════════════
-# 仿 report_03（14列）：机构投资者/前10大投资者/监管指标/内部要求
+# 16列，按「指標類型」用顏色分三組，一目了然：
+#   ⚑ 監管硬性限制（深紅）：SFC強制，違反=監管違規
+#   ★ 內控預警指標（橙色）：安全余量及早期預警
+#   ● 補充內控指標（琥珀）：信用/集中度/杠杆
+#   ○ 報表參考指標（藍色）：投資者集中度等信息性指標
+#   ✅ 綜合合規狀態（深綠）：硬性限制彙總判斷
 _stitle(S2['t'], '监管指标和内部要求', 16)
 h, h1 = S2['h'], S2['h'] + 1
 
+# A: 基金名称（跨兩行）
 _sh(h, 1, '基金名称', rs=2)
 
-_shg(h, 2, '机构投资者', cs=2)
-_shl(h1, 2, '总占比（%）')
-_shl(h1, 3, '单一最大占比（%）')
+# ── ⚑ 監管硬性限制（深紅，SFC強制）：cols 2-6 ────────────
+_shg_typed(h, 2, '⚑ 监管硬性限制（SFC强制）', cs=5, fill=_FILL_HARD)
+_shl_typed(h1, 2, 'WAM（天）\n上限60天',        fill=_FILL_HARD)
+_shl_typed(h1, 3, 'WAL（天）\n上限120天',       fill=_FILL_HARD)
+_shl_typed(h1, 4, 'DLA日流动\n资产(%)≥7.5%',   fill=_FILL_HARD)
+_shl_typed(h1, 5, 'WLA週流动\n资产(%)≥15%',    fill=_FILL_HARD)
+_shl_typed(h1, 6, '最大单一工具\n期限(天)≤397', fill=_FILL_HARD)
 
-_shg(h, 4, '前10大投资者', cs=2)
-_shl(h1, 4, '总占比（%）')
-_shl(h1, 5, '扣除固有资金占比（%）')
+# ── ✅ 綜合合規狀態（深綠）：col 7 ───────────────────────
+_shg_typed(h, 7, '✅ 综合\n合规状态', cs=1, fill=_FILL_STATUS)
+_shl_typed(h1, 7, '全部合规/\n需关注', fill=_FILL_STATUS)
 
-# SFC UT Code §8.2 监管指标（6列）：
-#   WAM≤60天 / WAL≤120天 / DLA≥7.5% / WLA≥15% / 最大工具期限≤397天 / 信用质量
-_shg(h, 6, '监管指标③④⑤⑥', cs=6)
-_shl(h1, 6,  'WAM（天）\n限≤60天')
-_shl(h1, 7,  'WAL（天）\n限≤120天')
-_shl(h1, 8,  '日流动资产DLA(%)\n≥7.5% NAV')
-_shl(h1, 9,  '週流动资产WLA(%)\n≥15% NAV')
-_shl(h1, 10, '最大单一工具\n剩余期限(天/≤397)')
-_shl(h1, 11, 'AAA以下机构发行\n金融工具占比(%)')
+# ── ★ 內控預警指標（橙色）：cols 8-10 ────────────────────
+_shg_typed(h, 8, '★ 早期预警指标（内控）', cs=3, fill=_FILL_WARN)
+_shl_typed(h1, 8,  'DLA安全余量(pp)\n>0合规,建议≥2pp',   fill=_FILL_WARN)
+_shl_typed(h1, 9,  'WLA安全余量(pp)\n>0合规,建议≥5pp',   fill=_FILL_WARN)
+_shl_typed(h1, 10, '最大单一发行人\n占NAV%\n(参考≤10%)', fill=_FILL_WARN)
 
-# 内部监控（5列）：流动性结构 / 杠杆 / 集中度 / DLA安全余量 / WLA安全余量
-_shg(h, 12, '内部监控', cs=5)
-_shl(h1, 12, '现金及利率债\n占比（%）')
-_shl(h1, 13, '杠杆比例\n（%）')
-_shl(h1, 14, '单一AAA以下机构\n最大持仓比率(%)')
-_shl(h1, 15, 'DLA安全余量(pp)\n（>0合规）')
-_shl(h1, 16, 'WLA安全余量(pp)\n（>0合规）')
+# ── ● 補充內控指標（琥珀）：cols 11-13 ───────────────────
+_shg_typed(h, 11, '● 补充内控指标', cs=3, fill=_FILL_INT)
+_shl_typed(h1, 11, 'AAA以下机构\n金融工具占比(%)',  fill=_FILL_INT)
+_shl_typed(h1, 12, '现金及利率债\n占NAV(%)',        fill=_FILL_INT)
+_shl_typed(h1, 13, '杠杆比例(%)\n参考≤150%',       fill=_FILL_INT)
+
+# ── ○ 報表參考指標（藍色）：cols 14-16 ───────────────────
+_shg_typed(h, 14, '○ 报表参考指标', cs=3, fill=_FILL_REF)
+_shl_typed(h1, 14, '机构投资者\n总占比(%)',         fill=_FILL_REF)
+_shl_typed(h1, 15, '前10大投资者\n总占比(%)',       fill=_FILL_REF)
+_shl_typed(h1, 16, '单一最大\n投资者占比(%)',       fill=_FILL_REF)
 
 for i, fund in enumerate(FUNDS_S):
     r = S2['ds'] + i
-    # ── 06_asset_portfolio 欄位映射（注意：SQL 無 估值日 列）────
-    # col2=净资产亿, col3=现金, col4=债券, col5=债券利息, col6=存款,
-    # col7=存款利息, col8=存单CD, col9=逆回购(融出), col10=正回购(融入),
-    # col11=利率债, col12=浮息债, col13=信用债, col14=存款提支罚息
-    # 分母統一用 col2（净资产），比例 > 100% 屬正常（基金使用正回購槓桿）
-    nav_e2 = f"IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_AP},2,0),1)"   # col2=净资产亿
-    t5_sum = (f"IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_T5},2,0)"
-              f"+VLOOKUP(A{r},'{_SRC_S}'!{_T5},3,0)"
-              f"+VLOOKUP(A{r},'{_SRC_S}'!{_T5},4,0)"
-              f"+VLOOKUP(A{r},'{_SRC_S}'!{_T5},5,0)"
-              f"+VLOOKUP(A{r},'{_SRC_S}'!{_T5},6,0),0)")
+    # 06_asset_portfolio: col2=净资产亿, col3=现金, col8=存单CD, col9=逆回购
+    #   col10=正回购, col11=利率债
+    nav_e2 = f"IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_AP},2,0),1)"  # 净资产亿
+
     _d(r, 1,  fund, bold=True, algn='center')
-    _d(r, 2,  vl(f'A{r}', _TH, 2),             '0.00_ ')  # 机构总占比
-    _d(r, 3,  vl(f'A{r}', _TH, 3),             '0.00_ ')  # 单一最大
-    _d(r, 4,  vl(f'A{r}', _TH, 5),             '0.00_ ')  # 前10大总占比
-    _d(r, 5,  vl(f'A{r}', _TH, 5),             '0.00_ ')  # 扣除固有(近似前10大)
-    # SFC UT Code §8.2 监管指标（来自 44_sfc_compliance.sql 精确计算）
-    _d(r, 6,  vl(f'A{r}', _N,   7), '0_ ')    # WAM（天），SFC上限60天
-    _d(r, 7,  vl(f'A{r}', _N,   8), '0_ ')    # WAL（天），SFC上限120天
-    _d(r, 8,  vl(f'A{r}', _SFC, 2), '0.00_ ') # DLA%（精确），SFC下限7.5%
-    _d(r, 9,  vl(f'A{r}', _SFC, 3), '0.00_ ') # WLA%（精确），SFC下限15%
-    _d(r, 10, vl(f'A{r}', _SFC, 4), '0_ ')    # 最大单一工具剩余期限天，SFC上限397天
-    _d(r, 11, vl(f'A{r}', _A,   3), '0.00_ ') # AAA以下机构金融工具占NAV%（信用质量）
-    # 现金(col3)+利率债(col11) / 净资产(col2) × 100
+
+    # ── ⚑ 監管硬性限制（來自SQL 01/44）────────────────────
+    _d(r, 2,  vl(f'A{r}', _N,   7), '0_ ')    # WAM天（SFC≤60）
+    _d(r, 3,  vl(f'A{r}', _N,   8), '0_ ')    # WAL天（SFC≤120）
+    _d(r, 4,  vl(f'A{r}', _SFC, 2), '0.00_ ') # DLA%（SFC≥7.5%）
+    _d(r, 5,  vl(f'A{r}', _SFC, 3), '0.00_ ') # WLA%（SFC≥15%）
+    _d(r, 6,  vl(f'A{r}', _SFC, 4), '0_ ')    # 最大工具期限天（SFC≤397）
+
+    # ── ✅ 綜合合規狀態（公式判斷五項硬性限制）──────────────
+    # 全部满足 → "✅ 全部合規"；否则列出违规项
+    _d(r, 7,
+       f'=IF(AND(B{r}<=60,C{r}<=120,D{r}>=7.5,E{r}>=15,F{r}<=397),'
+       f'"✅ 全部合規",'
+       f'TRIM(IF(B{r}>60,"WAM超限 ","")&IF(C{r}>120,"WAL超限 ","")&'
+       f'IF(D{r}<7.5,"DLA不足 ","")&IF(E{r}<15,"WLA不足 ","")&'
+       f'IF(F{r}>397,"期限超限","")))',
+       'General', algn='center')
+
+    # ── ★ 早期預警指標（安全余量 + 發行人集中度）────────────
+    _d(r, 8,  f'=IFERROR(D{r}-7.5,0)',   '0.00_ ;[Red]-0.00_ ')  # DLA余量
+    _d(r, 9,  f'=IFERROR(E{r}-15.0,0)',  '0.00_ ;[Red]-0.00_ ')  # WLA余量
+    _d(r, 10, vl(f'A{r}', _CON, 3),      '0.00_ ')                 # 最大单一发行人%
+
+    # ── ● 補充內控指標 ─────────────────────────────────────
+    _d(r, 11, vl(f'A{r}', _A,   3),      '0.00_ ')  # AAA以下占NAV%
     _d(r, 12,
        f"=IFERROR((VLOOKUP(A{r},'{_SRC_S}'!{_AP},3,0)"
        f"+VLOOKUP(A{r},'{_SRC_S}'!{_AP},11,0))/({nav_e2})*100,0)", '0.00_ ')
-    # 杠杆比例 = (净资产col2 + 正回购col10) / 净资产col2 × 100
     _d(r, 13,
        f"=IFERROR((VLOOKUP(A{r},'{_SRC_S}'!{_AP},2,0)"
        f"+VLOOKUP(A{r},'{_SRC_S}'!{_AP},10,0))"
        f"/VLOOKUP(A{r},'{_SRC_S}'!{_AP},2,0)*100,0)", '0.00_ ')
-    # 单一AAA以下机构最大持仓比率（集中度内控指标）
-    _d(r, 14, vl(f'A{r}', _AM, 2), '0.00_ ')
-    # DLA/WLA 安全余量（早期预警：距监管下限的百分点差距，正值=合规）
-    _d(r, 15, f'=IFERROR(H{r}-7.5,0)',  '0.00_ ;[Red]-0.00_ ')
-    _d(r, 16, f'=IFERROR(I{r}-15.0,0)', '0.00_ ;[Red]-0.00_ ')
+
+    # ── ○ 報表參考指標 ─────────────────────────────────────
+    _d(r, 14, vl(f'A{r}', _TH, 2), '0.00_ ')  # 机构投资者总占比
+    _d(r, 15, vl(f'A{r}', _TH, 5), '0.00_ ')  # 前10大总占比
+    _d(r, 16, vl(f'A{r}', _TH, 3), '0.00_ ')  # 单一最大投资者%
 
 ds2, de2, s2r = S2['ds'], S2['de'], S2['s']
 _sname(s2r)
-for ci, cl in enumerate(list('BCDE'), 2):
-    _s(s2r, ci,
-       f'=IFERROR(SUMPRODUCT(${cl}${ds2}:${cl}${de2},$B${ds1}:$B${de1})/$B${s1r},0)',
-       '0.00_ ')
-# WAM/WAL：NAV加权均值，保留整数（监管限额对比用）
-for ci, cl in enumerate(list('FG'), 6):
+# WAM/WAL（整数加权均值）
+for ci, cl in enumerate(list('BC'), 2):
     _s(s2r, ci,
        f'=IFERROR(SUMPRODUCT(${cl}${ds2}:${cl}${de2},$B${ds1}:$B${de1})/$B${s1r},0)',
        '0_ ')
-# DLA/WLA/信用质量/集中度/内控：NAV加权均值
-for ci, cl in enumerate(list('HIJKLMN'), 8):
+# 合规状态不汇总（各基金独立判断）
+_s(s2r, 7, '—', 'General')
+# DLA/WLA及所有%指标：NAV加权均值
+for ci, cl in enumerate(list('DEFHIJKLMNOP'), 4):
     _s(s2r, ci,
        f'=IFERROR(SUMPRODUCT(${cl}${ds2}:${cl}${de2},$B${ds1}:$B${de1})/$B${s1r},0)',
-       '0.00_ ')
+       '0.00_ ;[Red]-0.00_ ' if ci in (8, 9) else '0.00_ ')
 # DLA/WLA安全余量合计（加权均值）
 _s(s2r, 15, f'=IFERROR(SUMPRODUCT($O${ds2}:$O${de2},$B${ds1}:$B${de1})/$B${s1r},0)',
    '0.00_ ;[Red]-0.00_ ')
@@ -772,6 +819,45 @@ def _note_hdr(r, text):
 r = NOTE_ROW
 
 # ── 監管指標說明 ──────────────────────────────────────────
+_note_title(r, '▌ 指標分類說明  ⚑=監管硬性限制  ★=內控預警  ●=補充內控  ○=報表參考  ✅=合規狀態')
+r += 1
+
+# 分類說明表（4行）
+for fill_c, label, meaning, consequence in [
+    (_FILL_HARD,   '⚑ 監管硬性限制 Hard Limits',
+     'SFC UT Code §8 明確規定的量化上/下限（WAM/WAL/DLA/WLA/最大工具期限）',
+     '違反=立即向SFC上報，可能導致基金被暫停贖回或受到監管行動'),
+    (_FILL_WARN,   '★ 內控預警指標 Early Warning',
+     '基金公司自設的緩衝目標（安全余量距監管下限的百分點；發行人集中度≤10%參考線）',
+     '觸發=升級至投資委員會，啟動流動性管理措施，不觸犯SFC法規'),
+    (_FILL_INT,    '● 補充內控指標 Internal Controls',
+     '信用質量、杠杆比例、現金及利率債占比等基金公司風控政策要求',
+     '觸發=投資經理需書面說明，風控委員會審查，記錄於監管文件備查'),
+    (_FILL_REF,    '○ 報表參考指標 Reference Metrics',
+     '投資者集中度等信息性統計，無直接合規要求，供風控日常觀察',
+     '異常時納入流動性壓力測試情景（如大額投資者集中贖回情景）'),
+]:
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=3)
+    c1 = ws.cell(row=r, column=1, value=label)
+    c1.font = _FONT_WHITE; c1.fill = fill_c
+    c1.alignment = Alignment(horizontal='center', vertical='center')
+    c1.border = _bd(t=_TS, b=_TS, l=_TS, r=_TS)
+    ws.row_dimensions[r].height = 22
+
+    ws.merge_cells(start_row=r, start_column=4, end_row=r, end_column=10)
+    c2 = ws.cell(row=r, column=4, value=f'定義：{meaning}')
+    c2.font = _NOTE_BODY; c2.fill = _NOTE_FILL
+    c2.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+    c2.border = _bd(t=_TS, b=_TS, l=_TS, r=_TS)
+
+    ws.merge_cells(start_row=r, start_column=11, end_row=r, end_column=14)
+    c3 = ws.cell(row=r, column=11, value=f'後果：{consequence}')
+    c3.font = _NOTE_BODY; c3.fill = _NOTE_FILL
+    c3.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+    c3.border = _bd(t=_TS, b=_TS, l=_TS, r=_TS)
+    r += 1
+
+r += 1
 _note_title(r, '▌ 監管指標說明（參考：SFC《單位信託及互惠基金守則》第8章，2024年10月版）')
 r += 1
 _note_row(r, '①', 'DLA（日流動資產 Daily Liquid Assets）：每日可變現資產佔基金淨值的比例。'
