@@ -130,7 +130,9 @@ stress AS (
         -- 業務邏輯：壓力損失修正 = 壓力損失 × 變現係數
         -- 定義參考：SFC 通函 24EC64 及 IOSCO FR07/12 流動性分層框架
         CASE
-            WHEN coupon_type = 'DEPOSIT'                       THEN 0.00  -- 存款：合約本金，不做市場壓力計量
+            -- 存款：按合約面值估值（HK VNAV MMF無二級市場，合約價值=公允價值，非攤余成本法）
+            -- 利率衝擊對存款面值無影響（固定利率合約），早期支取損失見13_deposit_rate_loss.sql
+            WHEN coupon_type = 'DEPOSIT'                       THEN 0.00
             WHEN coupon_type = 'FLOAT'                         THEN 0.05  -- 浮息債：利率敏感度極低
             WHEN bond_type   = 'BOND_GOVT'                     THEN 0.20  -- 政府/公共債：銀行間活躍，流動性最好
             WHEN bond_type   = 'CD'                            THEN 0.20  -- 同業存單：流動性接近政府債

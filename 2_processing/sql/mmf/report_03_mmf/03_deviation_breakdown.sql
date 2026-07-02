@@ -117,12 +117,24 @@ cd_dev AS (
     GROUP BY c.port_id
 ),
 
--- 存款市值（活期 + 定期，按本金，無偏差概念）
--- 業務說明：存款採攤余成本法，本金≈市值，偏差≈0，但佔 NAV 約 30%，不可忽視
--- 分類：
---   活期（is_overnight=TRUE 或 maturity_date=T+1）→ 計入 DLA
---   定期1-5天（maturity_date T+2~T+5）            → 計入 WLA
---   定期6天以上                                    → 不計入 DLA/WLA
+-- 存款市值（活期 + 定期，按合約面值，偏差恒為0）
+-- 業務說明（HK VNAV MMF vs 內地 CNAV/攤余成本 MMF 的關鍵區別）：
+--
+--   HK SFC VNAV MMF（本系統適用）：
+--     債券/CD：按公允價值（Mark-to-Market）估值 → 可能有偏離度
+--     存款  ：按「合約面值」(principal + 應計利息) 估值
+--             ↳ 非「攤余成本法」，而是因為存款無二級市場，
+--               合約面值本身即等於公允價值，故偏差 = 0
+--
+--   內地 CSRC MMF（不適用本系統）：
+--     全部資產用攤余成本法 → 影子定價與帳面值有偏離度
+--
+--   注：對有罰息的定期存款，提前支取損失見 13_deposit_rate_loss.sql
+--
+-- 分類（SFC UT Code §8.2(n) DLA/WLA）：
+--   活期（is_overnight=TRUE 或 maturity_date≤T+1）→ 計入 DLA
+--   定期 T+2~T+5 到期                              → 計入 WLA（不計入DLA）
+--   定期 T+6以上                                   → 既不計DLA也不計WLA
 deposit_mv AS (
     SELECT d.port_id,
            SUM(COALESCE(d.principal, 0)) / 100000000.0               AS mv_100m,
