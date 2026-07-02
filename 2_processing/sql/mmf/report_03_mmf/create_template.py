@@ -304,7 +304,7 @@ _DL  = '$A$80:$C$100'    # 13: port,code,最大利差损(元)
 _RD  = '$A$96:$D$120'    # 10: port,明日确认亿,当日&昨日亿,T-2净值亿
 _T5  = '$E$96:$J$120'    # 12: port,T+1,T+2,T+3,T+4,T+5 (亿)
 _BKT = '$K$96:$R$120'    # 16: port,T+14,T+30,月末,季末,年末,明年末,后年末+ (亿)
-_DV  = '$A$118:$K$140'   # 03(HK口徑): port(1),总偏差元(2),港府债偏差元(3),机构债偏差元(4),信用类偏差元(5),存单偏差元(6),港府债市值亿(7),机构债市值亿(8),信用类市值亿(9),存单市值亿(10),其他市值亿(11)
+_DV  = '$A$118:$M$140'   # 03(HK口徑): port(1),总偏差元(2),港府债偏差元(3),机构债偏差元(4),信用类偏差元(5),存单偏差元(6),港府债市值亿(7),机构债市值亿(8),信用类市值亿(9),存单市值亿(10),存款市值亿(11),存款DLA部分市值亿(12)
 
 # ═══ Section 1：风险观察指标 ════════════════════════════
 # 三行表頭仿 report_03：
@@ -558,24 +558,36 @@ _s(s3r, 9,
 #
 # 偏離度貢獻(bp) = 各類偏差(元) / 總偏差(元) × 整體偏離度(bp)
 #
-# _DV 列映射（03_deviation_breakdown.sql HK 版，11列）：
+# _DV 列映射（03_deviation_breakdown.sql HK 版，12列）：
 #   col1=port_name, col2=total_deviation元, col3=港府债偏差元, col4=机构债偏差元,
 #   col5=信用类偏差元, col6=存单偏差元, col7=港府债市值亿, col8=机构债市值亿,
-#   col9=信用类市值亿, col10=存单市值亿, col11=其他市值亿
-_stitle(S4['t'], '偏离度分解（bp）', 6)
-for ci, text in enumerate(['偏离度（bp）', '基金整体', '港府/公共债券', '机构债', '信用类工具', '同业存单'], 1):
+#   col9=信用类市值亿, col10=存单市值亿, col11=存款市值亿(偏差恒为0), col12=存款DLA部分
+#
+# 存款：採攤余成本法，偏差恒為0，但佔 NAV 約30%，必須明確列示！
+# 否則讀者看到港府債+機構債+信用類+存單 = ~70%，不知道剩餘30%存款去哪了
+_stitle(S4['t'], '偏离度分解（bp）', 7)
+for ci, text in enumerate([
+    '偏离度（bp）', '基金整体',
+    '港府/公共债券', '机构债', '信用类工具', '同业存单',
+    '存款(0bp)\n占NAV%参考'   # 存款偏差恒为0，但展示市值比例
+], 1):
     _sh(S4['h'], ci, text, rs=1)
 
 for i, fund in enumerate(FUNDS_S):
     r = S4['ds'] + i
     _d(r, 1, fund, bold=True, algn='center')
     _FMT_DV = '0.00_ ;-0.00_ ;"-"'
-    _tot = f"IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_DV},2,0),1)"  # 总偏差元（分母）
-    _d(r, 2, vl(f'A{r}', _N, 3),  '0.00_ ')  # 基金整体bp
+    _tot    = f"IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_DV},2,0),1)"   # 总偏差元（分母）
+    nav_e4  = f"IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_AP},2,0),1)"   # 净资产亿（分母）
+    _d(r, 2, vl(f'A{r}', _N, 3),  '0.00_ ')  # 基金整体bp（来自01_nav）
     _d(r, 3, f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_DV},3,0)/({_tot})*B{r},0)", _FMT_DV)  # 港府债
     _d(r, 4, f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_DV},4,0)/({_tot})*B{r},0)", _FMT_DV)  # 机构债
     _d(r, 5, f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_DV},5,0)/({_tot})*B{r},0)", _FMT_DV)  # 信用类
     _d(r, 6, f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_DV},6,0)/({_tot})*B{r},0)", _FMT_DV)  # 存单
+    # 存款：偏差恒为0（摊余成本法），显示市值/NAV占比（%）供读者了解30%存款比重
+    _d(r, 7,
+       f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_DV},11,0)/({nav_e4})*100,0)",
+       '0.00_ ')
 
 # ═══ Section 5：申赎与流动性分析 ════════════════════════
 # 仿 report_03：各列独立2行表頭，按用户指定列标题
@@ -750,7 +762,7 @@ def _frame(sec, ncols):
 _frame(S1, 11)
 _frame(S2, 16)
 _frame(S3,  9)
-_frame(S4,  6)
+_frame(S4,  7)
 _frame(S5, 14)
 _frame(S6, 13)
 
