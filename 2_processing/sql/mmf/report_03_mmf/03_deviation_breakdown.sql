@@ -1,80 +1,155 @@
 -- ============================================================
 -- 報表03 / 03_deviation_breakdown.sql
--- 原始：SmartReport/03/03.sql  偏離按品種拆分（9列）
+-- 偏離度按資產類別拆分（HK MMF 口徑）
 -- Sheet：日报-sql导入数据 @ A118
 --
--- 欄位說明（對應源 SQL 9列）：
---   PortName, DeviationAmount,
---   cd_deviation, scp_deviation(短融/CP), mtn_deviation(中票),
---   treasury_deviation(國庫券), policybond_deviation(政策性債),
---   cd%, scp%, mtn%, tbond%, pbond%
+-- HK MMF 資產分類（對應 UT Code §8.2 及 SFC 監管術語）：
+--   港府/公共債券  Government/Public Securities
+--     → BOND_GOVT + 政府及交易所基金票據發行人
+--   機構債        Agency Bonds
+--     → BOND_GOVT + 機構發行人（HKMA、EIB、ADB 等）
+--   信用類工具    Credit Instruments（企業債 + CP）
+--     → BOND_CORP，asset_subtype IN ('CP','BOND_CORP')
+--   同業存單      Certificates of Deposit (CD)
+--     → balance_cd 表
 --
--- HK對應：
---   國庫券→港府票據(BOND_GOVT issuer=HK政府)
---   政策性債→機構債(BOND_GOVT issuer=HKMA/EIB等)
---   短融/CP → asset_subtype='CP'
---   中票MTN → asset_subtype='BOND_CORP' (中期)
---   存單CD → balance_cd
+-- 偏離度貢獻(bp) = 各類別佔總偏差比例 × 基金整體偏離度
+--   各資產偏差金額(元) = market_value - cost
+--   各類別比例 = 該類偏差 / 組合總偏差
+--
+-- 欄位說明（12列，對應模版 _DV 範圍）：
+--   col1  port_name              組合名稱
+--   col2  total_deviation        組合總偏差金額（元）= nav_deviation_amount
+--   col3  gov_bond_deviation     港府/公共債券偏差（元）
+--   col4  agency_deviation       機構債偏差（元）
+--   col5  credit_deviation       信用類工具偏差（元；含企業債+CP）
+--   col6  cd_deviation           同業存單偏差（元）
+--   col7  gov_bond_mv            港府/公共債券市值（億元）
+--   col8  agency_mv              機構債市值（億元）
+--   col9  credit_mv              信用類工具市值（億元）
+--   col10 cd_mv                  同業存單市值（億元）
+--   col11 other_mv               其他資產市值（億元；含存款等）
+--   col12 portfolio_yield        組合加權平均收益率（%；來自 01 sql）
+--
+-- 注意：偏離度貢獻(bp) = col_pct × 組合整體偏離度(bp)
+--   其中 col_pct = col_deviation / total_deviation（在模版計算）
+--
+-- ★ 修改 evaluate_date 即可獨立運行
 -- ============================================================
 
-WITH total_deviation AS (
-    SELECT m.port_id, p.port_name, m.nav_deviation_amount AS deviation_amount
+WITH
+
+-- 組合總偏差（來自系統計算，優先用此值作為分母）
+total_dev AS (
+    SELECT m.port_id,
+           p.port_name,
+           COALESCE(m.nav_deviation_amount, 0) AS total_deviation
     FROM fsi.balance_portfolio_mmf m
-    JOIN fsi.para_portfolio p ON p.port_id=m.port_id
-    WHERE p.is_mmf=TRUE AND p.is_active=TRUE
-      AND m.evaluate_date='2026-06-25'::DATE
+    JOIN fsi.para_portfolio p ON p.port_id = m.port_id
+    WHERE p.is_mmf = TRUE AND p.is_active = TRUE
+      AND m.evaluate_date = '2026-06-25'::DATE
 ),
 
+-- ── 各類別偏差（market_value - cost）────────────────────────
+
+-- 港府/公共債券偏差（Exchange Fund Bills/Notes + HK Govt Bonds）
+-- 識別方式：BOND_GOVT 且發行人為港府或交易所基金
+gov_bond_dev AS (
+    SELECT b.port_id,
+           SUM(COALESCE(b.market_value, 0) - COALESCE(b.cost, 0)) AS dev,
+           SUM(COALESCE(b.market_value, 0)) / 100000000.0          AS mv_100m
+    FROM fsi.balance_bond b
+    JOIN fsi.para_portfolio p ON p.port_id = b.port_id
+    WHERE p.is_mmf = TRUE AND b.evaluate_date = '2026-06-25'::DATE
+      AND b.asset_subtype = 'BOND_GOVT'
+      AND NOT (   COALESCE(b.issuer_name, '') ILIKE '%HKMA%'
+               OR COALESCE(b.issuer_name, '') ILIKE '%金管%'
+               OR COALESCE(b.issuer_name, '') ILIKE '%Monetary Authority%'
+               OR COALESCE(b.issuer_name, '') ILIKE '%EIB%'
+               OR COALESCE(b.issuer_name, '') ILIKE '%World Bank%'
+               OR COALESCE(b.issuer_name, '') ILIKE '%ADB%'
+               OR COALESCE(b.issuer_name, '') ILIKE '%IBRD%'
+               OR COALESCE(b.issuer_name, '') ILIKE '%IFC%')
+    GROUP BY b.port_id
+),
+
+-- 機構債偏差（HKMA、EIB、ADB、World Bank 等機構發行的 BOND_GOVT）
+agency_dev AS (
+    SELECT b.port_id,
+           SUM(COALESCE(b.market_value, 0) - COALESCE(b.cost, 0)) AS dev,
+           SUM(COALESCE(b.market_value, 0)) / 100000000.0          AS mv_100m
+    FROM fsi.balance_bond b
+    JOIN fsi.para_portfolio p ON p.port_id = b.port_id
+    WHERE p.is_mmf = TRUE AND b.evaluate_date = '2026-06-25'::DATE
+      AND b.asset_subtype = 'BOND_GOVT'
+      AND (   COALESCE(b.issuer_name, '') ILIKE '%HKMA%'
+           OR COALESCE(b.issuer_name, '') ILIKE '%金管%'
+           OR COALESCE(b.issuer_name, '') ILIKE '%Monetary Authority%'
+           OR COALESCE(b.issuer_name, '') ILIKE '%EIB%'
+           OR COALESCE(b.issuer_name, '') ILIKE '%World Bank%'
+           OR COALESCE(b.issuer_name, '') ILIKE '%ADB%'
+           OR COALESCE(b.issuer_name, '') ILIKE '%IBRD%'
+           OR COALESCE(b.issuer_name, '') ILIKE '%IFC%')
+    GROUP BY b.port_id
+),
+
+-- 信用類工具偏差（BOND_CORP 企業債 + CP 商業票據）
+-- 中長期信用債、商業票據均歸此類
+credit_dev AS (
+    SELECT b.port_id,
+           SUM(COALESCE(b.market_value, 0) - COALESCE(b.cost, 0)) AS dev,
+           SUM(COALESCE(b.market_value, 0)) / 100000000.0          AS mv_100m
+    FROM fsi.balance_bond b
+    JOIN fsi.para_portfolio p ON p.port_id = b.port_id
+    WHERE p.is_mmf = TRUE AND b.evaluate_date = '2026-06-25'::DATE
+      AND b.asset_subtype IN ('BOND_CORP', 'CP', 'BOND_CONVERT', 'BOND_ABS')
+    GROUP BY b.port_id
+),
+
+-- 同業存單偏差（balance_cd）
 cd_dev AS (
     SELECT c.port_id,
-           SUM(COALESCE(c.market_value,0)-COALESCE(c.cost,0)) AS cd_dev
+           SUM(COALESCE(c.market_value, 0) - COALESCE(c.cost, 0)) AS dev,
+           SUM(COALESCE(c.market_value, 0)) / 100000000.0          AS mv_100m
     FROM fsi.balance_cd c
-    JOIN fsi.para_portfolio p ON p.port_id=c.port_id
-    WHERE p.is_mmf=TRUE AND c.evaluate_date='2026-06-25'::DATE
+    JOIN fsi.para_portfolio p ON p.port_id = c.port_id
+    WHERE p.is_mmf = TRUE AND c.evaluate_date = '2026-06-25'::DATE
     GROUP BY c.port_id
 ),
 
-bond_dev AS (
-    SELECT b.port_id,
-           -- 短融/商票（CP）
-           SUM(CASE WHEN b.asset_subtype='CP'
-                    THEN COALESCE(b.market_value,0)-COALESCE(b.cost,0) ELSE 0 END) AS scp_dev,
-           -- 中票MTN（BOND_CORP 長期信用債近似）
-           SUM(CASE WHEN b.asset_subtype='BOND_CORP'
-                    THEN COALESCE(b.market_value,0)-COALESCE(b.cost,0) ELSE 0 END) AS mtn_dev,
-           -- 港府票據/國庫券（BOND_GOVT，政府直接發行）
-           SUM(CASE WHEN b.asset_subtype='BOND_GOVT'
-                        AND COALESCE(b.issuer_name,'') NOT ILIKE '%政策%'
-                        AND COALESCE(b.issuer_name,'') NOT ILIKE '%HKMA%'
-                    THEN COALESCE(b.market_value,0)-COALESCE(b.cost,0) ELSE 0 END) AS treasury_dev,
-           -- 政策性債（BOND_GOVT 中機構發行，如HKMA票據/EIB）
-           SUM(CASE WHEN b.asset_subtype='BOND_GOVT'
-                        AND (COALESCE(b.issuer_name,'') ILIKE '%政策%'
-                          OR COALESCE(b.issuer_name,'') ILIKE '%HKMA%'
-                          OR COALESCE(b.issuer_name,'') ILIKE '%金管%')
-                    THEN COALESCE(b.market_value,0)-COALESCE(b.cost,0) ELSE 0 END) AS policy_dev
-    FROM fsi.balance_bond b
-    JOIN fsi.para_portfolio p ON p.port_id=b.port_id
-    WHERE p.is_mmf=TRUE AND b.evaluate_date='2026-06-25'::DATE
-    GROUP BY b.port_id
+-- 其他資產市值（存款 + 現金，無偏差概念，僅作參考）
+other_mv AS (
+    SELECT d.port_id,
+           SUM(COALESCE(d.principal, 0)) / 100000000.0 AS mv_100m
+    FROM fsi.balance_deposit d
+    JOIN fsi.para_portfolio p ON p.port_id = d.port_id
+    WHERE p.is_mmf = TRUE AND d.evaluate_date = '2026-06-25'::DATE
+    GROUP BY d.port_id
 )
 
 SELECT
     t.port_name,
-    ROUND(t.deviation_amount, 2)                              AS total_deviation,
-    -- 各品種偏差金額
-    ROUND(COALESCE(c.cd_dev,0), 2)                           AS cd_deviation,
-    ROUND(COALESCE(b.scp_dev,0), 2)                          AS scp_deviation,     -- 短融/CP
-    ROUND(COALESCE(b.mtn_dev,0), 2)                          AS mtn_deviation,     -- 中票/信用債
-    ROUND(COALESCE(b.treasury_dev,0), 2)                     AS treasury_deviation,-- 國庫券/港府票據
-    ROUND(COALESCE(b.policy_dev,0), 2)                       AS policybond_deviation, -- 政策性債
-    -- 各品種佔總偏差比例
-    ROUND(COALESCE(c.cd_dev,0)  / NULLIF(t.deviation_amount,0), 6) AS cd_pct,
-    ROUND(COALESCE(b.scp_dev,0) / NULLIF(t.deviation_amount,0), 6) AS scp_pct,
-    ROUND(COALESCE(b.mtn_dev,0) / NULLIF(t.deviation_amount,0), 6) AS mtn_pct,
-    ROUND(COALESCE(b.treasury_dev,0) / NULLIF(t.deviation_amount,0), 6) AS treasury_pct,
-    ROUND(COALESCE(b.policy_dev,0) / NULLIF(t.deviation_amount,0), 6) AS policy_pct
-FROM total_deviation t
-LEFT JOIN cd_dev   c ON c.port_id=t.port_id
-LEFT JOIN bond_dev b ON b.port_id=t.port_id
+
+    -- col2: 組合總偏差（元），來自系統 WAM/NAV 計算
+    ROUND(t.total_deviation, 2)                                    AS total_deviation,
+
+    -- col3-col6: 各資產類別偏差（元）
+    ROUND(COALESCE(gd.dev, 0), 2)                                  AS gov_bond_deviation,
+    ROUND(COALESCE(ad.dev, 0), 2)                                  AS agency_deviation,
+    ROUND(COALESCE(cd_c.dev, 0), 2)                                AS credit_deviation,
+    ROUND(COALESCE(cdd.dev, 0), 2)                                 AS cd_deviation,
+
+    -- col7-col11: 各資產類別市值（億元）
+    ROUND(COALESCE(gd.mv_100m, 0), 6)                             AS gov_bond_mv,
+    ROUND(COALESCE(ad.mv_100m, 0), 6)                             AS agency_mv,
+    ROUND(COALESCE(cd_c.mv_100m, 0), 6)                           AS credit_mv,
+    ROUND(COALESCE(cdd.mv_100m, 0), 6)                            AS cd_mv,
+    ROUND(COALESCE(om.mv_100m, 0), 6)                             AS other_mv
+
+FROM total_dev t
+LEFT JOIN gov_bond_dev gd   ON gd.port_id   = t.port_id
+LEFT JOIN agency_dev   ad   ON ad.port_id   = t.port_id
+LEFT JOIN credit_dev   cd_c ON cd_c.port_id = t.port_id
+LEFT JOIN cd_dev       cdd  ON cdd.port_id  = t.port_id
+LEFT JOIN other_mv     om   ON om.port_id   = t.port_id
 ORDER BY t.port_name;

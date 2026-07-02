@@ -17,12 +17,13 @@
 --   K  liq_ratio            变现系数
 --   L  stressed_loss_adj    压力损失修正（万元）：= 压力损失 × 变现系数
 --
--- 變現係數定義（修正版）：
---   DEPOSIT      → 0      合約本金，不做市場壓力計量
---   FLOAT        → 0.05   浮息債利率敏感度極低
---   BOND_GOVT    → 0.20   政府/政策行債，流動性最好
---   CD           → 0.20   同業存單，銀行間活躍交易，流動性接近利率債
---   BOND_CORP    → 0.80   信用債，壓力下流動性較差
+-- 變現係數定義（HK MMF 口徑，對應 SFC UT Code §8.2 流動性分層）：
+--   DEPOSIT      → 0.00   合約本金，不受市場利率衝擊（計入 DLA）
+--   FLOAT        → 0.05   浮息債利率敏感度極低（下次重設日前視同現金）
+--   BOND_GOVT    → 0.20   政府/公共債券，銀行間高度活躍（T+1可計入DLA）
+--   CD           → 0.20   同業存單，流動性接近政府債（T+5可計入WLA）
+--   BOND_CORP    → 0.80   信用債，壓力環境下流動性顯著下降
+-- 注：係數越高表示在壓力下越難變現（損失越大），0=無利率風險，1=全額計入損失
 --
 -- ★ 修改 evaluate_date 即可獨立運行
 -- ============================================================
@@ -115,22 +116,26 @@ stress AS (
         market_value,
         duration,
 
-        -- 債券類別（U列）
+        -- 債券類別（U列）— HK MMF 口徑（對應 SFC UT Code 資產分類）
         CASE
-            WHEN bond_type = 'CD'                               THEN '同业存单'
+            WHEN bond_type = 'CD'                               THEN '同業存單'
             WHEN bond_type = 'DEPOSIT'                         THEN '存款'
-            WHEN bond_type = 'BOND_GOVT'                       THEN '利率债'
-            WHEN bond_type IN ('BOND_CORP','BOND_FLOAT')       THEN '信用债'
+            WHEN bond_type = 'BOND_GOVT'                       THEN '政府/公共債券'
+            WHEN bond_type = 'BOND_CORP'                       THEN '信用債'
+            WHEN bond_type = 'BOND_FLOAT'                      THEN '浮息債'
             ELSE '其他'
         END                                                     AS bond_category,
 
-        -- 變現係數（V列，修正版）
+        -- 變現係數（V列）— 反映各類資產在壓力環境下實際可變現比例
+        -- 業務邏輯：壓力損失修正 = 壓力損失 × 變現係數
+        -- 定義參考：SFC 通函 24EC64 及 IOSCO FR07/12 流動性分層框架
         CASE
-            WHEN coupon_type = 'DEPOSIT'                       THEN 0.00  -- 存款不計
-            WHEN coupon_type = 'FLOAT'                         THEN 0.05  -- 浮息債
-            WHEN bond_type   = 'BOND_GOVT'                     THEN 0.20  -- 利率債
-            WHEN bond_type   = 'CD'                            THEN 0.20  -- 同業存單（修正：與利率債同）
-            WHEN bond_type   = 'BOND_CORP'                     THEN 0.80  -- 信用債
+            WHEN coupon_type = 'DEPOSIT'                       THEN 0.00  -- 存款：合約本金，不做市場壓力計量
+            WHEN coupon_type = 'FLOAT'                         THEN 0.05  -- 浮息債：利率敏感度極低
+            WHEN bond_type   = 'BOND_GOVT'                     THEN 0.20  -- 政府/公共債：銀行間活躍，流動性最好
+            WHEN bond_type   = 'CD'                            THEN 0.20  -- 同業存單：流動性接近政府債
+            WHEN bond_type   = 'BOND_CORP'                     THEN 0.80  -- 信用債：壓力下流動性較差
+            WHEN bond_type   = 'BOND_FLOAT'                    THEN 0.05  -- 浮息債（按 coupon_type=FLOAT 前已覆蓋）
             ELSE 0.20
         END                                                     AS liq_ratio,
 

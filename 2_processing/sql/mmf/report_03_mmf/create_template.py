@@ -304,7 +304,7 @@ _DL  = '$A$80:$C$100'    # 13: port,code,最大利差损(元)
 _RD  = '$A$96:$D$120'    # 10: port,明日确认亿,当日&昨日亿,T-2净值亿
 _T5  = '$E$96:$J$120'    # 12: port,T+1,T+2,T+3,T+4,T+5 (亿)
 _BKT = '$K$96:$R$120'    # 16: port,T+14,T+30,月末,季末,年末,明年末,后年末+ (亿)
-_DV  = '$A$118:$L$140'   # 03: port,CD偏差万,企债偏差万,政债偏差万,CD市值亿,企债亿,政债亿,存款亿,利率×4
+_DV  = '$A$118:$K$140'   # 03(HK口徑): port(1),总偏差元(2),港府债偏差元(3),机构债偏差元(4),信用类偏差元(5),存单偏差元(6),港府债市值亿(7),机构债市值亿(8),信用类市值亿(9),存单市值亿(10),其他市值亿(11)
 
 # ═══ Section 1：风险观察指标 ════════════════════════════
 # 三行表頭仿 report_03：
@@ -550,37 +550,32 @@ _s(s3r, 9,
    f'=IFERROR(SUMPRODUCT($I${ds3}:$I${de3},$B${ds1}:$B${de1})/$B${s1r},0)', '0.00_ ')
 
 # ═══ Section 4：偏离度分解（bp）══════════════════════════
-# 仿 report_03：按資產類別分解偏離度bp
-# 列映射（03_deviation_breakdown SQL）：
-#   存单  ← CD偏差(万元)/NAV亿 = bp
-#   中票  ← 企业债偏差(万元)/NAV亿（含短融+中票）
-#   政金债 ← 政府债偏差(万元)/NAV亿（含国债+政金债）
-_stitle(S4['t'], '偏离度分解（bp）', 7)
-for ci, text in enumerate(['偏离度（bp）', '基金整体', '存单', '短融', '中票', '国债', '政金债'], 1):
+# HK MMF 四類資產口徑（已重寫 03_deviation_breakdown.sql）：
+#   港府/公共債券 Government/Public Securities (BOND_GOVT 非機構)
+#   機構債        Agency Bonds (BOND_GOVT 機構發行)
+#   信用類工具    Credit Instruments (BOND_CORP + CP)
+#   同業存單      Certificates of Deposit
+#
+# 偏離度貢獻(bp) = 各類偏差(元) / 總偏差(元) × 整體偏離度(bp)
+#
+# _DV 列映射（03_deviation_breakdown.sql HK 版，11列）：
+#   col1=port_name, col2=total_deviation元, col3=港府债偏差元, col4=机构债偏差元,
+#   col5=信用类偏差元, col6=存单偏差元, col7=港府债市值亿, col8=机构债市值亿,
+#   col9=信用类市值亿, col10=存单市值亿, col11=其他市值亿
+_stitle(S4['t'], '偏离度分解（bp）', 6)
+for ci, text in enumerate(['偏离度（bp）', '基金整体', '港府/公共债券', '机构债', '信用类工具', '同业存单'], 1):
     _sh(S4['h'], ci, text, rs=1)
 
 for i, fund in enumerate(FUNDS_S):
     r = S4['ds'] + i
     _d(r, 1, fund, bold=True, algn='center')
-    # ── 偏離度分解（各資產類別 bp 貢獻）───────────────────────
-    # 業務含義：基金整體偏離度 = 各資產類別偏離度貢獻之和
-    #   各資產偏離度貢獻(bp) = 該資產佔總偏差比例 × 基金整體偏離度(bp)
-    #
-    # 注意：各子項方向可能不同（存單升值、中票貶值），子項絕對值可 > 整體，
-    #       這是正常的「對沖抵消」效果，非計算錯誤。
-    #
-    # 03_deviation_breakdown.sql 列映射（_DV 範圍）：
-    #   col2=total_deviation(元), col3=cd_dev(元), col4=scp_dev(元),
-    #   col5=mtn_dev(元), col6=treasury_dev(元), col7=policy_dev(元),
-    #   col8=cd_pct, col9=scp_pct, col10=mtn_pct, col11=treasury_pct, col12=policy_pct
-    # 零值由數字格式自動顯示 "-"（格式：'0.00_ ;-0.00_ ;"-"'）
     _FMT_DV = '0.00_ ;-0.00_ ;"-"'
-    _d(r, 2, vl(f'A{r}', _N, 3),               '0.00_ ')   # 基金整体bp（来自01_nav col3）
-    _d(r, 3, f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_DV},8,0)*B{r},0)",  _FMT_DV)  # 存单: cd_pct×bp
-    _d(r, 4, f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_DV},9,0)*B{r},0)",  _FMT_DV)  # 短融: scp_pct×bp
-    _d(r, 5, f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_DV},10,0)*B{r},0)", _FMT_DV)  # 中票: mtn_pct×bp
-    _d(r, 6, f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_DV},11,0)*B{r},0)", _FMT_DV)  # 国债: treasury_pct×bp
-    _d(r, 7, f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_DV},12,0)*B{r},0)", _FMT_DV)  # 政金债: policy_pct×bp
+    _tot = f"IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_DV},2,0),1)"  # 总偏差元（分母）
+    _d(r, 2, vl(f'A{r}', _N, 3),  '0.00_ ')  # 基金整体bp
+    _d(r, 3, f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_DV},3,0)/({_tot})*B{r},0)", _FMT_DV)  # 港府债
+    _d(r, 4, f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_DV},4,0)/({_tot})*B{r},0)", _FMT_DV)  # 机构债
+    _d(r, 5, f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_DV},5,0)/({_tot})*B{r},0)", _FMT_DV)  # 信用类
+    _d(r, 6, f"=IFERROR(VLOOKUP(A{r},'{_SRC_S}'!{_DV},6,0)/({_tot})*B{r},0)", _FMT_DV)  # 存单
 
 # ═══ Section 5：申赎与流动性分析 ════════════════════════
 # 仿 report_03：各列独立2行表頭，按用户指定列标题
@@ -755,7 +750,7 @@ def _frame(sec, ncols):
 _frame(S1, 11)
 _frame(S2, 16)
 _frame(S3,  9)
-_frame(S4,  7)
+_frame(S4,  6)
 _frame(S5, 14)
 _frame(S6, 13)
 
