@@ -221,6 +221,15 @@
       "start_cell": "A130",
       "header": false,
       "description": "SFC UT Code §8.2：DLA/WLA/最大工具期限/合規狀態，A129=表頭，數據A130起"
+    },
+    {
+      "id": "03_45",
+      "name": "發行人集中度分析",
+      "sql": "45_concentration.sql",
+      "sheet": "日报-sql导入数据",
+      "start_cell": "A148",
+      "header": false,
+      "description": "SFC §8.2(g)：最大單一發行人/前5大/政府債/信用類佔NAV%，A147=表頭，數據A148起"
     }
   ]
 }
