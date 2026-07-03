@@ -53,13 +53,25 @@ def main():
     if not args.xlsx_only:
         ok &= run(
             f'python "{BASE_DIR / "extract_data.py"}" --date {ev} {fund_flag}',
-            'Step 2/3  提取資料庫數據 → outputdata.json')
+            'Step 2/4  提取資料庫數據 → outputdata.json')
 
-    # Step 3: PDF
+    # Step 3: 圖表 PNG
+    if not args.xlsx_only and ok:
+        ok &= run(
+            f'python "{BASE_DIR / "create_charts.py"}" --all',
+            'Step 3/4  生成圖表 PNG（餅圖 + 柱狀圖）')
+
+    # Step 4a: PDF
     if not args.xlsx_only and ok:
         ok &= run(
             f'python "{BASE_DIR / "create_factsheet.py"}" --date {ev} --all',
-            'Step 3/3  生成 PDF Factsheet（模版 + 數值）')
+            'Step 4a/4  生成 PDF Factsheet')
+
+    # Step 4b: Word
+    if not args.xlsx_only and ok:
+        run(
+            f'python "{BASE_DIR / "create_word_report.py"}" --all',
+            'Step 4b/4  生成 Word Factsheet（可編輯 .docx）')
 
     print(f'\n{"═"*55}')
     out = MMF_DIR / 'output' / 'report_04_mmf_monthly'
