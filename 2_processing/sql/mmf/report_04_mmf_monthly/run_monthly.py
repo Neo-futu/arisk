@@ -1,91 +1,78 @@
 """
-run_monthly.py — 一鍵生成 MMF 月報 XLSX + PDF Factsheet
-執行：python 2_processing/sql/mmf/report_04_mmf_monthly/run_monthly.py --date 2026-06-25
+run_monthly.py — MMF 月報一鍵生成：XLSX + outputdata.json + PDF
+用法：python run_monthly.py --date 2026-06-25
+
+執行順序：
+  Step 1: run_report.py     → XLSX 數據表
+  Step 2: extract_data.py   → outputdata.json（可審查數據）
+  Step 3: create_factsheet  → PDF Factsheet（模版 + 數據合併）
+
+輸出目錄：mmf/output/report_04_mmf_monthly/
 """
-import sys, argparse, shutil
+import sys, subprocess, argparse
 sys.stdout.reconfigure(encoding='utf-8')
 from datetime import date
 from pathlib import Path
 
-BASE_DIR   = Path(__file__).parent
-MMF_DIR    = BASE_DIR.parent
-OUTPUT_DIR = MMF_DIR / 'output' / 'report_04_mmf_monthly'
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+BASE_DIR = Path(__file__).parent
+MMF_DIR  = BASE_DIR.parent
 
-
-def run_xlsx(eval_date: date) -> Path:
-    """調用 run_report.py 生成 XLSX"""
-    import importlib.util, sys, os
-    spec = importlib.util.spec_from_file_location('run_report', MMF_DIR / 'run_report.py')
-    rr = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(rr)
-
-    params = {
-        'evaluate_date': eval_date,
-        'port_ids': [],
-        'trade_days_ahead': 5,
-        'rate_shock_bps': 50,
-    }
-    import os
-    rr.OUTPUT_DIR = OUTPUT_DIR
-    out = rr.generate_report(BASE_DIR, params, None, rr.get_db_conn())
-    return out
-
-
-def run_pdf(eval_date: date) -> Path:
-    """調用 create_factsheet.py 生成 PDF"""
-    import importlib.util
-    spec = importlib.util.spec_from_file_location(
-        'create_factsheet', BASE_DIR / 'create_factsheet.py')
-    cf = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(cf)
-    cf.OUTPUT_DIR = OUTPUT_DIR
-    pdf_path = OUTPUT_DIR / f'MMF_Factsheet_{eval_date.strftime("%Y%m%d")}_TC.pdf'
-    data = cf.load_data(eval_date)
-    cf.build_pdf(data, eval_date, pdf_path)
-    return pdf_path
-
+def run(cmd, desc):
+    print(f'\n{"─"*55}')
+    print(f'  {desc}')
+    print(f'{"─"*55}')
+    result = subprocess.run(cmd, shell=True, text=True, encoding='utf-8',
+                            capture_output=False)
+    return result.returncode == 0
 
 def main():
-    parser = argparse.ArgumentParser(description='MMF月報 XLSX + PDF 一鍵生成')
-    parser.add_argument('--date', default=date.today().isoformat(),
-                        help='估值日期 YYYY-MM-DD')
-    parser.add_argument('--xlsx-only', action='store_true', help='僅生成 XLSX')
-    parser.add_argument('--pdf-only',  action='store_true', help='僅生成 PDF')
-    args = parser.parse_args()
-    eval_date = date.fromisoformat(args.date)
+    ap = argparse.ArgumentParser(description='MMF 月報一鍵生成')
+    ap.add_argument('--date', default=date.today().isoformat(), help='估值日期 YYYY-MM-DD')
+    ap.add_argument('--fund', default=None, help='指定基金名稱（缺省=全部）')
+    ap.add_argument('--xlsx-only', action='store_true')
+    ap.add_argument('--pdf-only',  action='store_true')
+    args = ap.parse_args()
 
-    print(f'\n{"="*55}')
-    print(f'  MMF 月報生成  |  估值日期：{eval_date}')
-    print(f'{"="*55}')
+    fund_flag = f'--fund "{args.fund}"' if args.fund else ''
+    ev = args.date
 
-    results = {}
+    print(f'\n{"═"*55}')
+    print(f'  MMF 月報生成  |  估值日期：{ev}')
+    if args.fund: print(f'  基金：{args.fund}')
+    print(f'{"═"*55}')
 
+    ok = True
+
+    # Step 1: XLSX
     if not args.pdf_only:
-        print('\n[1/2] 生成 XLSX 月報數據表...')
-        try:
-            xlsx_path = run_xlsx(eval_date)
-            results['xlsx'] = xlsx_path
-            print(f'  ✅ XLSX：{xlsx_path}')
-        except Exception as e:
-            print(f'  ⚠ XLSX 生成失敗：{e}')
+        ok &= run(
+            f'python "{MMF_DIR / "run_report.py"}" --report report_04_mmf_monthly --date {ev}',
+            'Step 1/3  生成 XLSX 數據表')
 
+    # Step 2: outputdata.json
     if not args.xlsx_only:
-        print('\n[2/2] 生成 PDF Factsheet...')
-        try:
-            pdf_path = run_pdf(eval_date)
-            results['pdf'] = pdf_path
-            print(f'  ✅ PDF ：{pdf_path}')
-        except Exception as e:
-            print(f'  ⚠ PDF 生成失敗：{e}')
-            import traceback; traceback.print_exc()
+        ok &= run(
+            f'python "{BASE_DIR / "extract_data.py"}" --date {ev} {fund_flag}',
+            'Step 2/3  提取資料庫數據 → outputdata.json')
 
-    print(f'\n{"="*55}')
-    print(f'  完成！輸出目錄：{OUTPUT_DIR}')
-    for k, v in results.items():
-        print(f'    {k.upper()} → {Path(v).name}')
-    print(f'{"="*55}\n')
+    # Step 3: PDF
+    if not args.xlsx_only and ok:
+        ok &= run(
+            f'python "{BASE_DIR / "create_factsheet.py"}" --date {ev} --all',
+            'Step 3/3  生成 PDF Factsheet（模版 + 數值）')
 
+    print(f'\n{"═"*55}')
+    out = MMF_DIR / 'output' / 'report_04_mmf_monthly'
+    if ok:
+        print(f'  ✅ 全部完成！輸出目錄：\n     {out}')
+        import os
+        for f in sorted(out.iterdir()):
+            sz = f.stat().st_size
+            unit = 'KB' if sz < 1e6 else 'MB'
+            print(f'     {f.name:55s}  {sz//1024 if sz<1e6 else sz//1048576:.0f} {unit}')
+    else:
+        print(f'  ⚠ 部分步驟失敗，請查看上方錯誤信息')
+    print(f'{"═"*55}\n')
 
 if __name__ == '__main__':
     main()
