@@ -294,7 +294,7 @@ def si(ref, col_letter):
 
 # ── 資料源範圍（對應 日报-sql导入数据 各 SQL 佔位）──────
 _N   = '$A$6:$H$50'      # 01: port,nav元,dev_bp,dev_元,万份,7日年化,WAM,WAL
-_L   = '$I$6:$K$50'      # 02: port,现金亿,1M利率债亿
+_L   = '$I$6:$K$50'      # 02(HK版): port(1),政府/公共债1年内到期市值亿(2),现金亿(3)
 _RL  = '$L$6:$M$50'      # 07: port,受限资产亿
 _TH  = '$D$26:$H$50'     # 04: port,机构%,前1大%,前5大%,前10大%
 _AP  = '$A$44:$O$70'     # 06: port(1),净资产亿(2),现金(3),债券(4),债券利息(5),存款(6),存款利息(7),存单CD(8),逆回购(9),正回购(10),利率债(11),浮息债(12),信用债(13),存款提支罚息(14),存款提支不罚息(15)
@@ -1014,9 +1014,9 @@ for i, h in enumerate(h01, 1):
     hdr(ws2, 5, i, h)
 yell(ws2, 6, 1, 12, len(h01))
 
-# 02 流动性 → I6
+# 02 流动性 → I6（HK版：gov1y=政府/公共债1年内到期市值，cash=现金）
 lbl(ws2, 3, 9, '02_liquidity_1m.sql  →  I6')
-for i, h in enumerate(['组合名称', '现金(亿)', '1M内利率债(亿)'], 9):
+for i, h in enumerate(['组合名称', '政府/公共债1年内(亿)', '现金(亿)'], 9):
     hdr(ws2, 5, i, h)
 yell(ws2, 6, 9, 12, 11)
 
@@ -1054,15 +1054,15 @@ for i, h in enumerate(h06, 1):
     hdr(ws2, 43, i, h)
 yell(ws2, 44, 1, 54, len(h06))
 
-# 09 AAA以下合计 → A62
+# 09 AAA以下合计 → A62（信用质量指标：非AAA评级机构发行的持仓）
 lbl(ws2, 59, 1, '09_sub_aaa_total.sql  →  A62')
-for i, h in enumerate(['组合名称', 'AAA以下市值(亿)', '占NAV比(%)'], 1):
+for i, h in enumerate(['组合名称', '非AAA持仓市值(亿)', '占NAV比(%)'], 1):
     hdr(ws2, 61, i, h)
 yell(ws2, 62, 1, 68, 3)
 
-# 11 单一AAA以下最大 → D62
+# 11 单一非AAA发行人最大 → D62
 lbl(ws2, 59, 4, '11_sub_aaa_single_max.sql  →  D62')
-for i, h in enumerate(['组合名称', '单一最大比率(%)'], 4):
+for i, h in enumerate(['组合名称', '单一非AAA发行人最大占NAV(%)'], 4):
     hdr(ws2, 61, i, h)
 yell(ws2, 62, 4, 68, 5)
 
@@ -1096,11 +1096,23 @@ for i, h in enumerate(['组合', 'T+14', 'T+30', '月末', '季末', '年末', '
     hdr(ws2, 95, i, h)
 yell(ws2, 96, 11, 102, 18)
 
-# 03 偏差拆分 → A118
+# 03 偏离分解 → A118（HK版，12列）
+# 对应03_deviation_breakdown.sql HK口径输出
 lbl(ws2, 115, 1, '03_deviation_breakdown.sql  →  A118')
-h03 = ['组合名称', 'CD偏差(万)', '企业债偏差(万)', '政府债偏差(万)',
-       'CD市值(亿)', '企业债(亿)', '政府债(亿)', '存款(亿)',
-       'CD利率', '企债利率', '政债利率', '组合平均利率']
+h03 = [
+    '组合名称',               # col1
+    '总偏差金额(元)',           # col2  total_deviation
+    '港府/公共债券偏差(元)',    # col3  gov_bond_deviation
+    '机构债偏差(元)',           # col4  agency_deviation
+    '信用类工具偏差(元)',       # col5  credit_deviation
+    '同业存单偏差(元)',         # col6  cd_deviation
+    '港府/公共债券市值(亿)',    # col7  gov_bond_mv
+    '机构债市值(亿)',           # col8  agency_mv
+    '信用类工具市值(亿)',       # col9  credit_mv
+    '同业存单市值(亿)',         # col10 cd_mv
+    '存款市值(亿)',             # col11 deposit_mv（偏差恒为0）
+    '存款DLA部分(亿)',          # col12 deposit_dla_mv
+]
 for i, h in enumerate(h03, 1):
     hdr(ws2, 117, i, h)
 yell(ws2, 118, 1, 125, len(h03))
