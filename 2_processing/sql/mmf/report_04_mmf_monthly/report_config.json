@@ -1,0 +1,84 @@
+{
+  "report_id": "report_04_mmf_monthly",
+  "report_name": "MMF貨幣基金月報（Factsheet）",
+  "description": "月度投資組合報告，包含業績表現、組合配置、到期分佈，可輸出 XLSX 及 PDF Factsheet。仿 ChinaAMC Select MMF Factsheet 格式。",
+  "excel_template": "Template.xlsx",
+  "params": {
+    "evaluate_date": "DATE — 估值日期（月末最後交易日）",
+    "report_date_label": "STRING — 報告日期標籤（如「截至 2026年05月29日」）"
+  },
+  "sheet_layout": {
+    "01_基金資料":      "01_fund_info.sql 基金基本資料",
+    "02_各類別NAV":     "02_nav_by_class.sql 股份類別每股淨值",
+    "03_累積表現":      "03_performance.sql 累積及7日年化",
+    "04_年度表現":      "04_annual_performance.sql 年度業績",
+    "05_組合特點":      "05_portfolio_chars.sql WAM/WAL/YTM",
+    "06_資產配置":      "06_asset_allocation.sql 資產類別分佈",
+    "07_到期分佈":      "07_maturity_dist.sql 到期日分佈"
+  },
+  "queries": [
+    {
+      "id": "04_01",
+      "name": "基金基本資料",
+      "sql": "01_fund_info.sql",
+      "sheet": "01_基金資料",
+      "start_cell": "A2",
+      "header": false,
+      "description": "基金名稱、貨幣、規模、WAM/WAL、7日年化"
+    },
+    {
+      "id": "04_02",
+      "name": "各類別每股淨值",
+      "sql": "02_nav_by_class.sql",
+      "sheet": "02_各類別NAV",
+      "start_cell": "A2",
+      "header": false,
+      "description": "各股份類別 NAV per unit、成立日、發行量"
+    },
+    {
+      "id": "04_03",
+      "name": "累積業績表現",
+      "sql": "03_performance.sql",
+      "sheet": "03_累積表現",
+      "start_cell": "A2",
+      "header": false,
+      "description": "1M/3M/6M/1Y/自成立/年化/7日年化表現"
+    },
+    {
+      "id": "04_04",
+      "name": "年度業績表現",
+      "sql": "04_annual_performance.sql",
+      "sheet": "04_年度表現",
+      "start_cell": "A2",
+      "header": false,
+      "description": "2021-2026本年至今年度表現"
+    },
+    {
+      "id": "04_05",
+      "name": "組合投資特點",
+      "sql": "05_portfolio_chars.sql",
+      "sheet": "05_組合特點",
+      "start_cell": "A2",
+      "header": false,
+      "description": "WAM天數、WAL天數、加權平均YTM、持倉數"
+    },
+    {
+      "id": "04_06",
+      "name": "資產類別配置",
+      "sql": "06_asset_allocation.sql",
+      "sheet": "06_資產配置",
+      "start_cell": "A2",
+      "header": false,
+      "description": "各資產類別佔NAV比例"
+    },
+    {
+      "id": "04_07",
+      "name": "到期日分佈",
+      "sql": "07_maturity_dist.sql",
+      "sheet": "07_到期分佈",
+      "start_cell": "A2",
+      "header": false,
+      "description": "到期日區間分佈佔NAV比例"
+    }
+  ]
+}
