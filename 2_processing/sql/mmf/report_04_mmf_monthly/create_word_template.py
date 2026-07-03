@@ -129,6 +129,17 @@ def _table(doc_or_cell, rows, cols, col_widths_cm, no_border=True):
             _cell_margins(cell, top=15, bottom=15, left=50, right=50)
     return tbl
 
+
+def _image_box(cell, width_cm, border_color='BF0008', border_sz='6'):
+    """建立四周邊框的圖片容器"""
+    tbl = _table(cell, 1, 1, [width_cm], no_border=True)
+    c = tbl.rows[0].cells[0]
+    _border(c, color=border_color, sz=border_sz)
+    _cell_margins(c, top=80, bottom=80, left=80, right=80)
+    _clear(c)
+    return c
+
+
 def _section_head(cell, text):
     """節標題（■ 紅色文字）"""
     p = cell.add_paragraph()
@@ -516,8 +527,10 @@ def _build_right_p2(cell):
     _run(ph1, '資產類別分佈 (%)', CJK, 7.5, bold=True, clr=RED)
 
     # 圖片佔位符（docxtpl InlineImage 格式）
-    p_pie = cell.add_paragraph()
+    pie_box = _image_box(cell, 9.8)
+    p_pie = pie_box.add_paragraph()
     p_pie.paragraph_format.space_before = Pt(1); p_pie.paragraph_format.space_after = Pt(3)
+    p_pie.alignment = WD_ALIGN_PARAGRAPH.CENTER
     _run(p_pie, '{{pie_chart}}', ARIAL, 7)
 
     ph2 = cell.add_paragraph()
@@ -526,8 +539,10 @@ def _build_right_p2(cell):
     ph2.paragraph_format.line_spacing = Pt(10)
     _run(ph2, '到期日分佈 (%)', CJK, 7.5, bold=True, clr=RED)
 
-    p_bar = cell.add_paragraph()
+    bar_box = _image_box(cell, 9.8)
+    p_bar = bar_box.add_paragraph()
     p_bar.paragraph_format.space_before = Pt(1); p_bar.paragraph_format.space_after = Pt(0)
+    p_bar.alignment = WD_ALIGN_PARAGRAPH.CENTER
     _run(p_bar, '{{bar_chart}}', ARIAL, 7)
 
 

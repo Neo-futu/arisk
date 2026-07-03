@@ -64,6 +64,73 @@ def _no_border(cell):
         e.set(qn('w:color'),'auto'); b.append(e)
     tcp.append(b)
 
+
+def _border(cell, color='BF0008', sz='4'):
+    """設定儲存格四周邊框"""
+    tcp = cell._tc.get_or_add_tcPr()
+    for old in tcp.findall(qn('w:tcBorders')): tcp.remove(old)
+    b = OxmlElement('w:tcBorders')
+    for s in ['top','bottom','left','right']:
+        e = OxmlElement(f'w:{s}')
+        e.set(qn('w:val'),'single'); e.set(qn('w:sz'), sz)
+        e.set(qn('w:color'), color); b.append(e)
+    tcp.append(b)
+
+
+def _image_box(cell, width_cm, border_color='BF0008', border_sz='4'):
+    """建立四周邊框圖片容器，避免圖片排版錯亂"""
+    t = _new_tbl(cell, 1, 1, [width_cm], border=False)
+    c = t.rows[0].cells[0]
+    _border(c, color=border_color, sz=border_sz)
+    _pad(c, t=18, b=18, l=18, r=18)
+    _clear_cell(c)
+    return c
+
+
+def _anchor_image_run(run):
+    """將圖片從 inline 轉為 anchor，使頁面和表格中的圖形顯示更穩定。"""
+    inline = run._element.findall('.//' + qn('wp:inline'))
+    if not inline:
+        return
+    inline = inline[0]
+    inline.tag = qn('wp:anchor')
+    inline.set('distT', '0')
+    inline.set('distB', '0')
+    inline.set('distL', '114300')
+    inline.set('distR', '114300')
+    inline.set('simplePos', '0')
+    inline.set('relativeHeight', '251658240')
+    inline.set('behindDoc', '0')
+    inline.set('locked', '0')
+    inline.set('layoutInCell', '1')
+    inline.set('allowOverlap', '1')
+
+    simple_pos = OxmlElement('wp:simplePos')
+    simple_pos.set('x', '0'); simple_pos.set('y', '0')
+    pos_h = OxmlElement('wp:positionH')
+    pos_h.set('relativeFrom', 'column')
+    pos_offset_h = OxmlElement('wp:posOffset')
+    pos_offset_h.text = '0'
+    pos_h.append(pos_offset_h)
+    pos_v = OxmlElement('wp:positionV')
+    pos_v.set('relativeFrom', 'paragraph')
+    pos_offset_v = OxmlElement('wp:posOffset')
+    pos_offset_v.text = '0'
+    pos_v.append(pos_offset_v)
+    effect = OxmlElement('wp:effectExtent')
+    effect.set('l', '0'); effect.set('t', '0'); effect.set('r', '6985'); effect.set('b', '0')
+    wrap = OxmlElement('wp:wrapSquare')
+    wrap.set('wrapText', 'bothSides')
+
+    inline.insert(0, simple_pos)
+    inline.insert(1, pos_h)
+    inline.insert(2, pos_v)
+    # extent already exists as child 3 now
+    # insert effectExtent and wrapSquare after extent
+    inline.insert(4, effect)
+    inline.insert(5, wrap)
+
+
 def _row_h(row, pt, rule='exact'):
     """設定精確行高"""
     tr = row._tr; tp = tr.get_or_add_trPr()
@@ -521,12 +588,15 @@ def _add_p2_main(doc, data, pie_path, bar_path):
 
     # 嵌入餅圖
     if pie_path and Path(pie_path).exists():
-        p_pie = rc.add_paragraph()
-        p_pie.paragraph_format.space_before = Pt(2); p_pie.paragraph_format.space_after = Pt(5)
+        img_cell = _image_box(rc, 10.0)
+        p_pie = img_cell.add_paragraph()
+        p_pie.paragraph_format.space_before = Pt(0); p_pie.paragraph_format.space_after = Pt(0)
         p_pie.paragraph_format.line_spacing_rule = WD_LINE_SPACING.EXACTLY
         p_pie.paragraph_format.line_spacing = Pt(1)
+        p_pie.alignment = WD_ALIGN_PARAGRAPH.CENTER
         run_pie = p_pie.add_run()
-        run_pie.add_picture(str(pie_path), width=Cm(9.8))
+        run_pie.add_picture(str(pie_path), width=Cm(9.4))
+        _anchor_image_run(run_pie)
     else:
         p_na = rc.add_paragraph(); p_na.paragraph_format.space_after = Pt(5)
         _r(p_na, '（請先執行 create_charts.py）', CJK, 7, clr=GREY)
@@ -540,12 +610,15 @@ def _add_p2_main(doc, data, pie_path, bar_path):
 
     # 嵌入柱狀圖
     if bar_path and Path(bar_path).exists():
-        p_bar = rc.add_paragraph()
-        p_bar.paragraph_format.space_before = Pt(2); p_bar.paragraph_format.space_after = Pt(0)
+        img_cell = _image_box(rc, 10.0)
+        p_bar = img_cell.add_paragraph()
+        p_bar.paragraph_format.space_before = Pt(0); p_bar.paragraph_format.space_after = Pt(0)
         p_bar.paragraph_format.line_spacing_rule = WD_LINE_SPACING.EXACTLY
         p_bar.paragraph_format.line_spacing = Pt(1)
+        p_bar.alignment = WD_ALIGN_PARAGRAPH.CENTER
         run_bar = p_bar.add_run()
-        run_bar.add_picture(str(bar_path), width=Cm(9.8))
+        run_bar.add_picture(str(bar_path), width=Cm(9.4))
+        _anchor_image_run(run_bar)
     else:
         p_na2 = rc.add_paragraph(); p_na2.paragraph_format.space_after = Pt(0)
         _r(p_na2, '（請先執行 create_charts.py）', CJK, 7, clr=GREY)
