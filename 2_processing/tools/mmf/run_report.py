@@ -43,16 +43,16 @@ logger = logging.getLogger(__name__)
 # 1. CONFIG — 報表目錄與參數
 # ══════════════════════════════════════════════════════════════
 
-BASE_DIR   = Path(__file__).parent
-OUTPUT_DIR = BASE_DIR / "output"
+SQL_DIR    = Path(__file__).parent.parent.parent / "sql" / "mmf"
+OUTPUT_DIR = SQL_DIR / "output"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# 可用報表目錄：report_id → 目錄路徑
+# 可用報表目錄：report_id → SQL 目錄路徑
 REPORTS = {
-    "report_03":          BASE_DIR / "report_03",           # MMF 整體日報（xlsm，含 Wind 公式）
-    "report_03_mmf":      BASE_DIR / "report_03_mmf",       # MMF 整體日報（xlsx，SFC合規版）
-    "report_04_mmf_monthly": BASE_DIR / "report_04_mmf_monthly",  # MMF 月報 XLSX 數據表
-    "report_06":          BASE_DIR / "report_06",           # 特定基金詳細分析
+    "report_03":             SQL_DIR / "report_03",
+    "report_03_mmf":         SQL_DIR / "report_03_mmf",
+    "report_04_mmf_monthly": SQL_DIR / "report_04_mmf_monthly",
+    "report_06":             SQL_DIR / "report_06",
 }
 
 # SQL 參數默認值（可被命令行覆蓋）

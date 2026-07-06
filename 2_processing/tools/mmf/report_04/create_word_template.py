@@ -14,8 +14,8 @@ from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 
-BASE_DIR = Path(__file__).parent
-OUT_PATH = BASE_DIR / 'Template_Factsheet.docx'
+SQL_DIR  = Path(__file__).parent.parent.parent / "sql" / "mmf" / "report_04_mmf_monthly"
+OUT_PATH = SQL_DIR / 'Template_Factsheet.docx'
 
 # 品牌紅
 RED   = RGBColor(191, 0, 8)

@@ -19,7 +19,7 @@ def _run_async(coro):
 def compute_daily_risk_snapshot(self, fund_ids: list[str] | None = None, as_of_date: str | None = None):
     """計算並持久化每日風控快照。"""
     from 2_processing.api.deps import AsyncSessionLocal
-    from 2_processing.risk.exposure_engine import compute_exposure
+    from 2_processing.tools.risk.exposure_engine import compute_exposure
 
     target_date = date.fromisoformat(as_of_date) if as_of_date else date.today() - timedelta(days=1)
 

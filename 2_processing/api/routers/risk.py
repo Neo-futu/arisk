@@ -6,8 +6,12 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..deps import get_db, verify_api_key
-from ...risk.exposure_engine import compute_exposure
-from ...risk.var_calculator import compute_historical_var
+from ...tools.risk.exposure_engine import compute_exposure
+from ...tools.risk.var_calculator import (
+    compute_distribution_var,
+    compute_historical_var,
+    compute_monte_carlo_var,
+)
 
 router = APIRouter(dependencies=[Depends(verify_api_key)])
 
@@ -51,12 +55,24 @@ async def get_var(
     confidence: float = 0.99,
     horizon_days: int = 1,
     method: str = "historical",
+    simulations: int = 10000,
     db: AsyncSession = Depends(get_db),
 ):
-    """計算基金 VaR。method: historical | parametric"""
-    if method == "parametric":
-        from ...risk.var_calculator import compute_parametric_var
-        result = await compute_parametric_var(fund_id, as_of_date, db, confidence, horizon_days)
+    """計算基金 VaR。method: historical | monte_carlo | distribution。"""
+    method_normalized = method.lower()
+    if method_normalized == "historical":
+        result = await compute_historical_var(fund_id, as_of_date, db, confidence, horizon_days)
+    elif method_normalized in {"distribution", "parametric"}:
+        result = await compute_distribution_var(fund_id, as_of_date, db, confidence, horizon_days)
+    elif method_normalized in {"monte_carlo", "monte-carlo", "mc"}:
+        result = await compute_monte_carlo_var(
+            fund_id=fund_id,
+            as_of_date=as_of_date,
+            db=db,
+            confidence=confidence,
+            horizon_days=horizon_days,
+            simulations=simulations,
+        )
     else:
         result = await compute_historical_var(fund_id, as_of_date, db, confidence, horizon_days)
 

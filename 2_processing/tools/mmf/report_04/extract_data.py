@@ -14,8 +14,8 @@ from pathlib import Path
 
 sys.stdout.reconfigure(encoding='utf-8')
 
-BASE_DIR = Path(__file__).parent
-OUTPUT_DIR = BASE_DIR.parent / 'output' / 'report_04_mmf_monthly'
+SQL_MMF    = Path(__file__).parent.parent.parent / "sql" / "mmf"
+OUTPUT_DIR = SQL_MMF / 'output' / 'report_04_mmf_monthly'
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 try:

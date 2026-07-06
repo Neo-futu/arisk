@@ -12,9 +12,9 @@ sys.stdout.reconfigure(encoding='utf-8')
 from datetime import date, timedelta
 from pathlib import Path
 
-BASE_DIR    = Path(__file__).parent
-LAYOUT_FILE = BASE_DIR / 'ref_layout.json'
-OUTPUT_DIR  = BASE_DIR.parent / 'output' / 'report_04_mmf_monthly'
+SQL_MMF     = Path(__file__).parent.parent.parent / "sql" / "mmf"
+LAYOUT_FILE = SQL_MMF / 'report_04_mmf_monthly' / 'ref_layout.json'
+OUTPUT_DIR  = SQL_MMF / 'output' / 'report_04_mmf_monthly'
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── 依賴 ─────────────────────────────────────────────────

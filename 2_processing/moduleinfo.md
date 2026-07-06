@@ -46,8 +46,31 @@ FSI 風控業績平台六層架構的**第二層**，是平台的**計算核心*
 ├── logging/                操作日誌
 │   ├── op_logger.py          結構化日誌記錄（→ svc_sys_op_log）
 │   └── middleware.py         FastAPI 請求日誌中間件
-└── sql/
-    └── position_exposure.sql  持倉暴露分析核心 SQL
+├── tools/                  業務邏輯 Python 工具（計算引擎 / 報表生成）
+│   ├── risk/
+│   │   ├── exposure_engine.py    暴露分析 + SFC MMF 合規計算
+│   │   └── var_calculator.py     VaR / CVaR（歷史模擬法 + 參數法）
+│   ├── performance/
+│   │   └── attribution.py        Brinson 收益歸因（配置/選股/交互效應）
+│   └── mmf/
+│       ├── run_report.py         MMF 報表總執行入口（SQL→Excel）
+│       ├── report_03/
+│       │   └── create_template.py   日報 XLSX 模版生成器
+│       └── report_04/
+│           ├── run_monthly.py        月報一鍵入口（XLSX+JSON+PDF+Word）
+│           ├── create_template.py    月報 XLSX 模版生成器
+│           ├── extract_data.py       DB → outputdata.json
+│           ├── create_factsheet.py   outputdata.json → PDF
+│           ├── create_charts.py      outputdata.json → PNG 圖表
+│           ├── create_word_template.py  Word 模版生成器
+│           └── create_word_report.py    outputdata.json+PNG → Word
+└── sql/                    SQL 查詢文件（純查詢，不含 Python）
+    └── mmf/
+        ├── report_03/        日報 xlsm（含 Wind 公式）
+        ├── report_03_mmf/    日報 xlsx（SFC 合規版）
+        ├── report_04_mmf_monthly/  月報數據（SQL + 佈局 JSON + 模版）
+        ├── report_06/        特定基金詳細分析
+        └── output/           生成輸出文件
 ```
 
 ---

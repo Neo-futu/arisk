@@ -14,8 +14,8 @@ sys.stdout.reconfigure(encoding='utf-8')
 from datetime import date
 from pathlib import Path
 
-BASE_DIR = Path(__file__).parent
-MMF_DIR  = BASE_DIR.parent
+TOOL_DIR  = Path(__file__).parent                                   # tools/mmf/report_04/
+SQL_MMF   = TOOL_DIR.parent.parent.parent / "sql" / "mmf"           # 2_processing/sql/mmf/
 
 def run(cmd, desc):
     print(f'\n{"─"*55}')
@@ -46,35 +46,35 @@ def main():
     # Step 1: XLSX
     if not args.pdf_only:
         ok &= run(
-            f'python "{MMF_DIR / "run_report.py"}" --report report_04_mmf_monthly --date {ev}',
+            f'python "{TOOL_DIR.parent / "run_report.py"}" --report report_04_mmf_monthly --date {ev}',
             'Step 1/3  生成 XLSX 數據表')
 
     # Step 2: outputdata.json
     if not args.xlsx_only:
         ok &= run(
-            f'python "{BASE_DIR / "extract_data.py"}" --date {ev} {fund_flag}',
+            f'python "{TOOL_DIR / "extract_data.py"}" --date {ev} {fund_flag}',
             'Step 2/4  提取資料庫數據 → outputdata.json')
 
     # Step 3: 圖表 PNG
     if not args.xlsx_only and ok:
         ok &= run(
-            f'python "{BASE_DIR / "create_charts.py"}" --all',
+            f'python "{TOOL_DIR / "create_charts.py"}" --all',
             'Step 3/4  生成圖表 PNG（餅圖 + 柱狀圖）')
 
     # Step 4a: PDF
     if not args.xlsx_only and ok:
         ok &= run(
-            f'python "{BASE_DIR / "create_factsheet.py"}" --date {ev} --all',
+            f'python "{TOOL_DIR / "create_factsheet.py"}" --date {ev} --all',
             'Step 4a/4  生成 PDF Factsheet')
 
     # Step 4b: Word
     if not args.xlsx_only and ok:
         run(
-            f'python "{BASE_DIR / "create_word_report.py"}" --all',
+            f'python "{TOOL_DIR / "create_word_report.py"}" --all',
             'Step 4b/4  生成 Word Factsheet（可編輯 .docx）')
 
     print(f'\n{"═"*55}')
-    out = MMF_DIR / 'output' / 'report_04_mmf_monthly'
+    out = SQL_MMF / 'output' / 'report_04_mmf_monthly'
     if ok:
         print(f'  ✅ 全部完成！輸出目錄：\n     {out}')
         import os
