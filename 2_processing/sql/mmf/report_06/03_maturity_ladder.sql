@@ -138,36 +138,47 @@ pivot AS (
         ROUND(SUM(CASE WHEN remaining_days BETWEEN 61 AND 90  THEN mv ELSE 0 END) / 100000000, 4) AS m1_m3,
         ROUND(SUM(CASE WHEN remaining_days BETWEEN 91 AND 180 THEN mv ELSE 0 END) / 100000000, 4) AS m3_m6,
         ROUND(SUM(CASE WHEN remaining_days BETWEEN 181 AND 270 THEN mv ELSE 0 END) / 100000000, 4) AS m6_m9,
-        ROUND(SUM(CASE WHEN remaining_days > 270 THEN mv ELSE 0 END) / 100000000, 4) AS m9_plus,
+        ROUND(SUM(CASE WHEN remaining_days BETWEEN 271 AND 365 THEN mv ELSE 0 END) / 100000000, 4) AS m9_1y,
+        ROUND(SUM(CASE WHEN remaining_days > 365 THEN mv ELSE 0 END) / 100000000, 4) AS y1_plus,
         ROUND(SUM(mv) / 100000000, 4) AS total
     FROM base b
     GROUP BY b.port_id, b.asset_type
 )
 
 -- 明細行
-SELECT
-    p.port_name,
-    pv.asset_type,
-    pv.d1, pv.d2, pv.d3, pv.d4, pv.d5, pv.d6, pv.d7, pv.d8, pv.d9, pv.d10,
-    pv.d11, pv.d12, pv.d13, pv.d14, pv.d15, pv.d16, pv.d17, pv.d18, pv.d19, pv.d20,
-    pv.d21_m1, pv.m1_m3, pv.m3_m6, pv.m6_m9, pv.m9_plus, pv.total
-FROM pivot pv
-JOIN fsi.para_portfolio p ON p.port_id = pv.port_id
+SELECT * FROM (
+    SELECT
+        p.port_name,
+        pv.asset_type,
+        pv.d1, pv.d2, pv.d3, pv.d4, pv.d5, pv.d6, pv.d7, pv.d8, pv.d9, pv.d10,
+        pv.d11, pv.d12, pv.d13, pv.d14, pv.d15, pv.d16, pv.d17, pv.d18, pv.d19, pv.d20,
+        pv.d21_m1, pv.m1_m3, pv.m3_m6, pv.m6_m9, pv.m9_1y, pv.y1_plus,
+        CASE pv.asset_type
+            WHEN '存款' THEN '存款'
+            WHEN '存款證CD' THEN '存款'
+            WHEN '逆回購' THEN '回购'
+            WHEN '正回購（融入）' THEN '回购'
+            WHEN '利率債' THEN '债券'
+            WHEN '信用債' THEN '债券'
+            ELSE pv.asset_type
+        END AS big_type
+    FROM pivot pv
+    JOIN fsi.para_portfolio p ON p.port_id = pv.port_id
 
-UNION ALL
+    UNION ALL
 
--- 合計行
-SELECT
-    p.port_name,
-    '合計' AS asset_type,
-    SUM(pv.d1), SUM(pv.d2), SUM(pv.d3), SUM(pv.d4), SUM(pv.d5),
-    SUM(pv.d6), SUM(pv.d7), SUM(pv.d8), SUM(pv.d9), SUM(pv.d10),
-    SUM(pv.d11), SUM(pv.d12), SUM(pv.d13), SUM(pv.d14), SUM(pv.d15),
-    SUM(pv.d16), SUM(pv.d17), SUM(pv.d18), SUM(pv.d19), SUM(pv.d20),
-    SUM(pv.d21_m1), SUM(pv.m1_m3), SUM(pv.m3_m6), SUM(pv.m6_m9),
-    SUM(pv.m9_plus), SUM(pv.total)
-FROM pivot pv
-JOIN fsi.para_portfolio p ON p.port_id = pv.port_id
-GROUP BY p.port_name, pv.port_id
-
+    -- 合計行
+    SELECT
+        p.port_name,
+        '合計' AS asset_type,
+        SUM(pv.d1), SUM(pv.d2), SUM(pv.d3), SUM(pv.d4), SUM(pv.d5),
+        SUM(pv.d6), SUM(pv.d7), SUM(pv.d8), SUM(pv.d9), SUM(pv.d10),
+        SUM(pv.d11), SUM(pv.d12), SUM(pv.d13), SUM(pv.d14), SUM(pv.d15),
+        SUM(pv.d16), SUM(pv.d17), SUM(pv.d18), SUM(pv.d19), SUM(pv.d20),
+        SUM(pv.d21_m1), SUM(pv.m1_m3), SUM(pv.m3_m6), SUM(pv.m6_m9), SUM(pv.m9_1y), SUM(pv.y1_plus),
+        '合计' AS big_type
+    FROM pivot pv
+    JOIN fsi.para_portfolio p ON p.port_id = pv.port_id
+    GROUP BY p.port_name, pv.port_id
+) t
 ORDER BY port_name, CASE asset_type WHEN '合計' THEN 99 ELSE 0 END, asset_type;

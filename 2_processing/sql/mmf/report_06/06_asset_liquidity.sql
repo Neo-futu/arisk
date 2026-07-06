@@ -30,14 +30,14 @@ govt_bond AS (
 
 credit_bond AS (
     SELECT b.port_id,
-           ROUND(SUM(CASE WHEN b.remaining_days = 1 THEN COALESCE(b.cost,0) ELSE 0 END)*100/100000000,4),
-           ROUND(SUM(CASE WHEN b.remaining_days = 2 THEN COALESCE(b.cost,0) ELSE 0 END)*100/100000000,4),
-           ROUND(SUM(CASE WHEN b.remaining_days = 3 THEN COALESCE(b.cost,0) ELSE 0 END)*100/100000000,4),
-           ROUND(SUM(CASE WHEN b.remaining_days = 4 THEN COALESCE(b.cost,0) ELSE 0 END)*100/100000000,4),
-           ROUND(SUM(CASE WHEN b.remaining_days = 5 THEN COALESCE(b.cost,0) ELSE 0 END)*100/100000000,4),
-           ROUND(SUM(CASE WHEN b.remaining_days = 6 THEN COALESCE(b.cost,0) ELSE 0 END)*100/100000000,4),
-           ROUND(SUM(CASE WHEN b.remaining_days = 7 THEN COALESCE(b.cost,0) ELSE 0 END)*100/100000000,4),
-           '信用債'
+       ROUND(SUM(CASE WHEN b.remaining_days = 1 THEN COALESCE(b.cost,0) ELSE 0 END)*100/100000000,4) AS d1,
+       ROUND(SUM(CASE WHEN b.remaining_days = 2 THEN COALESCE(b.cost,0) ELSE 0 END)*100/100000000,4) AS d2,
+       ROUND(SUM(CASE WHEN b.remaining_days = 3 THEN COALESCE(b.cost,0) ELSE 0 END)*100/100000000,4) AS d3,
+       ROUND(SUM(CASE WHEN b.remaining_days = 4 THEN COALESCE(b.cost,0) ELSE 0 END)*100/100000000,4) AS d4,
+       ROUND(SUM(CASE WHEN b.remaining_days = 5 THEN COALESCE(b.cost,0) ELSE 0 END)*100/100000000,4) AS d5,
+       ROUND(SUM(CASE WHEN b.remaining_days = 6 THEN COALESCE(b.cost,0) ELSE 0 END)*100/100000000,4) AS d6,
+       ROUND(SUM(CASE WHEN b.remaining_days = 7 THEN COALESCE(b.cost,0) ELSE 0 END)*100/100000000,4) AS d7,
+       '信用債' AS asset_type
     FROM fsi.balance_bond b, params
     WHERE b.port_id = ANY(params.port_ids) AND b.evaluate_date = params.evaluate_date
       AND b.asset_subtype != 'BOND_GOVT'
@@ -46,14 +46,14 @@ credit_bond AS (
 
 cd AS (
     SELECT c.port_id,
-           ROUND(SUM(CASE WHEN c.remaining_days = 1 THEN COALESCE(c.cost,0) ELSE 0 END)*100/100000000,4),
-           ROUND(SUM(CASE WHEN c.remaining_days = 2 THEN COALESCE(c.cost,0) ELSE 0 END)*100/100000000,4),
-           ROUND(SUM(CASE WHEN c.remaining_days = 3 THEN COALESCE(c.cost,0) ELSE 0 END)*100/100000000,4),
-           ROUND(SUM(CASE WHEN c.remaining_days = 4 THEN COALESCE(c.cost,0) ELSE 0 END)*100/100000000,4),
-           ROUND(SUM(CASE WHEN c.remaining_days = 5 THEN COALESCE(c.cost,0) ELSE 0 END)*100/100000000,4),
-           ROUND(SUM(CASE WHEN c.remaining_days = 6 THEN COALESCE(c.cost,0) ELSE 0 END)*100/100000000,4),
-           ROUND(SUM(CASE WHEN c.remaining_days = 7 THEN COALESCE(c.cost,0) ELSE 0 END)*100/100000000,4),
-           '存款證(CD)'
+       ROUND(SUM(CASE WHEN c.remaining_days = 1 THEN COALESCE(c.cost,0) ELSE 0 END)*100/100000000,4) AS d1,
+       ROUND(SUM(CASE WHEN c.remaining_days = 2 THEN COALESCE(c.cost,0) ELSE 0 END)*100/100000000,4) AS d2,
+       ROUND(SUM(CASE WHEN c.remaining_days = 3 THEN COALESCE(c.cost,0) ELSE 0 END)*100/100000000,4) AS d3,
+       ROUND(SUM(CASE WHEN c.remaining_days = 4 THEN COALESCE(c.cost,0) ELSE 0 END)*100/100000000,4) AS d4,
+       ROUND(SUM(CASE WHEN c.remaining_days = 5 THEN COALESCE(c.cost,0) ELSE 0 END)*100/100000000,4) AS d5,
+       ROUND(SUM(CASE WHEN c.remaining_days = 6 THEN COALESCE(c.cost,0) ELSE 0 END)*100/100000000,4) AS d6,
+       ROUND(SUM(CASE WHEN c.remaining_days = 7 THEN COALESCE(c.cost,0) ELSE 0 END)*100/100000000,4) AS d7,
+       '存款證(CD)' AS asset_type
     FROM fsi.balance_cd c, params
     WHERE c.port_id = ANY(params.port_ids) AND c.evaluate_date = params.evaluate_date
     GROUP BY c.port_id
@@ -62,14 +62,14 @@ cd AS (
 -- 銀行間逆回購（融出，到期收回）
 ib_rev_repo AS (
     SELECT r.port_id,
-           ROUND(SUM(CASE WHEN COALESCE(r.actual_maturity_date,r.maturity_date)-r.evaluate_date=1 THEN COALESCE(r.principal,0) ELSE 0 END)*100/100000000,4),
-           ROUND(SUM(CASE WHEN COALESCE(r.actual_maturity_date,r.maturity_date)-r.evaluate_date=2 THEN COALESCE(r.principal,0) ELSE 0 END)*100/100000000,4),
-           ROUND(SUM(CASE WHEN COALESCE(r.actual_maturity_date,r.maturity_date)-r.evaluate_date=3 THEN COALESCE(r.principal,0) ELSE 0 END)*100/100000000,4),
-           ROUND(SUM(CASE WHEN COALESCE(r.actual_maturity_date,r.maturity_date)-r.evaluate_date=4 THEN COALESCE(r.principal,0) ELSE 0 END)*100/100000000,4),
-           ROUND(SUM(CASE WHEN COALESCE(r.actual_maturity_date,r.maturity_date)-r.evaluate_date=5 THEN COALESCE(r.principal,0) ELSE 0 END)*100/100000000,4),
-           ROUND(SUM(CASE WHEN COALESCE(r.actual_maturity_date,r.maturity_date)-r.evaluate_date=6 THEN COALESCE(r.principal,0) ELSE 0 END)*100/100000000,4),
-           ROUND(SUM(CASE WHEN COALESCE(r.actual_maturity_date,r.maturity_date)-r.evaluate_date=7 THEN COALESCE(r.principal,0) ELSE 0 END)*100/100000000,4),
-           '銀行間逆回購'
+       ROUND(SUM(CASE WHEN COALESCE(r.actual_maturity_date,r.maturity_date)-r.evaluate_date=1 THEN COALESCE(r.principal,0) ELSE 0 END)*100/100000000,4) AS d1,
+       ROUND(SUM(CASE WHEN COALESCE(r.actual_maturity_date,r.maturity_date)-r.evaluate_date=2 THEN COALESCE(r.principal,0) ELSE 0 END)*100/100000000,4) AS d2,
+       ROUND(SUM(CASE WHEN COALESCE(r.actual_maturity_date,r.maturity_date)-r.evaluate_date=3 THEN COALESCE(r.principal,0) ELSE 0 END)*100/100000000,4) AS d3,
+       ROUND(SUM(CASE WHEN COALESCE(r.actual_maturity_date,r.maturity_date)-r.evaluate_date=4 THEN COALESCE(r.principal,0) ELSE 0 END)*100/100000000,4) AS d4,
+       ROUND(SUM(CASE WHEN COALESCE(r.actual_maturity_date,r.maturity_date)-r.evaluate_date=5 THEN COALESCE(r.principal,0) ELSE 0 END)*100/100000000,4) AS d5,
+       ROUND(SUM(CASE WHEN COALESCE(r.actual_maturity_date,r.maturity_date)-r.evaluate_date=6 THEN COALESCE(r.principal,0) ELSE 0 END)*100/100000000,4) AS d6,
+       ROUND(SUM(CASE WHEN COALESCE(r.actual_maturity_date,r.maturity_date)-r.evaluate_date=7 THEN COALESCE(r.principal,0) ELSE 0 END)*100/100000000,4) AS d7,
+       '銀行間逆回購' AS asset_type
     FROM fsi.balance_repo r, params
     WHERE r.port_id = ANY(params.port_ids) AND r.evaluate_date = params.evaluate_date
       AND r.repo_type = 'REV_REPO'
@@ -80,14 +80,14 @@ ib_rev_repo AS (
 -- 正回購（融入，到期還款，負流動性）
 repo_outflow AS (
     SELECT r.port_id,
-           ROUND(-SUM(CASE WHEN COALESCE(r.actual_maturity_date,r.maturity_date)-r.evaluate_date=1 THEN COALESCE(r.principal,0) ELSE 0 END)*100/100000000,4),
-           ROUND(-SUM(CASE WHEN COALESCE(r.actual_maturity_date,r.maturity_date)-r.evaluate_date=2 THEN COALESCE(r.principal,0) ELSE 0 END)*100/100000000,4),
-           ROUND(-SUM(CASE WHEN COALESCE(r.actual_maturity_date,r.maturity_date)-r.evaluate_date=3 THEN COALESCE(r.principal,0) ELSE 0 END)*100/100000000,4),
-           ROUND(-SUM(CASE WHEN COALESCE(r.actual_maturity_date,r.maturity_date)-r.evaluate_date=4 THEN COALESCE(r.principal,0) ELSE 0 END)*100/100000000,4),
-           ROUND(-SUM(CASE WHEN COALESCE(r.actual_maturity_date,r.maturity_date)-r.evaluate_date=5 THEN COALESCE(r.principal,0) ELSE 0 END)*100/100000000,4),
-           ROUND(-SUM(CASE WHEN COALESCE(r.actual_maturity_date,r.maturity_date)-r.evaluate_date=6 THEN COALESCE(r.principal,0) ELSE 0 END)*100/100000000,4),
-           ROUND(-SUM(CASE WHEN COALESCE(r.actual_maturity_date,r.maturity_date)-r.evaluate_date=7 THEN COALESCE(r.principal,0) ELSE 0 END)*100/100000000,4),
-           '正回購（融入還款）'
+       ROUND(-SUM(CASE WHEN COALESCE(r.actual_maturity_date,r.maturity_date)-r.evaluate_date=1 THEN COALESCE(r.principal,0) ELSE 0 END)*100/100000000,4) AS d1,
+       ROUND(-SUM(CASE WHEN COALESCE(r.actual_maturity_date,r.maturity_date)-r.evaluate_date=2 THEN COALESCE(r.principal,0) ELSE 0 END)*100/100000000,4) AS d2,
+       ROUND(-SUM(CASE WHEN COALESCE(r.actual_maturity_date,r.maturity_date)-r.evaluate_date=3 THEN COALESCE(r.principal,0) ELSE 0 END)*100/100000000,4) AS d3,
+       ROUND(-SUM(CASE WHEN COALESCE(r.actual_maturity_date,r.maturity_date)-r.evaluate_date=4 THEN COALESCE(r.principal,0) ELSE 0 END)*100/100000000,4) AS d4,
+       ROUND(-SUM(CASE WHEN COALESCE(r.actual_maturity_date,r.maturity_date)-r.evaluate_date=5 THEN COALESCE(r.principal,0) ELSE 0 END)*100/100000000,4) AS d5,
+       ROUND(-SUM(CASE WHEN COALESCE(r.actual_maturity_date,r.maturity_date)-r.evaluate_date=6 THEN COALESCE(r.principal,0) ELSE 0 END)*100/100000000,4) AS d6,
+       ROUND(-SUM(CASE WHEN COALESCE(r.actual_maturity_date,r.maturity_date)-r.evaluate_date=7 THEN COALESCE(r.principal,0) ELSE 0 END)*100/100000000,4) AS d7,
+       '正回購（融入還款）' AS asset_type
     FROM fsi.balance_repo r, params
     WHERE r.port_id = ANY(params.port_ids) AND r.evaluate_date = params.evaluate_date
       AND r.repo_type = 'REPO'

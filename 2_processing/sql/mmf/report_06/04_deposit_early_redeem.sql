@@ -33,34 +33,33 @@ pivot AS (
         port_id,
         bank_id,
         MAX(bank_name) AS bank_name,
-        ROUND(SUM(CASE WHEN remaining_days = 1            THEN principal ELSE 0 END) / 100000000, 4) AS d1,
-        ROUND(SUM(CASE WHEN remaining_days = 2            THEN principal ELSE 0 END) / 100000000, 4) AS d2,
-        ROUND(SUM(CASE WHEN remaining_days = 3            THEN principal ELSE 0 END) / 100000000, 4) AS d3,
-        ROUND(SUM(CASE WHEN remaining_days = 4            THEN principal ELSE 0 END) / 100000000, 4) AS d4,
-        ROUND(SUM(CASE WHEN remaining_days = 5            THEN principal ELSE 0 END) / 100000000, 4) AS d5,
-        ROUND(SUM(CASE WHEN remaining_days = 6            THEN principal ELSE 0 END) / 100000000, 4) AS d6,
-        ROUND(SUM(CASE WHEN remaining_days = 7            THEN principal ELSE 0 END) / 100000000, 4) AS d7,
-        ROUND(SUM(CASE WHEN remaining_days > 7            THEN principal ELSE 0 END) / 100000000, 4) AS d7plus
+        ROUND(SUM(CASE WHEN remaining_days = 1 THEN principal ELSE 0 END) / 100000000, 4) AS d1,
+        ROUND(SUM(CASE WHEN remaining_days = 2 THEN principal ELSE 0 END) / 100000000, 4) AS d2,
+        ROUND(SUM(CASE WHEN remaining_days = 3 THEN principal ELSE 0 END) / 100000000, 4) AS d3,
+        ROUND(SUM(CASE WHEN remaining_days = 4 THEN principal ELSE 0 END) / 100000000, 4) AS d4,
+        ROUND(SUM(CASE WHEN remaining_days = 5 THEN principal ELSE 0 END) / 100000000, 4) AS d5,
+        ROUND(SUM(CASE WHEN remaining_days = 6 THEN principal ELSE 0 END) / 100000000, 4) AS d6,
+        ROUND(SUM(CASE WHEN remaining_days = 7 THEN principal ELSE 0 END) / 100000000, 4) AS d7,
+        ROUND(SUM(CASE WHEN remaining_days > 7 THEN principal ELSE 0 END) / 100000000, 4) AS d7plus
     FROM data
     GROUP BY port_id, bank_id
 )
 
--- 明細行
-SELECT p.port_id, pv.bank_id, pv.bank_name,
-       pv.d1, pv.d2, pv.d3, pv.d4, pv.d5, pv.d6, pv.d7, pv.d7plus,
-       ROUND(pv.d1+pv.d2+pv.d3+pv.d4+pv.d5+pv.d6+pv.d7+pv.d7plus, 4) AS total
-FROM pivot pv
-JOIN fsi.para_portfolio p ON p.port_id = pv.port_id
+SELECT * FROM (
+    SELECT p.port_id, pv.bank_id, pv.bank_name,
+           pv.d1, pv.d2, pv.d3, pv.d4, pv.d5, pv.d6, pv.d7, pv.d7plus,
+           ROUND(pv.d1 + pv.d2 + pv.d3 + pv.d4 + pv.d5 + pv.d6 + pv.d7 + pv.d7plus, 4) AS total
+    FROM pivot pv
+    JOIN fsi.para_portfolio p ON p.port_id = pv.port_id
 
-UNION ALL
+    UNION ALL
 
--- 合計行
-SELECT p.port_id, 'TOTAL', '合計',
-       ROUND(SUM(pv.d1),4), ROUND(SUM(pv.d2),4), ROUND(SUM(pv.d3),4), ROUND(SUM(pv.d4),4),
-       ROUND(SUM(pv.d5),4), ROUND(SUM(pv.d6),4), ROUND(SUM(pv.d7),4), ROUND(SUM(pv.d7plus),4),
-       ROUND(SUM(pv.d1+pv.d2+pv.d3+pv.d4+pv.d5+pv.d6+pv.d7+pv.d7plus),4)
-FROM pivot pv
-JOIN fsi.para_portfolio p ON p.port_id = pv.port_id
-GROUP BY p.port_id
-
+    SELECT p.port_id, 'TOTAL' AS bank_id, '合計' AS bank_name,
+           ROUND(SUM(pv.d1), 4), ROUND(SUM(pv.d2), 4), ROUND(SUM(pv.d3), 4), ROUND(SUM(pv.d4), 4),
+           ROUND(SUM(pv.d5), 4), ROUND(SUM(pv.d6), 4), ROUND(SUM(pv.d7), 4), ROUND(SUM(pv.d7plus), 4),
+           ROUND(SUM(pv.d1 + pv.d2 + pv.d3 + pv.d4 + pv.d5 + pv.d6 + pv.d7 + pv.d7plus), 4) AS total
+    FROM pivot pv
+    JOIN fsi.para_portfolio p ON p.port_id = pv.port_id
+    GROUP BY p.port_id
+) t
 ORDER BY port_id, CASE bank_id WHEN 'TOTAL' THEN 'ZZZZ' ELSE bank_id END;

@@ -1,5 +1,10 @@
 -- report_04_mmf_monthly / 04_annual_performance.sql
--- 年度業績（使用 unit_nav）
+-- 年度業績：生成年度回報和本年累計 (YTD) 的數據，用於 Factsheet 的年度表現區。
+-- 業務意義：
+--   1) 以年末 NAV 計算每年的年度回報
+--   2) 使用最近一個可用年末數據，並與前一年年末比較
+--   3) YTD 使用本年度首個可用 NAV 與當前評估日 NAV 計算
+--   4) 只展示 2021 年以後的年度回報，保持報表簡潔
 WITH
 year_end_nav AS (
     SELECT DISTINCT ON (n.port_id, n.class_id, EXTRACT(YEAR FROM n.evaluate_date))

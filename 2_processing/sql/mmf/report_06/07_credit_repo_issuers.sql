@@ -10,7 +10,7 @@ WITH params AS (
     SELECT
         '2026-06-25'::DATE                      AS evaluate_date,
         ARRAY['BHMMF001', 'BHMMF002']::TEXT[]   AS port_ids
-),
+)
 -- ============================================================
 
 SELECT

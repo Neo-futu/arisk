@@ -86,7 +86,7 @@ SELECT
     ROUND(SUM(deposit_cost) / 100000000, 4),
     ROUND(SUM(cd_cost)      / 100000000, 4),
     ROUND(SUM(total_cost)   / 100000000, 4),
-    9999    AS rk
+    NULL    AS rk
 FROM data
 GROUP BY port_id
 

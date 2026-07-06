@@ -136,11 +136,7 @@ SELECT
     ROUND(COALESCE(rn.mv,0)         / 100000000, 4) AS repo_net_100m,
     ROUND(COALESCE(pr.mv,0)         / 100000000, 4) AS potential_repo_100m,
     ROUND(COALESCE(bcr.mv,0)        / 100000000, 4) AS bond_cd_realize_100m,
-    ROUND(COALESCE(de.mv,0)         / 100000000, 4) AS deposit_early_100m,
-    -- 合計
-    ROUND((COALESCE(c.cash,0) + COALESCE(nm.mv,0) + COALESCE(rn.mv,0) +
-           COALESCE(pr.mv,0) + COALESCE(bcr.mv,0) + COALESCE(de.mv,0))
-          / 100000000, 4)                           AS total_liquidity_100m
+    ROUND(COALESCE(de.mv,0)         / 100000000, 4) AS deposit_early_100m
 FROM fsi.para_portfolio p
 JOIN fsi.balance_portfolio_nav n ON n.port_id=p.port_id
     AND n.evaluate_date=params.evaluate_date AND n.class_id IS NULL

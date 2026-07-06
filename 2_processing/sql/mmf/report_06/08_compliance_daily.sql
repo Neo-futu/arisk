@@ -95,7 +95,7 @@ repo_ratio AS (
         AND n2.evaluate_date=r.evaluate_date AND n2.class_id IS NULL
     WHERE r.port_id = ANY(params.port_ids) AND r.evaluate_date = params.evaluate_date
       AND r.repo_type = 'REPO'
-    GROUP BY r.port_id
+    GROUP BY r.port_id, n2.net_asset
 ),
 
 -- 前十大持有人集中度
@@ -134,6 +134,50 @@ float_gt1y AS (
         AND n2.evaluate_date=b.evaluate_date AND n2.class_id IS NULL
     WHERE b.port_id = ANY(params.port_ids) AND b.evaluate_date = params.evaluate_date
     GROUP BY b.port_id, n2.net_asset
+),
+
+other_mmf_size AS (
+    SELECT
+        n.port_id,
+        ROUND((SUM(n2.net_asset) - n.net_asset) / 100000000, 4) AS other_fund_size
+    FROM fsi.balance_portfolio_nav n
+    JOIN fsi.para_portfolio p ON p.port_id = n.port_id
+    JOIN fsi.balance_portfolio_nav n2 ON n2.evaluate_date = n.evaluate_date
+    JOIN fsi.para_portfolio p2 ON p2.port_id = n2.port_id
+    , params
+    WHERE p.is_mmf = TRUE AND p.is_active = TRUE
+      AND p2.is_mmf = TRUE AND p2.is_active = TRUE
+      AND n.evaluate_date = params.evaluate_date
+      AND n2.evaluate_date = params.evaluate_date
+      AND n.class_id IS NULL
+      AND n2.class_id IS NULL
+      AND n.port_id = ANY(params.port_ids)
+    GROUP BY n.port_id, n.net_asset
+),
+
+bond_cd_wam AS (
+    SELECT port_id,
+           ROUND(SUM(weight_pct * remaining_days) / 100.0, 4) AS weighted_avg_remaining_days
+    FROM (
+        SELECT b.port_id,
+               COALESCE(b.weight_pct, 0) AS weight_pct,
+               b.remaining_days
+        FROM fsi.balance_bond b, params
+        WHERE b.port_id = ANY(params.port_ids)
+          AND b.evaluate_date = params.evaluate_date
+          AND b.remaining_days > 0
+
+        UNION ALL
+
+        SELECT c.port_id,
+               COALESCE(c.weight_pct, 0) AS weight_pct,
+               c.remaining_days
+        FROM fsi.balance_cd c, params
+        WHERE c.port_id = ANY(params.port_ids)
+          AND c.evaluate_date = params.evaluate_date
+          AND c.remaining_days > 0
+    ) x
+    GROUP BY port_id
 )
 
 SELECT
@@ -149,9 +193,18 @@ SELECT
     ROUND(COALESCE(fl.float_gt1y_pct,0), 4)                AS float_gt1y_pct,
     ROUND(COALESCE(rr.repo_pct,0), 4)                      AS repo_pct,
     ROUND(COALESCE(t10.top10_pct,0), 4)                    AS top10_holder_pct,
-    -- SFC 合規狀態
-    CASE WHEN n.wam_days <= 60  THEN 'OK' ELSE 'BREACH' END AS wam_status,
-    CASE WHEN n.wal_days <= 120 THEN 'OK' ELSE 'BREACH' END AS wal_status
+    NULL::NUMERIC                                          AS subscribe_forecast_1,
+    NULL::NUMERIC                                          AS subscribe_forecast_2,
+    NULL::NUMERIC                                          AS subscribe_forecast_3,
+    NULL::NUMERIC                                          AS subscribe_forecast_4,
+    NULL::NUMERIC                                          AS subscribe_forecast_5,
+    NULL::NUMERIC                                          AS redemption_forecast_1,
+    NULL::NUMERIC                                          AS redemption_forecast_2,
+    NULL::NUMERIC                                          AS redemption_forecast_3,
+    NULL::NUMERIC                                          AS redemption_forecast_4,
+    NULL::NUMERIC                                          AS redemption_forecast_5,
+    COALESCE(o.other_fund_size, 0)                         AS other_fund_size,
+    COALESCE(w.weighted_avg_remaining_days, 0)             AS weighted_avg_remaining_days
 FROM nav n
 JOIN fsi.para_portfolio p ON p.port_id = n.port_id
 LEFT JOIN max_single_credit mc  ON mc.port_id  = n.port_id
@@ -161,4 +214,6 @@ LEFT JOIN top10              t10 ON t10.port_id = n.port_id
 LEFT JOIN max_govt_days      mg  ON mg.port_id  = n.port_id
 LEFT JOIN max_cd_days        mcd ON mcd.port_id = n.port_id
 LEFT JOIN float_gt1y         fl  ON fl.port_id  = n.port_id
+LEFT JOIN other_mmf_size     o   ON o.port_id  = n.port_id
+LEFT JOIN bond_cd_wam        w   ON w.port_id  = n.port_id
 ORDER BY n.port_id;

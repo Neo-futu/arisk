@@ -1,5 +1,10 @@
 -- report_04_mmf_monthly / 05_portfolio_chars.sql
--- 組合特點：WAM/WAL/YTM（使用 wam_days 正確字段名）
+-- 組合特點：提供基金風險和收益組成的關鍵指標，例如加權平均到期日、加權平均到期收益率等。
+-- 業務邏輯：
+--   1) 取指定評估日的組合 NAV
+--   2) 取 MMF 专用指标中的 WAM/WAL
+--   3) 計算各類持倉的到期收益率加權平均值，得到整體 YTM
+--   4) 計算資產規模和持倉筆數，供報表顯示與風險提示使用
 WITH
 nav AS (
     SELECT n.port_id, n.net_asset
