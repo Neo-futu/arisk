@@ -3,6 +3,7 @@
 -- 原始：SmartReport/06/04.sql  可提前支取協議存款到期日期分佈
 -- 功能：僅統計可提前支取（is_penalty_on_early_redeem=FALSE）存款
 --        按銀行/到期天數展示 D+1 至 D+7+
+--        其中 1D 兼含隔夜存款/同日到期存款，對貨幣基金而言屬於 T+1 可用流動性來源。
 -- 對應 Sheet：可提支存款到期原始
 -- 參數：params.port_ids TEXT[], params.evaluate_date DATE
 -- ============================================================

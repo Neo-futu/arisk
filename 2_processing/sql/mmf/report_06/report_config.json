@@ -15,7 +15,7 @@
       "sheet": "资产分布原始",
       "start_cell": "A3",
       "header": false,
-      "description": "估值科目彙總 + 利率/信用/存單細分 + AA+以下資產標識"
+      "description": "估值科目彙總 + 資產分布（億元）+ 利率/信用/存單細分 + AA+以下資產標識"
     },
     {
       "id": "06_02",
@@ -33,7 +33,7 @@
       "sheet": "剩余期限结构原始",
       "start_cell": "A3",
       "header": false,
-      "description": "D+1至D+20逐天 + 月/季/年段分佈，按資產類型分行"
+      "description": "剩餘期限結構（億元），D+1至D+20逐天 + 月/季/年段分佈，1Y以上保留為長端結構分析"
     },
     {
       "id": "06_04",
@@ -42,7 +42,7 @@
       "sheet": "可提支存款到期原始",
       "start_cell": "A3",
       "header": false,
-      "description": "僅統計可提前支取的存款，按銀行/D+1~D+7+到期分佈"
+      "description": "僅統計可提前支取的存款，按銀行/D+1~D+7+到期分佈（1D含隔夜/同日到期）"
     },
     {
       "id": "06_05",
@@ -60,7 +60,7 @@
       "sheet": "资产变现原始",
       "start_cell": "A2",
       "header": false,
-      "description": "各資產類別 T+1~T+7 可變現金額（政府債/信用債/CD/回購）"
+      "description": "各資產類別 T+1~T+7 可變現金額（億元，政府債/信用債/CD/回購）"
     },
     {
       "id": "06_07",
