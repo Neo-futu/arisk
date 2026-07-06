@@ -3,6 +3,7 @@ from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,8 +36,35 @@ async def get_positions(
         params["asset_type"] = asset_type
     sql += " ORDER BY weight_pct DESC NULLS LAST"
 
-    rows = await db.execute(text(sql), params)
-    positions = rows.mappings().fetchall()
+    try:
+        rows = await db.execute(text(sql), params)
+        positions = rows.mappings().fetchall()
+    except ProgrammingError:
+        await db.rollback()
+        fallback_sql = """
+            SELECT
+                subject_code AS asset_id,
+                subject_name AS asset_name,
+                subject_code AS asset_type,
+                subject_name AS issuer_name,
+                NULL::text AS issuer_group,
+                currency,
+                quantity AS face_value,
+                market_value,
+                market_value AS market_value_hkd,
+                weight_pct,
+                NULL::date AS maturity_date,
+                NULL::numeric AS coupon_rate,
+                NULL::text AS credit_rating,
+                NULL::text AS rating_agency,
+                NULL::text AS country,
+                NULL::text AS sector
+            FROM fsi.balance_valuation_sheet
+            WHERE port_id = :fid AND evaluate_date = :dt
+            ORDER BY weight_pct DESC NULLS LAST
+        """
+        rows = await db.execute(text(fallback_sql), params)
+        positions = rows.mappings().fetchall()
 
     return {
         "fund_id": fund_id,
@@ -53,17 +81,32 @@ async def get_position_summary(
     db: AsyncSession = Depends(get_db),
 ):
     """持倉彙總：總 NAV、資產類型分佈。"""
-    row = await db.execute(
-        text("""
-            SELECT
-                COUNT(*) AS position_count,
-                SUM(market_value_hkd) AS total_nav_hkd,
-                COUNT(DISTINCT issuer_name) AS issuer_count,
-                COUNT(DISTINCT asset_type) AS asset_type_count
-            FROM fsi.positions
-            WHERE fund_id = :fid AND as_of_date = :dt
-        """),
-        {"fid": fund_id, "dt": as_of_date},
-    )
+    try:
+        row = await db.execute(
+            text("""
+                SELECT
+                    COUNT(*) AS position_count,
+                    SUM(market_value_hkd) AS total_nav_hkd,
+                    COUNT(DISTINCT issuer_name) AS issuer_count,
+                    COUNT(DISTINCT asset_type) AS asset_type_count
+                FROM fsi.positions
+                WHERE fund_id = :fid AND as_of_date = :dt
+            """),
+            {"fid": fund_id, "dt": as_of_date},
+        )
+    except ProgrammingError:
+        await db.rollback()
+        row = await db.execute(
+            text("""
+                SELECT
+                    COUNT(*) AS position_count,
+                    SUM(market_value) AS total_nav_hkd,
+                    COUNT(DISTINCT subject_name) AS issuer_count,
+                    COUNT(DISTINCT subject_code) AS asset_type_count
+                FROM fsi.balance_valuation_sheet
+                WHERE port_id = :fid AND evaluate_date = :dt
+            """),
+            {"fid": fund_id, "dt": as_of_date},
+        )
     summary = dict(row.mappings().fetchone() or {})
     return {"fund_id": fund_id, "as_of_date": as_of_date, **summary}

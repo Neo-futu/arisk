@@ -72,3 +72,45 @@ async def query_var(
     if resp.status_code != 200:
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
     return resp.json()
+
+
+@router.get("/risk/var-compare/{fund_id}")
+async def query_var_compare(
+    fund_id: str,
+    as_of_date: Annotated[date, Query()],
+    confidence: float = 0.99,
+    horizon_days: int = 1,
+    simulations: int = 10000,
+    client: httpx.AsyncClient = Depends(_get_client),
+):
+    """三方法 VaR 對比（historical / monte_carlo / distribution）。"""
+    method_list = ("historical", "monte_carlo", "distribution")
+    results = []
+
+    for method in method_list:
+        params = {
+            "as_of_date": str(as_of_date),
+            "confidence": confidence,
+            "horizon_days": horizon_days,
+            "method": method,
+        }
+        if method == "monte_carlo":
+            params["simulations"] = simulations
+
+        resp = await client.get(f"/risk/var/{fund_id}", params=params)
+        if resp.status_code != 200:
+            raise HTTPException(status_code=resp.status_code, detail=resp.text)
+
+        payload = resp.json()
+        payload["method_requested"] = method
+        results.append(payload)
+
+    max_var_pct_nav = max((float(r.get("var_pct_nav", 0.0) or 0.0) for r in results), default=0.0)
+    return {
+        "fund_id": fund_id,
+        "as_of_date": str(as_of_date),
+        "confidence": confidence,
+        "horizon_days": horizon_days,
+        "results": results,
+        "max_var_pct_nav": max_var_pct_nav,
+    }

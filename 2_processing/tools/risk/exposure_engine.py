@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from sqlalchemy import text
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -50,28 +51,51 @@ async def compute_exposure(
     """計算指定日期的持倉暴露指標。"""
     result = ExposureResult(fund_id=fund_id, as_of_date=as_of_date)
 
-    rows = await db.execute(
-        text("""
-            SELECT
-                asset_id, asset_type, issuer_id, issuer_name, issuer_group,
-                currency, market_value_hkd, weight_pct,
-                maturity_date, asset_type IN ('DEPOSIT','CD') AS is_deposit,
-                CASE
-                    WHEN maturity_date IS NULL THEN NULL
-                    ELSE (maturity_date - :dt)
-                END AS days_to_maturity
-            FROM fsi.positions
-            WHERE fund_id = :fid AND as_of_date = :dt
-        """),
-        {"fid": fund_id, "dt": as_of_date},
-    )
-    positions = rows.fetchall()
+    try:
+        rows = await db.execute(
+            text("""
+                SELECT
+                    asset_id, asset_type, issuer_id, issuer_name, issuer_group,
+                    currency, market_value_hkd, weight_pct,
+                    maturity_date, asset_type IN ('DEPOSIT','CD') AS is_deposit,
+                    CASE
+                        WHEN maturity_date IS NULL THEN NULL
+                        ELSE (maturity_date - :dt)
+                    END AS days_to_maturity
+                FROM fsi.positions
+                WHERE fund_id = :fid AND as_of_date = :dt
+            """),
+            {"fid": fund_id, "dt": as_of_date},
+        )
+        positions = rows.fetchall()
+    except ProgrammingError:
+        await db.rollback()
+        rows = await db.execute(
+            text("""
+                SELECT
+                    subject_code AS asset_id,
+                    subject_code AS asset_type,
+                    NULL::text AS issuer_id,
+                    subject_name AS issuer_name,
+                    NULL::text AS issuer_group,
+                    currency,
+                    market_value AS market_value_hkd,
+                    weight_pct,
+                    NULL::date AS maturity_date,
+                    FALSE AS is_deposit,
+                    0 AS days_to_maturity
+                FROM fsi.balance_valuation_sheet
+                WHERE port_id = :fid AND evaluate_date = :dt
+            """),
+            {"fid": fund_id, "dt": as_of_date},
+        )
+        positions = rows.fetchall()
 
     if not positions:
         logger.warning("No positions found for %s on %s", fund_id, as_of_date)
         return result
 
-    total_nav = sum(p.market_value_hkd or 0 for p in positions)
+    total_nav = float(sum(float(p.market_value_hkd or 0) for p in positions))
     result.total_nav_hkd = total_nav
 
     # WAM / WAL（以剩餘天數加權）
@@ -81,9 +105,9 @@ async def compute_exposure(
     weekly_liquid = 0.0
 
     for p in positions:
-        mv = p.market_value_hkd or 0
+        mv = float(p.market_value_hkd or 0)
         w = mv / total_nav if total_nav > 0 else 0
-        days = p.days_to_maturity or 0
+        days = float(p.days_to_maturity or 0)
 
         wam_numerator += w * min(days, 397)
         wal_numerator += w * days

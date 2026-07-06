@@ -15,7 +15,7 @@ system: |
   - GET {PROCESSING_API_URL}/risk/exposure/{fund_id}?as_of_date={date}
 
   可用 MCP 工具：
-  - internal-db: get_positions, get_risk_snapshot, get_nav_history
+  - internal-db: get_positions, get_risk_snapshot, get_nav_history, get_var_three_methods
   - wind: wind_get_price, wind_get_fx, wind_get_bond_info
 
 tools:

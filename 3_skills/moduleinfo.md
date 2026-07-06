@@ -22,12 +22,14 @@ FSI 風控業績平台六層架構的**第三層**，是 Claude Agent 的**業�
 │   └── plugin.json          技能包聲明（名稱/版本/技能路徑/MCP配置）
 ├── skills/                  SKILL.md 技能定義
 │   ├── risk-analysis/       風控分析技能
+│   ├── var-analysis/        VaR 專項分析技能
 │   ├── mmf-compliance/      MMF 合規核查技能
 │   ├── performance-report/  業績歸因報告技能
 │   ├── xlsx-report/         Excel 報表生成技能
 │   └── human-review/        人工審核工作流技能
 └── commands/                快捷命令定義
     ├── risk.md              /risk 命令
+    ├── var.md               /var 命令
     └── compliance.md        /compliance 命令
 ```
 
@@ -63,6 +65,22 @@ FSI 風控業績平台六層架構的**第三層**，是 Claude Agent 的**業�
 | 同集團合計 | ≤ 20% NAV | `GROUP_BREACH` |
 | 工具剩餘期限 | ≤ 397 天 | `MATURITY_BREACH` |
 | 資產抵押證券 | ≤ 15% NAV | `ABS_BREACH` |
+
+---
+
+### `var-analysis` — VaR 專項分析
+
+**觸發詞**：VaR、CVaR、historical、monte carlo、parametric、distribution
+
+**功能：**
+- 三方法 VaR 對比：historical / monte_carlo / distribution
+- 輸出 VaR(HKD)、VaR(%NAV)、CVaR(HKD)、sample_size
+- 樣本不足時返回 `INSUFFICIENT_DATA` 並提示風險口徑限制
+
+**調用接口：**
+- `GET /risk/var/{fund_id}?method=historical`
+- `GET /risk/var/{fund_id}?method=monte_carlo`
+- `GET /risk/var/{fund_id}?method=distribution`
 
 ---
 
@@ -128,6 +146,7 @@ FSI 風控業績平台六層架構的**第三層**，是 Claude Agent 的**業�
 | 命令 | 說明 | 示例 |
 |---|---|---|
 | `/risk [fund_id] [date]` | 風控快照（WAM/WAL/VaR/合規） | `/risk BHMMF 2026-06-24` |
+| `/var [fund_id] [date] [method]` | VaR 專項分析（三方法） | `/var BHMMF001 2026-06-25 all` |
 | `/compliance [fund_id] [date]` | MMF 合規核查 | `/compliance BHMMF` |
 | `/positions [fund_id] [date]` | 持倉列表 | `/positions BHMMF` |
 | `/performance [fund_id]` | 業績分析 | `/performance BHMMF` |

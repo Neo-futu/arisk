@@ -9,7 +9,7 @@ from fastapi.security import APIKeyHeader
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .deps import get_db, verify_api_key
-from .routers import op_logs, performance, positions, review, risk
+from .routers import op_logs, positions, review, risk
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -24,7 +24,6 @@ app = FastAPI(
 
 app.include_router(positions.router, prefix="/positions", tags=["持倉"])
 app.include_router(risk.router,      prefix="/risk",      tags=["風控"])
-app.include_router(performance.router, prefix="/performance", tags=["業績"])
 app.include_router(review.router,    prefix="/review",    tags=["人工審核"])
 app.include_router(op_logs.router,   prefix="/op-logs",   tags=["操作日誌"])
 

@@ -22,7 +22,7 @@ triggers:
 
 1. **取持倉** → 調用 `GET /positions/{fund_id}?as_of_date=YYYY-MM-DD`
 2. **計算暴露** → 調用 `GET /risk/exposure/{fund_id}?as_of_date=YYYY-MM-DD`
-3. **計算 VaR** → 調用 `GET /risk/var/{fund_id}?as_of_date=YYYY-MM-DD&confidence=0.99`
+3. **計算 VaR** → 優先調用 `var-analysis` 技能（historical / monte_carlo / distribution）
 4. **合規判斷** → 對照 SFC 守則第 8.2 章閾值
 5. **生成報告** → 結構化輸出表格 + 違規預警
 
@@ -77,6 +77,13 @@ triggers:
 **VaR**: HKD X,XXX,XXX (X.XX% NAV)
 **CVaR**: HKD X,XXX,XXX
 
+### VaR 方法對比（可選）
+| 方法 | VaR(HKD) | VaR(%NAV) | CVaR(HKD) | 樣本數 |
+|------|----------|-----------|-----------|--------|
+| historical | ... | ... | ... | ... |
+| monte_carlo | ... | ... | ... | ... |
+| distribution | ... | ... | ... | ... |
+
 ### 合規狀態
 {✅ 全部合規 | ❌ 發現 N 項違規}
 ```
@@ -86,3 +93,4 @@ triggers:
 - 分析結果僅供參考，不構成投資建議
 - 合規判斷以最新版 SFC 守則為準，如有疑問請諮詢合規部門
 - VaR 使用歷史模擬法，基於 252 個交易日數據
+- 若用戶明確要求方法對比，調用 `var-analysis` 技能輸出三方法結果

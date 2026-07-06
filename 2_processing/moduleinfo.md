@@ -52,6 +52,8 @@ FSI 風控業績平台六層架構的**第二層**，是平台的**計算核心*
 │   │   └── var_calculator.py     VaR / CVaR（歷史模擬法 + 參數法）
 │   ├── performance/
 │   │   └── attribution.py        Brinson 收益歸因（配置/選股/交互效應）
+│   ├── internal/
+│   │   └── sql_queries.py        內部查詢 SQL 統一註冊（供 4_mcp 調用）
 │   └── mmf/
 │       ├── run_report.py         MMF 報表總執行入口（SQL→Excel）
 │       ├── report_03/

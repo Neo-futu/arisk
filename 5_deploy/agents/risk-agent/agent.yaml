@@ -8,6 +8,7 @@ system:
 
 skills:
   - path: ../../3_skills/skills/risk-analysis/SKILL.md
+  - path: ../../3_skills/skills/var-analysis/SKILL.md
   - path: ../../3_skills/skills/mmf-compliance/SKILL.md
   - path: ../../3_skills/skills/xlsx-report/SKILL.md
 

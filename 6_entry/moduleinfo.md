@@ -49,7 +49,9 @@ FSI 風控業績平台六層架構的**第六層（最頂層）**，是所有用
 |---|---|---|
 | `POST /agent/analyze` | **Agent 模式** | 複雜分析、需推理判斷 |
 | `POST /agent/report` | **Agent 模式** | 多步驟報告生成 |
+| `POST /agent/skills/var-analysis` | **Agent 模式** | VaR 三方法技能輸出（含 summary） |
 | `GET /query/risk/{fund_id}` | **Direct Query** | 標準風控查詢（低延遲） |
+| `GET /query/risk/var-compare/{fund_id}` | **Direct Query** | VaR 三方法對比（低延遲） |
 | `GET /query/holdings/{fund_id}` | **Direct Query** | 持倉查詢 |
 | `GET /query/performance/{fund_id}` | **Direct Query** | 業績查詢 |
 | `GET /review/inbox` | 審核 UI | 待審核請求列表 |
@@ -143,6 +145,7 @@ python 6_entry/cli/run.py compute --all-funds
 
 ```
 GET  /query/risk/{fund_id}                   風控快照
+GET  /query/risk/var-compare/{fund_id}       VaR 三方法對比
 GET  /query/risk/{fund_id}/exposure          暴露明細
 GET  /query/holdings/{fund_id}/{asset_class} 持倉數據
 GET  /query/performance/{fund_id}            業績指標

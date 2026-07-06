@@ -15,7 +15,8 @@ Orchestrator — FSI Risk Platform Agent 事件循環。
   orchestrator
       ↓ callable data-puller（只讀）
       ↓ callable risk-calculator（只讀計算）
-      ↓ [人工審核點 ①] — 如有 breach_flags
+    ↓ [人工審核點 ①] — 如有 breach_flags
+    ↓ [人工審核點 ①.5] — 如 VaR 超閾值（預設 > 5% NAV）
       ↓ callable report-writer（write-holder）
       ↓ [人工審核點 ②] — 報告發布前
       ↓ 完成，返回 artefact 路徑
@@ -30,8 +31,17 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-import anthropic
 import httpx
+
+try:
+    import anthropic
+except ImportError:  # pragma: no cover
+    anthropic = None
+
+try:
+    from .report_writer_runtime import generate_risk_report
+except ImportError:
+    from report_writer_runtime import generate_risk_report
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +78,7 @@ class RiskAgentOrchestrator:
     """
 
     def __init__(self):
-        self.client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        self.client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY) if anthropic else None
         self.http = httpx.AsyncClient(
             base_url=PROCESSING_API_URL,
             headers=_api_headers,
@@ -82,15 +92,21 @@ class RiskAgentOrchestrator:
         as_of_date: str,
         task_id: str | None = None,
         skip_review: bool = False,
+        risk_only: bool = False,
     ) -> dict:
         """
         完整執行 risk-agent 工作流：
-        data-puller → risk-calculator → [審核①] → report-writer → [審核②]
+        data-puller → risk-calculator → [審核①] → [審核①.5] → report-writer → [審核②]
 
         skip_review=True 僅用於測試環境。
+        risk_only=True 僅跑到 risk-calculator，便於日常巡檢。
         """
         task_id = task_id or str(uuid.uuid4())
-        self._log(task_id, "ORCHESTRATOR_START", {"fund_id": fund_id, "as_of_date": as_of_date})
+        self._log(
+            task_id,
+            "ORCHESTRATOR_START",
+            {"fund_id": fund_id, "as_of_date": as_of_date, "risk_only": risk_only},
+        )
 
         try:
             # ── Step 1: Data Puller（只讀） ──────────────────────
@@ -99,7 +115,34 @@ class RiskAgentOrchestrator:
 
             # ── Step 2: Risk Calculator（只讀計算） ───────────────
             self._log(task_id, "INVOKE_SUBAGENT", {"agent": "risk-calculator"})
-            risk_result = await self._invoke_risk_calculator(fund_id, as_of_date)
+            risk_package = await self._invoke_risk_calculator(task_id, fund_id, as_of_date)
+            exposure_result = risk_package["exposure"]
+            var_results = risk_package["var_results"]
+            max_var_pct_nav = risk_package["max_var_pct_nav"]
+
+            risk_result = {
+                "fund_id": fund_id,
+                "as_of_date": as_of_date,
+                "exposure": exposure_result,
+                "var_results": var_results,
+                "max_var_pct_nav": max_var_pct_nav,
+                "primary_var": var_results[0] if var_results else {},
+                "is_compliant": exposure_result.get("is_compliant", True),
+                "breach_flags": exposure_result.get("breach_flags", {}),
+                "wam_days": exposure_result.get("wam_days"),
+                "wal_days": exposure_result.get("wal_days"),
+                "daily_liquid_pct": exposure_result.get("daily_liquid_pct"),
+                "weekly_liquid_pct": exposure_result.get("weekly_liquid_pct"),
+            }
+
+            if risk_only:
+                self._log(task_id, "RISK_ONLY_COMPLETE", {"max_var_pct_nav": max_var_pct_nav})
+                return {
+                    "task_id": task_id,
+                    "status": "risk_only_completed",
+                    "risk_summary": risk_result,
+                    "task_log": self.task_log,
+                }
 
             # ── 審核點 ①：合規違規檢查 ───────────────────────────
             breach_flags = risk_result.get("breach_flags", {})
@@ -116,6 +159,24 @@ class RiskAgentOrchestrator:
                 )
                 if review_decision == "REJECTED":
                     return self._abort(task_id, "合規違規審核被拒絕，已中止報告生成")
+
+            # ── 審核點 ①.5：高風險 VaR 檢查 ──────────────────────
+            if max_var_pct_nav > 5 and not skip_review:
+                self._log(task_id, "REVIEW_GATE_HIGH_RISK", {"max_var_pct_nav": max_var_pct_nav})
+                review_decision = await self._human_review_gate(
+                    task_id=task_id,
+                    category="HIGH_RISK",
+                    title=f"高風險告警：VaR={max_var_pct_nav:.2f}% NAV",
+                    summary=(
+                        f"基金 {fund_id} 在 {as_of_date} 的 VaR 超過 5% NAV 閾值。"
+                        f"最高 VaR 佔比：{max_var_pct_nav:.2f}%（三方法口徑）。"
+                    ),
+                    fund_id=fund_id,
+                    as_of_date=as_of_date,
+                    payload={"var_results": var_results, "max_var_pct_nav": max_var_pct_nav},
+                )
+                if review_decision == "REJECTED":
+                    return self._abort(task_id, "高風險 VaR 審核被拒絕，已中止報告生成")
 
             # ── Step 3: Report Writer（write-holder） ─────────────
             self._log(task_id, "INVOKE_SUBAGENT", {"agent": "report-writer"})
@@ -170,14 +231,55 @@ class RiskAgentOrchestrator:
         resp.raise_for_status()
         return resp.json()
 
-    async def _invoke_risk_calculator(self, fund_id: str, as_of_date: str) -> dict:
-        """調用 risk-calculator：計算暴露和 VaR，返回計算結果（不寫 DB）。"""
+    async def _invoke_risk_calculator(self, task_id: str, fund_id: str, as_of_date: str) -> dict:
+        """調用 risk-calculator：計算暴露與三方法 VaR，返回聚合結果（不寫 DB）。"""
         exposure_resp = await self.http.get(
             f"/risk/exposure/{fund_id}",
             params={"as_of_date": as_of_date},
         )
         exposure_resp.raise_for_status()
-        return exposure_resp.json()
+
+        var_methods = ("historical", "monte_carlo", "distribution")
+        var_results = await asyncio.gather(
+            *[self._fetch_var_method(task_id, fund_id, as_of_date, method) for method in var_methods]
+        )
+        max_var_pct_nav = max((float(v.get("var_pct_nav", 0.0) or 0.0) for v in var_results), default=0.0)
+
+        return {
+            "exposure": exposure_resp.json(),
+            "var_results": var_results,
+            "max_var_pct_nav": max_var_pct_nav,
+        }
+
+    async def _fetch_var_method(self, task_id: str, fund_id: str, as_of_date: str, method: str) -> dict:
+        """Fetch one VaR method with graceful fallback on upstream errors."""
+        try:
+            resp = await self.http.get(
+                f"/risk/var/{fund_id}",
+                params={"as_of_date": as_of_date, "method": method, "confidence": 0.99, "horizon_days": 1},
+            )
+            resp.raise_for_status()
+            payload = resp.json()
+            payload["method_requested"] = method
+            return payload
+        except Exception as exc:
+            self._log(
+                task_id,
+                "VAR_FETCH_FAILED",
+                {"fund_id": fund_id, "as_of_date": as_of_date, "method": method, "error": str(exc)},
+            )
+            return {
+                "fund_id": fund_id,
+                "as_of_date": as_of_date,
+                "confidence": 0.99,
+                "horizon_days": 1,
+                "var_hkd": 0.0,
+                "var_pct_nav": 0.0,
+                "cvar_hkd": 0.0,
+                "method": "INSUFFICIENT_DATA",
+                "method_requested": method,
+                "sample_size": 0,
+            }
 
     async def _invoke_report_writer(
         self,
@@ -188,16 +290,15 @@ class RiskAgentOrchestrator:
     ) -> dict:
         """
         調用 report-writer（write-holder）：生成 xlsx 報告。
-        這是唯一向 artefacts/ 和 S3 寫入的步驟。
+        這是唯一向 artefacts/ 寫入的步驟。
         """
-        # 在實際生產中，這裡會調用 report-writer subagent 的 API
-        # 目前返回模擬結果
-        artefact_path = f"artefacts/{fund_id}_{as_of_date}_risk_report.xlsx"
-        return {
-            "artefact_path": artefact_path,
-            "artefact_url": f"s3://fsi-risk-artefacts/reports/{fund_id}_{as_of_date}_risk_report.xlsx",
-            "summary": f"Risk report for {fund_id} on {as_of_date}. Compliant: {risk_result.get('is_compliant')}",
-        }
+        return await asyncio.to_thread(
+            generate_risk_report,
+            fund_id,
+            as_of_date,
+            risk_result,
+            positions_data,
+        )
 
     # ─── 人工審核交接 ─────────────────────────────────────────────
 
@@ -305,10 +406,16 @@ async def main():
     parser.add_argument("fund_id", help="基金 ID")
     parser.add_argument("as_of_date", help="日期 YYYY-MM-DD")
     parser.add_argument("--skip-review", action="store_true", help="跳過人工審核（僅測試用）")
+    parser.add_argument("--risk-only", action="store_true", help="只執行到 risk-calculator（巡檢模式）")
     args = parser.parse_args()
 
     orch = RiskAgentOrchestrator()
-    result = await orch.run(args.fund_id, args.as_of_date, skip_review=args.skip_review)
+    result = await orch.run(
+        args.fund_id,
+        args.as_of_date,
+        skip_review=args.skip_review,
+        risk_only=args.risk_only,
+    )
     print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
 
 

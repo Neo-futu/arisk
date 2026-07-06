@@ -102,6 +102,7 @@ review_gates:
 orchestrator
     ↓ 調用 data-puller（只讀）
     ↓ 調用 risk-calculator（只讀計算）
+  ↓ （可選）risk-only 結束，直接返回風險巡檢結果
     ↓ [人工審核點 ①] — 如有 breach_flags（30分鐘SLA）
     ↓ 調用 report-writer（write-holder）
     ↓ [人工審核點 ②] — 報告發布前（120分鐘SLA）
@@ -174,7 +175,10 @@ kubectl apply -f k8s/deployment.yaml
 
 ```bash
 # 本地開發
-python 5_deploy/orchestrate.py --fund BHMMF --date 2026-06-25
+python 5_deploy/orchestrate.py BHMMF001 2026-06-25 --skip-review
+
+# 風險巡檢（只跑到 risk-calculator）
+python 5_deploy/orchestrate.py BHMMF001 2026-06-25 --risk-only
 
 # 同步技能（修改 SKILL.md 後執行）
 python scripts/sync_skills.py

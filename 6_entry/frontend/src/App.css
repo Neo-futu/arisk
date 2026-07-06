@@ -1,0 +1,151 @@
+.page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 22px;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 28px;
+}
+
+h2 {
+  margin: 0 0 12px;
+  font-size: 18px;
+}
+
+.subtitle {
+  margin: 6px 0 0;
+  color: #5f6b76;
+}
+
+.mode-tabs {
+  display: inline-flex;
+  border-radius: 999px;
+  background: #dbe6ef;
+  padding: 3px;
+}
+
+.tab {
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #314457;
+  padding: 8px 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tab.active {
+  background: #0a6e7b;
+  color: #ffffff;
+}
+
+.card {
+  background: #ffffff;
+  border: 1px solid #d6dee8;
+  border-radius: 14px;
+  padding: 18px;
+  margin-bottom: 14px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: #334155;
+}
+
+input {
+  border: 1px solid #c3cfdb;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 14px;
+  background: #f9fbff;
+}
+
+.actions {
+  margin-top: 12px;
+}
+
+.run {
+  border: none;
+  border-radius: 8px;
+  background: #0f766e;
+  color: #fff;
+  padding: 10px 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.run:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.error {
+  margin-top: 10px;
+  color: #b91c1c;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.hint {
+  color: #64748b;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.summary {
+  background: #0b1324;
+  color: #c8dcff;
+  border-radius: 8px;
+  padding: 12px;
+  overflow: auto;
+  max-height: 260px;
+}
+
+.result-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.result-table th,
+.result-table td {
+  border: 1px solid #dde5ee;
+  padding: 8px;
+  text-align: right;
+}
+
+.result-table th:first-child,
+.result-table td:first-child {
+  text-align: left;
+}
+
+@media (max-width: 960px) {
+  .grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .topbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

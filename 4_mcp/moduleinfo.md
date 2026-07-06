@@ -58,6 +58,8 @@ FSI 風控業績平台六層架構的**第四層**，是平台的**數據連接�
 
 **啟動方式：** `python -m 4_mcp.internal.internal_mcp_server`
 
+**實現約束：** SQL 已下沉到 `2_processing/tools/internal/sql_queries.py`，`internal_mcp_server.py` 僅做 MCP 工具調度與風控計算邏輯。
+
 **認證：** `MCP_GATEWAY_SECRET` Bearer Token
 
 **設計原則：只讀**，Agent 通過此 MCP 查詢已清洗的業務數據，不能寫入。
@@ -66,12 +68,11 @@ FSI 風控業績平台六層架構的**第四層**，是平台的**數據連接�
 
 | 工具名 | 功能 | 對應數據表 |
 |---|---|---|
-| `db_get_portfolio_nav` | 查詢組合每日淨值 | `balance_portfolio_nav` |
-| `db_get_holdings` | 查詢持倉（按資產類別） | `balance_bond/stock/cd...` |
-| `db_get_risk_snapshot` | 查詢風控快照 | `svc_risk_snapshot` |
-| `db_get_exposure` | 查詢暴露明細 | `svc_risk_exposure` |
-| `db_get_market_data` | 查詢市場數據 | `mktdata_quotes/fx_rate...` |
-| `db_query_custom` | 自定義只讀 SQL | fsi schema（SELECT only）|
+| `get_nav_history` | 查詢組合 NAV 歷史 | `balance_portfolio_nav` |
+| `get_positions` | 查詢持倉（按科目關鍵詞可選過濾） | `balance_valuation_sheet` |
+| `get_risk_snapshot` | 查詢風控快照 | `svc_risk_snapshot` |
+| `get_var_three_methods` | 計算三方法 VaR（歷史/蒙特卡洛/分佈公式） | `balance_portfolio_nav` |
+| `get_fund_list` | 查詢活躍基金清單 | `para_portfolio` |
 
 ---
 
