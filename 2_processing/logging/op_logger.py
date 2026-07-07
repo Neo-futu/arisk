@@ -51,7 +51,7 @@ structlog.configure(
 
 _HOST     = socket.gethostname()
 _VERSION  = os.environ.get("APP_VERSION", "0.1.0")
-_SERVICE  = "fsi-risk-platform"
+_SERVICE  = "arisk"
 
 std_log = structlog.get_logger()
 

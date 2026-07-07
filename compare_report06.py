@@ -1,7 +1,7 @@
 ﻿from pathlib import Path
 from openpyxl import load_workbook
 
-local = Path(r'd:\vsproject\fsi-risk-platform\2_processing\sql\mmf\report_06\Template.xlsx')
+local = Path(r'd:\vsproject\arisk\2_processing\sql\mmf\report_06\Template.xlsx')
 external = Path(r'd:\riskpy\amc\SQLServer\Script\SmartReport\06\Template.xlsx')
 print('LOCAL exists', local.exists())
 print('EXT exists', external.exists())

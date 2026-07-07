@@ -1,5 +1,5 @@
 """
-migrate.py  FSI Risk Platform — Schema Migration Runner
+migrate.py  ARISK — Schema Migration Runner
 =========================================================
 用法：
   python 1_datastorage/postgres/migrations/migrate.py          # 執行所有待跑遷移

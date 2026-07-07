@@ -19,7 +19,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="FSI Risk Platform — Web Entry",
+    title="ARISK — Web Entry",
     description="統一入口：Agent 模式、Direct Query、人工審核收件箱。",
     version="0.1.0",
     lifespan=lifespan,

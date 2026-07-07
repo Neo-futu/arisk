@@ -1,14 +1,14 @@
-# 6_entry — 入口層
+# 6_entry — 內部入口層
 
 ## 模塊定位
 
-FSI 風控業績平台六層架構的**第六層（最頂層）**，是所有用戶和外部系統的**統一接入點**。提供四種入口形式：Web Chat UI、Excel 插件、Python CLI、以及 Direct API。同一業務功能根據需求複雜度自動路由至 Agent 模式或 Direct Query 模式。
+FSI 風控業績平台六層架構的**第六層（最頂層）**，是平台的**內部入口服務層**。承接 Agent、Direct Query、CLI、Excel 等接入方式；正式對外 Web 入口已收斂到根目錄 `frontend/ + backend/`。
 
 ```
 用戶 / 外部系統
     ↓   ↓   ↓   ↓
-  Web  Excel CLI  API
-【6_entry】  ← 本層（統一入口）
+ Excel CLI  API  Agent
+【6_entry】  ← 本層（內部入口）
     ├── Agent 模式  →  5_deploy/orchestrate
     └── Direct Query →  2_processing API
 ```
@@ -19,7 +19,7 @@ FSI 風控業績平台六層架構的**第六層（最頂層）**，是所有用
 
 ```
 6_entry/
-├── web/                        Web 入口（FastAPI）
+├── web/                        內部入口 API（FastAPI）
 │   ├── app.py                    應用主體（CORS/路由/靜態文件）
 │   ├── static/
 │   │   └── index.html            前端頁面（Chat UI + 報表瀏覽器）
@@ -39,9 +39,9 @@ FSI 風控業績平台六層架構的**第六層（最頂層）**，是所有用
 
 ## 四種入口詳解
 
-### 1. Web Chat UI（`web/`）
+### 1. 內部 Web / API 入口（`web/`）
 
-**啟動：** `uvicorn 6_entry.web.app:app --port 8000`
+**啟動：** `uvicorn 6_entry.web.app:app --port 8010`
 
 **路由體系：**
 
@@ -65,10 +65,7 @@ FSI 風控業績平台六層架構的**第六層（最頂層）**，是所有用
   └── 複雜分析（需推理）→ Agent 模式 → 5_deploy orchestrator（秒級）
 ```
 
-**前端（`static/index.html`）：**
-- Chat 對話界面（輸入框 + 消息流）
-- 報表結果展示（支持表格/圖表）
-- 審核通知徽章
+說明：`web/` 仍可提供內部測試頁與調試接口，但正式產品 Web UI 應優先在根目錄 `frontend/` 開發，並經由根目錄 `backend/` 對外暴露。
 
 ---
 
@@ -185,7 +182,8 @@ POST /review/{id}/escalate  升級
 | **→ `5_deploy`** | Agent 模式請求轉發至 orchestrator |
 | **→ `2_processing`** | Direct Query 直接調用計算 API |
 | **→ `3_skills`** | Excel/Web Chat 使用技能庫命令 |
-| **← 用戶** | Web 瀏覽器 / Excel / Terminal / API 客戶端 |
+| **← backend** | 對外 Web API 代理到本層 Agent / Direct 能力 |
+| **← 用戶 / 工具** | Excel / Terminal / 內部 API 客戶端 |
 
 ---
 
@@ -193,7 +191,7 @@ POST /review/{id}/escalate  升級
 
 | 變量 | 說明 |
 |---|---|
-| `WEB_PORT` | Web 服務端口，默認 8000 |
+| `WEB_PORT` | 內部入口服務端口，建議 8010 |
 | `WEB_SECRET_KEY` | Web API 認證密鑰 |
 | `CORS_ORIGINS` | 允許的跨域來源（逗號分隔） |
 | `PROCESSING_API_URL` | 下游計算服務地址 |
@@ -205,8 +203,8 @@ POST /review/{id}/escalate  升級
 ## 快速啟動
 
 ```bash
-# 啟動 Web 入口
-uvicorn 6_entry.web.app:app --host 0.0.0.0 --port 8000 --reload
+# 啟動內部入口服務
+uvicorn 6_entry.web.app:app --host 0.0.0.0 --port 8010 --reload
 
 # CLI 查看風控快照
 python 6_entry/cli/run.py risk --fund BHMMF

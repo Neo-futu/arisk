@@ -1,4 +1,6 @@
-# FSI Risk Platform 測試指南（Agent 與非 Agent 交互）
+# ARISK 測試指南（Agent 與非 Agent 交互）
+
+> 統一本地啟動與端口約定請優先參考：`docs/local_development_stack.md`。
 
 ## 1. 目標
 
@@ -35,13 +37,13 @@ pip install fastapi uvicorn anthropic mcp redis
 
 PowerShell：
 
-$env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@localhost:5432/postgres'; $env:PROCESSING_API_KEY='internal_key_change_me'; uvicorn 2_processing.api.main:app --host 127.0.0.1 --port 8001
+$env:DATABASE_URL='postgresql+asyncpg://fsi_user:change_me@localhost:5432/fsi_risk'; $env:PROCESSING_API_KEY='internal_key_change_me'; uvicorn 2_processing.api.main:app --host 127.0.0.1 --port 8001
 
-### 3.2 啟動 6_entry Web API
+### 3.2 啟動 6_entry Web API（內部入口）
 
 PowerShell：
 
-$env:PROCESSING_API_URL='http://127.0.0.1:8001'; $env:PROCESSING_API_KEY='internal_key_change_me'; uvicorn 6_entry.web.app:app --host 127.0.0.1 --port 8000
+$env:PROCESSING_API_URL='http://127.0.0.1:8001'; $env:PROCESSING_API_KEY='internal_key_change_me'; uvicorn 6_entry.web.app:app --host 127.0.0.1 --port 8010
 
 ### 3.3 啟動 6_entry React 前端（獨立目錄）
 
@@ -52,7 +54,7 @@ copy .env.example .env
 npm install
 npm run dev
 
-前端預設訪問 `http://localhost:5173`，並調用 `VITE_ENTRY_API_BASE`（默認 `http://127.0.0.1:8000`）。
+前端預設訪問 `http://localhost:5173`，對外 API 走 root backend（`http://127.0.0.1:8000`）。
 
 ---
 
@@ -62,7 +64,7 @@ npm run dev
 
 使用現有測試腳本：
 
-python 2_processing/test/test_var_three_methods.py --fund-id BHMMF001 --as-of-date 2026-06-25 --database-url postgresql+asyncpg://postgres:postgres@localhost:5432/postgres --min-observations 30
+python 2_processing/test/test_var_three_methods.py --fund-id BHMMF001 --as-of-date 2026-06-25 --database-url postgresql+asyncpg://fsi_user:change_me@localhost:5432/fsi_risk --min-observations 30
 
 本次測試結果（節選）：
 
@@ -80,7 +82,7 @@ python 2_processing/test/test_var_three_methods.py --fund-id BHMMF001 --as-of-da
 
 @'
 from pathlib import Path
-root=Path(r'd:/vsproject/fsi-risk-platform')
+root=Path(r'd:/vsproject/arisk')
 checks=[
   root/'3_skills/skills/var-analysis/SKILL.md',
   root/'3_skills/skills/risk-analysis/SKILL.md',

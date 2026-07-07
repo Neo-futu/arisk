@@ -83,7 +83,7 @@ async def cmd_var(args: argparse.Namespace) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="FSI Risk Platform CLI")
+    parser = argparse.ArgumentParser(description="ARISK CLI")
     sub = parser.add_subparsers(dest="command", required=True)
 
     # risk 子命令

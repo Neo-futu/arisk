@@ -1,6 +1,6 @@
 ---
 name: bootstrap
-description: FSI Risk Platform — Excel 環境初始化，偵測可用 MCP 和技能
+description: ARISK — Excel 環境初始化，偵測可用 MCP 和技能
 ---
 
 # /bootstrap — Excel 環境初始化
@@ -24,7 +24,7 @@ description: FSI Risk Platform — Excel 環境初始化，偵測可用 MCP 和�
 4. **返回狀態摘要**
 
 ```
-FSI Risk Platform — Excel 環境就緒 ✅
+ARISK — Excel 環境就緒 ✅
 
 可用連接：
   ✅ FSI Gateway MCP

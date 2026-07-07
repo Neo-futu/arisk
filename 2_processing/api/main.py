@@ -16,7 +16,7 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(
-    title="FSI Risk Platform — Processing API",
+    title="ARISK — Processing API",
     description="內部計算服務：持倉、風控、業績、人工審核。供 Entry 層和 Agent 調用，不直接暴露外網。",
     version="0.1.0",
     lifespan=lifespan,

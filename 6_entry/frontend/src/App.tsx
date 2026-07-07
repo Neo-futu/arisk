@@ -57,7 +57,7 @@ function App() {
     <main className="page">
       <header className="topbar">
         <div>
-          <h1>FSI Risk Platform Frontend</h1>
+          <h1>ARISK Frontend</h1>
           <p className="subtitle">React 前端（獨立目錄）- Agent / Direct 雙模式 VaR 測試台</p>
         </div>
         <div className="mode-tabs">

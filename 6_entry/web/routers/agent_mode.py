@@ -85,7 +85,7 @@ async def chat_with_agent(request: AgentTaskRequest):
         model=ANTHROPIC_MODEL,
         max_tokens=4096,
         system=(
-            "你是 FSI Risk Platform 的助手，幫助分析基金風控數據。"
+            "你是 ARISK 的助手，幫助分析基金風控數據。"
             "回答要簡潔、結構化。如需詳細計算，建議使用 /agent/run 觸發完整 Agent 分析。"
         ),
         messages=[{"role": "user", "content": context}],
@@ -249,7 +249,7 @@ async def _run_agent_background(task_id: str, request: AgentTaskRequest) -> None
             model=ANTHROPIC_MODEL,
             max_tokens=8192,
             system=(
-                "你是 FSI Risk Platform 的 Risk Agent。執行用戶指定的風控分析任務。"
+                "你是 ARISK 的 Risk Agent。執行用戶指定的風控分析任務。"
                 "可調用的 API: Processing API (http://localhost:8001)，需要 X-API-Key 頭。"
                 "按 risk-analysis 和 mmf-compliance SKILL 格式輸出報告。"
             ),

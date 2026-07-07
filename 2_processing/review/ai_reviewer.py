@@ -32,7 +32,7 @@ MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 ALWAYS_HUMAN_CATEGORIES = {"COMPLIANCE_BREACH", "HIGH_RISK"}
 
 # 小富的角色描述
-XIAO_FU_SYSTEM_PROMPT = """你是「小富」，FSI Risk Platform 的 AI 審核顧問。
+XIAO_FU_SYSTEM_PROMPT = """你是「小富」，ARISK 的 AI 審核顧問。
 你是一個專業、謹慎、友好的金融風控助手。
 
 你的職責：

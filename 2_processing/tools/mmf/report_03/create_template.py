@@ -986,7 +986,7 @@ _note_row(r, '㉀', 'CNAV基金升級路徑（諮詢文件 25CP10，2025年10月
 r += 2
 _note_title(r, '▌ 數據來源及監管參考')
 r += 1
-_note_row(r, '*', '所有數據來源：FSI Risk Platform 數據庫，以估值日收盤數據為準。\n'
+_note_row(r, '*', '所有數據來源：ARISK 數據庫，以估值日收盤數據為準。\n'
            '主要參考法規：\n'
            '  · SFC《單位信託及互惠基金守則》第二節第8章（現行版本2024年10月2日）\n'
            '  · SFC通函 24EC64《流動性風險管理良好做法》（2024年12月）\n'
@@ -1565,7 +1565,7 @@ ws17.column_dimensions['M'].width = 14
 ws17.column_dimensions['N'].width = 14
 
 # ── 保存 ─────────────────────────────────────────────────
-dest = Path('D:/vsproject/fsi-risk-platform/2_processing/sql/mmf/report_03_mmf/Template.xlsx')
+dest = Path('D:/vsproject/arisk/2_processing/sql/mmf/report_03_mmf/Template.xlsx')
 wb.save(dest)
 print(f'已創建: {dest}')
 print(f'Sheets ({len(wb.sheetnames)}):')

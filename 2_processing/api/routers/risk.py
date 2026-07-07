@@ -33,7 +33,7 @@ async def get_exposure(
         "daily_liquid_pct": result.daily_liquid_pct,
         "weekly_liquid_pct": result.weekly_liquid_pct,
         "is_compliant": result.is_compliant,
-        "breach_flags": result.breach_flags,
+        "breach_flags": list(result.breach_flags.keys()),
         "by_asset_type": {k: {"mv_hkd": v, "pct": v / result.total_nav_hkd * 100 if result.total_nav_hkd else 0}
                           for k, v in result.by_asset_type.items()},
         "by_currency": {k: {"mv_hkd": v, "pct": v / result.total_nav_hkd * 100 if result.total_nav_hkd else 0}

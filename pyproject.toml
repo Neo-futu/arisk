@@ -3,8 +3,8 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.backends.legacy:build"
 
 [project]
-name = "fsi-risk-platform"
-version = "0.1.0"
+name = "arisk"
+version = "1.0.0"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.111",

@@ -1,4 +1,4 @@
-# FSI Risk Platform Frontend (React)
+# ARISK Frontend (React)
 
 獨立前端目錄：`6_entry/frontend`
 

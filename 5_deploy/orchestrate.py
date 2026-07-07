@@ -1,5 +1,5 @@
 """
-Orchestrator — FSI Risk Platform Agent 事件循環。
+Orchestrator — ARISK Agent 事件循環。
 
 職責：
 1. 接收 agent 的 handoff_request 事件
@@ -402,7 +402,7 @@ class RiskAgentOrchestrator:
 
 async def main():
     import argparse
-    parser = argparse.ArgumentParser(description="FSI Risk Agent Orchestrator")
+    parser = argparse.ArgumentParser(description="ARISK Agent Orchestrator")
     parser.add_argument("fund_id", help="基金 ID")
     parser.add_argument("as_of_date", help="日期 YYYY-MM-DD")
     parser.add_argument("--skip-review", action="store_true", help="跳過人工審核（僅測試用）")

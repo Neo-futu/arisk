@@ -3,23 +3,23 @@ kind: Deployment
 metadata:
   name: fsi-processing-api
   labels:
-    app: fsi-risk-platform
+    app: arisk
     component: processing-api
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: fsi-risk-platform
+      app: arisk
       component: processing-api
   template:
     metadata:
       labels:
-        app: fsi-risk-platform
+        app: arisk
         component: processing-api
     spec:
       containers:
       - name: processing-api
-        image: fsi-risk-platform/processing:latest
+        image: arisk/processing:latest
         ports:
         - containerPort: 8001
         envFrom:
@@ -50,23 +50,23 @@ kind: Deployment
 metadata:
   name: fsi-entry-web
   labels:
-    app: fsi-risk-platform
+    app: arisk
     component: entry-web
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: fsi-risk-platform
+      app: arisk
       component: entry-web
   template:
     metadata:
       labels:
-        app: fsi-risk-platform
+        app: arisk
         component: entry-web
     spec:
       containers:
       - name: entry-web
-        image: fsi-risk-platform/entry:latest
+        image: arisk/entry:latest
         ports:
         - containerPort: 8000
         envFrom:
@@ -85,23 +85,23 @@ kind: Deployment
 metadata:
   name: fsi-celery-worker
   labels:
-    app: fsi-risk-platform
+    app: arisk
     component: celery-worker
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: fsi-risk-platform
+      app: arisk
       component: celery-worker
   template:
     metadata:
       labels:
-        app: fsi-risk-platform
+        app: arisk
         component: celery-worker
     spec:
       containers:
       - name: celery-worker
-        image: fsi-risk-platform/processing:latest
+        image: arisk/processing:latest
         command: ["celery", "-A", "2_processing.workers.celery_app", "worker", "--loglevel=info"]
         envFrom:
         - secretRef:
