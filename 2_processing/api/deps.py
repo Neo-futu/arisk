@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
-    "postgresql+asyncpg://fsi_user:change_me@localhost:5432/fsi_risk",
+    "postgresql+asyncpg://postgres:postgres@localhost:5432/fsi_risk",
 )
 PROCESSING_API_KEY = os.environ.get("PROCESSING_API_KEY", "internal_key_change_me")
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")

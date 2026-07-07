@@ -2,26 +2,16 @@ import { createFileRoute } from "@tanstack/react-router"
 import { Download, FileSpreadsheet, FileText } from "lucide-react"
 import { useState } from "react"
 
+import { FUNDS, FsiToolbar, lastTradeDate } from "@/components/FsiToolbar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 
 export const Route = createFileRoute("/_layout/reports")({
   component: ReportsPage,
   head: () => ({ meta: [{ title: "報表中心 — ARISK" }] }),
 })
 
-const FUNDS = [
-  { id: "BHMMF001", name: "博匯港元貨幣市場基金 I" },
-  { id: "BHMMF002", name: "博匯港元貨幣市場基金 II" },
-]
 
 type ReportDef = {
   id: string
@@ -125,12 +115,7 @@ function ReportCard({ report, fundId, asOfDate }: { report: ReportDef; fundId: s
 
 function ReportsPage() {
   const [fundId, setFundId] = useState(FUNDS[0].id)
-  const [asOfDate] = useState(() => {
-    const d = new Date()
-    d.setDate(d.getDate() - 1)
-    while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1)
-    return d.toISOString().split("T")[0]
-  })
+  const [asOfDate, setAsOfDate] = useState(lastTradeDate)
 
   const daily = REPORTS.filter((r) => r.frequency === "daily")
   const monthly = REPORTS.filter((r) => r.frequency === "monthly")
@@ -144,23 +129,11 @@ function ReportsPage() {
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        <Select value={fundId} onValueChange={setFundId}>
-          <SelectTrigger className="w-56">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {FUNDS.map((f) => (
-              <SelectItem key={f.id} value={f.id}>
-                {f.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Badge variant="outline" className="h-10 px-3 text-sm">
-          {asOfDate}
-        </Badge>
-      </div>
+      <FsiToolbar
+        fundId={fundId} onFundChange={setFundId}
+        asOfDate={asOfDate} onDateChange={setAsOfDate}
+        onRefresh={() => window.location.reload()}
+      />
 
       <div className="space-y-4">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">

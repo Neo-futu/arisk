@@ -60,16 +60,29 @@ export interface VarCompareResult {
 }
 
 export interface Position {
-  security_id: string
-  security_name: string
+  asset_id: string
+  asset_name: string
   asset_type: string
+  issuer_name?: string | null
+  issuer_group?: string | null
   currency: string
-  face_value: number
-  market_value_hkd: number
-  pct_nav: number
-  maturity_date?: string
-  rating?: string
-  issuer?: string
+  face_value?: number | null
+  market_value?: number | null
+  market_value_hkd?: number | null
+  weight_pct?: number | null
+  maturity_date?: string | null
+  coupon_rate?: number | null
+  credit_rating?: string | null
+  rating_agency?: string | null
+  country?: string | null
+  sector?: string | null
+}
+
+export interface PositionsResponse {
+  fund_id: string
+  as_of_date: string
+  count: number
+  positions: Position[]
 }
 
 export interface AgentTaskRequest {
@@ -153,7 +166,7 @@ export const fsiApi = {
 
   /** 持倉列表 */
   getPositions(fundId: string, asOfDate: string, assetType?: string) {
-    return axios.get<{ positions: Position[]; total_count: number }>(
+    return axios.get<PositionsResponse>(
       `${BASE}/api/v1/fsi/positions/${fundId}`,
       {
         params: {

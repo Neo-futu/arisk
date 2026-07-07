@@ -3,15 +3,9 @@ import { createFileRoute } from "@tanstack/react-router"
 import { CheckCircle2, XCircle } from "lucide-react"
 import { useState } from "react"
 
+import { FUNDS, FsiToolbar, lastTradeDate } from "@/components/FsiToolbar"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { fsiApi, type ExposureResult } from "@/fsiClient"
 
 export const Route = createFileRoute("/_layout/compliance")({
@@ -19,12 +13,6 @@ export const Route = createFileRoute("/_layout/compliance")({
   head: () => ({ meta: [{ title: "SFC 合規 — ARISK" }] }),
 })
 
-const FUNDS = [
-  { id: "BHMMF001", name: "博匯港元貨幣市場基金 I" },
-  { id: "BHMMF002", name: "博匯港元貨幣市場基金 II" },
-]
-
-// SFC 第 8.2 章所有守則定義
 const SFC_RULES = [
   {
     code: "WAM_BREACH",
@@ -82,31 +70,21 @@ const SFC_RULES = [
   },
 ]
 
-function RuleRow({
-  rule,
-  data,
-}: {
-  rule: (typeof SFC_RULES)[number]
-  data: ExposureResult
-}) {
+function RuleRow({ rule, data }: { rule: (typeof SFC_RULES)[number]; data: ExposureResult }) {
   const breach = data.breach_flags.includes(rule.code)
   return (
     <div className="flex items-center justify-between py-3 border-b last:border-0">
       <div className="flex items-center gap-3">
-        {breach ? (
-          <XCircle className="h-4 w-4 text-destructive shrink-0" />
-        ) : (
-          <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
-        )}
+        {breach
+          ? <XCircle className="h-4 w-4 text-destructive shrink-0" />
+          : <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />}
         <div>
           <p className="text-sm font-medium">{rule.name}</p>
           <p className="text-xs text-muted-foreground">{rule.limit}</p>
         </div>
       </div>
       <div className="flex items-center gap-3">
-        <span className="text-sm font-mono text-right">
-          {rule.getValue(data)}
-        </span>
+        <span className="text-sm font-mono">{rule.getValue(data)}</span>
         <Badge
           variant={breach ? "destructive" : "outline"}
           className="w-14 justify-center text-xs"
@@ -120,16 +98,13 @@ function RuleRow({
 
 function CompliancePage() {
   const [fundId, setFundId] = useState(FUNDS[0].id)
-  const [asOfDate] = useState(() => {
-    const d = new Date()
-    d.setDate(d.getDate() - 1)
-    while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1)
-    return d.toISOString().split("T")[0]
-  })
+  const [asOfDate, setAsOfDate] = useState(lastTradeDate)
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isFetching, isError, refetch } = useQuery({
     queryKey: ["compliance", fundId, asOfDate],
     queryFn: () => fsiApi.getExposure(fundId, asOfDate).then((r) => r.data),
+    staleTime: 0,
+    gcTime: 0,
     retry: 1,
   })
 
@@ -142,25 +117,13 @@ function CompliancePage() {
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        <Select value={fundId} onValueChange={setFundId}>
-          <SelectTrigger className="w-56">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {FUNDS.map((f) => (
-              <SelectItem key={f.id} value={f.id}>
-                {f.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Badge variant="outline" className="h-10 px-3 text-sm">
-          {asOfDate}
-        </Badge>
-      </div>
+      <FsiToolbar
+        fundId={fundId} onFundChange={setFundId}
+        asOfDate={asOfDate} onDateChange={setAsOfDate}
+        onRefresh={() => refetch()} isFetching={isFetching}
+      />
 
-      {isLoading && <p className="text-muted-foreground text-sm">載入中...</p>}
+      {isFetching && <p className="text-muted-foreground text-sm animate-pulse">載入中...</p>}
       {isError && (
         <Card className="border-destructive">
           <CardContent className="pt-4 text-sm text-destructive">
@@ -171,26 +134,17 @@ function CompliancePage() {
 
       {data && (
         <div className="space-y-4">
-          {/* 總體狀態 */}
-          <Card
-            className={
-              data.is_compliant ? "border-green-500/50" : "border-destructive"
-            }
-          >
+          <Card className={data.is_compliant ? "border-green-500/50" : "border-destructive"}>
             <CardContent className="flex items-center gap-4 pt-4">
-              {data.is_compliant ? (
-                <CheckCircle2 className="h-8 w-8 text-green-500" />
-              ) : (
-                <XCircle className="h-8 w-8 text-destructive" />
-              )}
+              {data.is_compliant
+                ? <CheckCircle2 className="h-8 w-8 text-green-500" />
+                : <XCircle className="h-8 w-8 text-destructive" />}
               <div>
                 <p className="font-semibold text-lg">
-                  {data.is_compliant
-                    ? "全部合規"
-                    : `${data.breach_flags.length} 項守則違規`}
+                  {data.is_compliant ? "全部合規" : `${data.breach_flags.length} 項守則違規`}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  {data.fund_id} · {data.as_of_date} · 總 NAV HKD{" "}
+                  {data.fund_id} · {String(data.as_of_date)} · 總 NAV HKD{" "}
                   {(data.total_nav_hkd / 1e8).toFixed(2)} 億
                 </p>
                 {!data.is_compliant && (
@@ -202,7 +156,6 @@ function CompliancePage() {
             </CardContent>
           </Card>
 
-          {/* 逐條守則 */}
           <Card>
             <CardHeader>
               <CardTitle className="text-base">第 8.2 章守則逐項核查</CardTitle>

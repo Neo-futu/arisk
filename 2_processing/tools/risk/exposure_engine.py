@@ -1,4 +1,15 @@
-"""暴露分析引擎：計算組合的各維度暴露及 MMF 合規指標。"""
+"""暴露分析引擎 — 對齊 fsi schema 實際表結構。
+
+數據來源：
+  balance_portfolio_nav   → NAV（net_asset）
+  balance_portfolio_mmf   → WAM / WAL（預計算，直接讀取）
+  balance_portfolio_asset → 資產類別佔比
+  balance_bond            → 債券持倉（DLA/WLA 計算）
+  balance_cd              → 存款證持倉
+  balance_deposit         → 定期存款持倉
+  balance_repo            → 回購持倉
+  balance_cash            → 現金持倉
+"""
 from __future__ import annotations
 
 import logging
@@ -6,22 +17,18 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from sqlalchemy import text
-from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
 # SFC 《單位信託及互惠基金守則》第 8.2 章閾值
-MMF_WAM_LIMIT_DAYS = 60
-MMF_WAL_LIMIT_DAYS = 120
-MMF_MAX_MATURITY_DAYS = 397
+MMF_WAM_LIMIT_DAYS       = 60
+MMF_WAL_LIMIT_DAYS       = 120
 MMF_DAILY_LIQUID_MIN_PCT = 7.5
 MMF_WEEKLY_LIQUID_MIN_PCT = 15.0
-MMF_SINGLE_ENTITY_MAX_PCT = 10.0        # 一般上限
-MMF_SINGLE_ENTITY_SFI_PCT = 25.0        # 重要財務機構上限
-MMF_GROUP_MAX_PCT = 20.0
-MMF_ABS_MAX_PCT = 15.0                  # 資產抵押證券上限
-MMF_GOVBOND_SAME_ISSUE_PCT = 30.0
+MMF_SINGLE_ENTITY_MAX_PCT = 10.0
+MMF_GROUP_MAX_PCT        = 20.0
+MMF_ABS_MAX_PCT          = 15.0
 
 
 @dataclass
@@ -48,128 +55,187 @@ async def compute_exposure(
     as_of_date: date,
     db: AsyncSession,
 ) -> ExposureResult:
-    """計算指定日期的持倉暴露指標。"""
+    """從 fsi schema 實際持倉表計算暴露指標。"""
     result = ExposureResult(fund_id=fund_id, as_of_date=as_of_date)
+    p = {"fid": fund_id, "dt": as_of_date}
 
-    try:
-        rows = await db.execute(
-            text("""
-                SELECT
-                    asset_id, asset_type, issuer_id, issuer_name, issuer_group,
-                    currency, market_value_hkd, weight_pct,
-                    maturity_date, asset_type IN ('DEPOSIT','CD') AS is_deposit,
-                    CASE
-                        WHEN maturity_date IS NULL THEN NULL
-                        ELSE (maturity_date - :dt)
-                    END AS days_to_maturity
-                FROM fsi.positions
-                WHERE fund_id = :fid AND as_of_date = :dt
-            """),
-            {"fid": fund_id, "dt": as_of_date},
-        )
-        positions = rows.fetchall()
-    except ProgrammingError:
-        await db.rollback()
-        rows = await db.execute(
-            text("""
-                SELECT
-                    subject_code AS asset_id,
-                    subject_code AS asset_type,
-                    NULL::text AS issuer_id,
-                    subject_name AS issuer_name,
-                    NULL::text AS issuer_group,
-                    currency,
-                    market_value AS market_value_hkd,
-                    weight_pct,
-                    NULL::date AS maturity_date,
-                    FALSE AS is_deposit,
-                    0 AS days_to_maturity
-                FROM fsi.balance_valuation_sheet
-                WHERE port_id = :fid AND evaluate_date = :dt
-            """),
-            {"fid": fund_id, "dt": as_of_date},
-        )
-        positions = rows.fetchall()
+    # ── 1. NAV ────────────────────────────────────────────────────────
+    nav_row = (await db.execute(
+        text("""
+            SELECT net_asset
+            FROM fsi.balance_portfolio_nav
+            WHERE port_id = :fid AND evaluate_date = :dt AND class_id IS NULL
+        """), p,
+    )).fetchone()
 
-    if not positions:
-        logger.warning("No positions found for %s on %s", fund_id, as_of_date)
+    if not nav_row or not nav_row.net_asset:
+        logger.warning("No NAV found for %s on %s", fund_id, as_of_date)
         return result
 
-    total_nav = float(sum(float(p.market_value_hkd or 0) for p in positions))
-    result.total_nav_hkd = total_nav
+    result.total_nav_hkd = float(nav_row.net_asset)
+    nav = result.total_nav_hkd
 
-    # WAM / WAL（以剩餘天數加權）
-    wam_numerator = 0.0
-    wal_numerator = 0.0
-    daily_liquid = 0.0
-    weekly_liquid = 0.0
+    # ── 2. WAM / WAL（balance_portfolio_mmf 預計算值） ────────────────
+    mmf_row = (await db.execute(
+        text("""
+            SELECT wam_days, wal_days
+            FROM fsi.balance_portfolio_mmf
+            WHERE port_id = :fid AND evaluate_date = :dt
+        """), p,
+    )).fetchone()
 
-    for p in positions:
-        mv = float(p.market_value_hkd or 0)
-        w = mv / total_nav if total_nav > 0 else 0
-        days = float(p.days_to_maturity or 0)
+    if mmf_row:
+        result.wam_days = float(mmf_row.wam_days or 0)
+        result.wal_days = float(mmf_row.wal_days or 0)
 
-        wam_numerator += w * min(days, 397)
-        wal_numerator += w * days
+    # ── 3. 資產配置（balance_portfolio_asset） ────────────────────────
+    asset_rows = (await db.execute(
+        text("""
+            SELECT asset_class::text, market_value
+            FROM fsi.balance_portfolio_asset
+            WHERE port_id = :fid AND evaluate_date = :dt
+        """), p,
+    )).fetchall()
 
-        if days <= 1:
-            daily_liquid += mv
-        if days <= 5:
-            weekly_liquid += mv
+    for row in asset_rows:
+        mv = float(row.market_value or 0)
+        result.by_asset_type[row.asset_class] = mv
 
-        # 分組彙總
-        result.by_asset_type[p.asset_type] = result.by_asset_type.get(p.asset_type, 0) + mv
-        issuer_key = p.issuer_name or p.issuer_id or "UNKNOWN"
-        result.by_issuer[issuer_key] = result.by_issuer.get(issuer_key, 0) + mv
-        group_key = p.issuer_group or issuer_key
-        result.by_group[group_key] = result.by_group.get(group_key, 0) + mv
-        result.by_currency[p.currency] = result.by_currency.get(p.currency, 0) + mv
-        bucket = _maturity_bucket(days)
-        result.by_maturity_bucket[bucket] = result.by_maturity_bucket.get(bucket, 0) + mv
+    # ── 4. 現金 ───────────────────────────────────────────────────────
+    cash_row = (await db.execute(
+        text("""
+            SELECT COALESCE(SUM(amount_base_ccy), SUM(amount), 0) AS cash
+            FROM fsi.balance_cash
+            WHERE port_id = :fid AND evaluate_date = :dt
+        """), p,
+    )).fetchone()
+    cash = float(cash_row.cash or 0) if cash_row else 0.0
 
-    result.wam_days = wam_numerator
-    result.wal_days = wal_numerator
-    result.daily_liquid_pct = daily_liquid / total_nav * 100 if total_nav > 0 else 0
-    result.weekly_liquid_pct = weekly_liquid / total_nav * 100 if total_nav > 0 else 0
+    # ── 5. 流動性計算（DLA/WLA，對齊 44_sfc_compliance.sql） ──────────
+    # DLA = 現金 + T+1 到期政府債 + T+1 CD + 隔夜存款 + T+1 逆回購
+    dla_govbond = float((await db.execute(text("""
+        SELECT COALESCE(SUM(market_value), 0) AS v
+        FROM fsi.balance_bond
+        WHERE port_id = :fid AND evaluate_date = :dt
+          AND asset_subtype = 'BOND_GOVT' AND maturity_date <= :dt + INTERVAL '1 day'
+    """), p)).scalar() or 0)
 
-    # 合規檢查
-    result.breach_flags = _check_mmf_compliance(result, total_nav)
+    dla_cd = float((await db.execute(text("""
+        SELECT COALESCE(SUM(market_value), 0) AS v
+        FROM fsi.balance_cd
+        WHERE port_id = :fid AND evaluate_date = :dt AND maturity_date <= :dt + INTERVAL '1 day'
+    """), p)).scalar() or 0)
+
+    dla_deposit = float((await db.execute(text("""
+        SELECT COALESCE(SUM(principal), 0) AS v
+        FROM fsi.balance_deposit
+        WHERE port_id = :fid AND evaluate_date = :dt
+          AND (is_overnight = TRUE OR maturity_date <= :dt + INTERVAL '1 day')
+    """), p)).scalar() or 0)
+
+    dla_revrepo = float((await db.execute(text("""
+        SELECT COALESCE(SUM(principal), 0) AS v
+        FROM fsi.balance_repo
+        WHERE port_id = :fid AND evaluate_date = :dt
+          AND repo_type = 'REV_REPO'
+          AND COALESCE(actual_maturity_date, maturity_date) <= :dt + INTERVAL '1 day'
+    """), p)).scalar() or 0)
+
+    # WLA = 現金 + T+5 到期政府債 + T+5 CD + T+5 存款 + T+5 逆回購 + T+5 信用債
+    wla_govbond = float((await db.execute(text("""
+        SELECT COALESCE(SUM(market_value), 0) AS v
+        FROM fsi.balance_bond
+        WHERE port_id = :fid AND evaluate_date = :dt
+          AND asset_subtype = 'BOND_GOVT' AND maturity_date <= :dt + INTERVAL '5 days'
+    """), p)).scalar() or 0)
+
+    wla_cd = float((await db.execute(text("""
+        SELECT COALESCE(SUM(market_value), 0) AS v
+        FROM fsi.balance_cd
+        WHERE port_id = :fid AND evaluate_date = :dt AND maturity_date <= :dt + INTERVAL '5 days'
+    """), p)).scalar() or 0)
+
+    wla_deposit = float((await db.execute(text("""
+        SELECT COALESCE(SUM(principal), 0) AS v
+        FROM fsi.balance_deposit
+        WHERE port_id = :fid AND evaluate_date = :dt
+          AND (is_overnight = TRUE OR maturity_date <= :dt + INTERVAL '5 days')
+    """), p)).scalar() or 0)
+
+    wla_revrepo = float((await db.execute(text("""
+        SELECT COALESCE(SUM(principal), 0) AS v
+        FROM fsi.balance_repo
+        WHERE port_id = :fid AND evaluate_date = :dt
+          AND repo_type = 'REV_REPO'
+          AND COALESCE(actual_maturity_date, maturity_date) <= :dt + INTERVAL '5 days'
+    """), p)).scalar() or 0)
+
+    wla_corpbond = float((await db.execute(text("""
+        SELECT COALESCE(SUM(market_value), 0) AS v
+        FROM fsi.balance_bond
+        WHERE port_id = :fid AND evaluate_date = :dt
+          AND asset_subtype != 'BOND_GOVT' AND maturity_date <= :dt + INTERVAL '5 days'
+    """), p)).scalar() or 0)
+
+    dla = cash + dla_govbond + dla_cd + dla_deposit + dla_revrepo
+    wla = cash + wla_govbond + wla_cd + wla_deposit + wla_revrepo + wla_corpbond
+
+    result.daily_liquid_pct  = dla / nav * 100 if nav > 0 else 0.0
+    result.weekly_liquid_pct = wla / nav * 100 if nav > 0 else 0.0
+
+    # ── 6. 發行人集中度（Bond + CD + Deposit 合并） ────────────────────
+    issuer_rows = (await db.execute(text("""
+        SELECT issuer_name, issuer_group, COALESCE(SUM(mv), 0) AS total_mv
+        FROM (
+            SELECT COALESCE(issuer_name, issuer_id, 'UNKNOWN') AS issuer_name,
+                   COALESCE(issuer_group, issuer_name, 'UNKNOWN') AS issuer_group,
+                   market_value AS mv
+            FROM fsi.balance_bond
+            WHERE port_id = :fid AND evaluate_date = :dt AND quantity > 0
+
+            UNION ALL
+            SELECT COALESCE(issuer_name, issuer_id, 'UNKNOWN'),
+                   COALESCE(issuer_group, issuer_name, 'UNKNOWN'),
+                   COALESCE(market_value, 0)
+            FROM fsi.balance_cd
+            WHERE port_id = :fid AND evaluate_date = :dt
+
+            UNION ALL
+            SELECT COALESCE(bank_name, bank_id, 'UNKNOWN'),
+                   COALESCE(bank_group, bank_name, 'UNKNOWN'),
+                   COALESCE(total_value, principal, 0)
+            FROM fsi.balance_deposit
+            WHERE port_id = :fid AND evaluate_date = :dt
+        ) t
+        GROUP BY issuer_name, issuer_group
+        ORDER BY total_mv DESC
+        LIMIT 20
+    """), p)).fetchall()
+
+    for row in issuer_rows:
+        mv = float(row.total_mv or 0)
+        result.by_issuer[row.issuer_name] = mv
+        result.by_group[row.issuer_group] = result.by_group.get(row.issuer_group, 0) + mv
+
+    # ── 7. 合規檢查 ────────────────────────────────────────────────────
+    result.breach_flags = _check_mmf_compliance(result, nav)
     result.is_compliant = not any(result.breach_flags.values())
     return result
 
 
-def _maturity_bucket(days: int | float) -> str:
-    if days <= 1:
-        return "ON/1D"
-    elif days <= 7:
-        return "2-7D"
-    elif days <= 30:
-        return "8-30D"
-    elif days <= 90:
-        return "31-90D"
-    elif days <= 180:
-        return "91-180D"
-    elif days <= 397:
-        return "181-397D"
-    else:
-        return ">397D"
-
-
-def _check_mmf_compliance(result: ExposureResult, total_nav: float) -> dict[str, bool]:
+def _check_mmf_compliance(result: ExposureResult, nav: float) -> dict[str, bool]:
     flags: dict[str, bool] = {}
-    flags["WAM_BREACH"] = result.wam_days > MMF_WAM_LIMIT_DAYS
-    flags["WAL_BREACH"] = result.wal_days > MMF_WAL_LIMIT_DAYS
-    flags["DAILY_LIQUID_BREACH"] = result.daily_liquid_pct < MMF_DAILY_LIQUID_MIN_PCT
+    flags["WAM_BREACH"]           = result.wam_days > MMF_WAM_LIMIT_DAYS
+    flags["WAL_BREACH"]           = result.wal_days > MMF_WAL_LIMIT_DAYS
+    flags["DAILY_LIQUID_BREACH"]  = result.daily_liquid_pct < MMF_DAILY_LIQUID_MIN_PCT
     flags["WEEKLY_LIQUID_BREACH"] = result.weekly_liquid_pct < MMF_WEEKLY_LIQUID_MIN_PCT
 
-    if total_nav > 0:
-        max_issuer_pct = max(
-            (v / total_nav * 100 for v in result.by_issuer.values()), default=0
-        )
-        max_group_pct = max(
-            (v / total_nav * 100 for v in result.by_group.values()), default=0
-        )
-        flags["SINGLE_ENTITY_BREACH"] = max_issuer_pct > MMF_SINGLE_ENTITY_MAX_PCT
-        flags["GROUP_BREACH"] = max_group_pct > MMF_GROUP_MAX_PCT
+    if nav > 0 and result.by_issuer:
+        max_issuer = max(v / nav * 100 for v in result.by_issuer.values())
+        max_group  = max(v / nav * 100 for v in result.by_group.values())
+        if max_issuer > MMF_SINGLE_ENTITY_MAX_PCT:
+            flags["SINGLE_ENTITY_BREACH"] = True
+        if max_group > MMF_GROUP_MAX_PCT:
+            flags["GROUP_BREACH"] = True
 
     return {k: v for k, v in flags.items() if v}

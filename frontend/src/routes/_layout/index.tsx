@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { AlertTriangle, CheckCircle2, TrendingDown, Waves } from "lucide-react"
+import { AlertTriangle, CheckCircle2, RefreshCw, TrendingDown, Waves } from "lucide-react"
 import { useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { DatePicker } from "@/components/DatePicker"
 import {
   Select,
   SelectContent,
@@ -219,48 +221,70 @@ function ExposureDashboard({ data }: { data: ExposureResult }) {
 function Dashboard() {
   const { user } = useAuth()
   const [fundId, setFundId] = useState(DEMO_FUNDS[0].id)
-  const [asOfDate] = useState(lastTradeDate)
+  const [asOfDate, setAsOfDate] = useState(lastTradeDate)
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ["exposure", fundId, asOfDate],
     queryFn: () => fsiApi.getExposure(fundId, asOfDate).then((r) => r.data),
+    staleTime: 0,      // 每次切換日期/基金都重新請求
+    gcTime: 0,         // 不緩存舊結果
     retry: 1,
   })
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">風控儀表板</h1>
           <p className="text-muted-foreground text-sm">
             歡迎，{user?.full_name || user?.email} · 估值日期：{asOfDate}
           </p>
         </div>
-        <Select value={fundId} onValueChange={setFundId}>
-          <SelectTrigger className="w-56">
-            <SelectValue placeholder="選擇基金" />
-          </SelectTrigger>
-          <SelectContent>
-            {DEMO_FUNDS.map((f) => (
-              <SelectItem key={f.id} value={f.id}>
-                {f.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex flex-wrap items-center gap-3">
+          <Select value={fundId} onValueChange={setFundId}>
+            <SelectTrigger className="w-56">
+              <SelectValue placeholder="選擇基金" />
+            </SelectTrigger>
+            <SelectContent>
+              {DEMO_FUNDS.map((f) => (
+                <SelectItem key={f.id} value={f.id}>
+                  {f.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <DatePicker value={asOfDate} onChange={setAsOfDate} />
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            title="重新加載"
+          >
+            <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
+          </Button>
+        </div>
       </div>
 
-      {isLoading && (
-        <p className="text-muted-foreground text-sm">載入中...</p>
+      {isFetching && (
+        <p className="text-muted-foreground text-sm animate-pulse">載入中...</p>
       )}
       {isError && (
         <Card className="border-destructive">
           <CardContent className="pt-4 text-sm text-destructive">
-            無法載入風控數據。請確認 Processing API 已啟動（port 8001）。
+            API 請求失敗。請確認 Processing API（port 8001）和 Backend（port 8000）均已啟動。
           </CardContent>
         </Card>
       )}
-      {data && <ExposureDashboard data={data} />}
+      {data && data.total_nav_hkd === 0 && !isFetching && (
+        <Card className="border-yellow-500/50">
+          <CardContent className="pt-4 text-sm text-yellow-600">
+            查無數據：基金 <b>{fundId}</b> 在 <b>{asOfDate}</b> 無 NAV 記錄。
+            請確認日期和基金 ID 與數據庫一致，或點擊重新加載。
+          </CardContent>
+        </Card>
+      )}
+      {data && data.total_nav_hkd > 0 && <ExposureDashboard data={data} />}
     </div>
   )
 }
