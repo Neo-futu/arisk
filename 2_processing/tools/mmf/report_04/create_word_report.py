@@ -8,7 +8,7 @@ sys.stdout.reconfigure(encoding='utf-8')
 from datetime import date
 from pathlib import Path
 
-SQL_MMF    = Path(__file__).parent.parent.parent / "sql" / "mmf"
+SQL_MMF    = Path(__file__).parent.parent.parent.parent / "sql" / "mmf"
 OUTPUT_DIR = SQL_MMF / 'output' / 'report_04_mmf_monthly'
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -703,26 +703,50 @@ def process_one(json_path: Path):
     build_word(data, pie_path, bar_path, out)
 
 
+PORT_ID_MAP = {
+    "BHMMF001": "博匯港元貨幣市場基金I",
+    "BHMMF002": "博匯港元貨幣市場基金II",
+}
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--data', default=None)
-    ap.add_argument('--date', default=None)
-    ap.add_argument('--all',  action='store_true')
+    ap.add_argument('--data',    default=None, help='指定單個 outputdata.json 文件路徑')
+    ap.add_argument('--date',    default=None, help='按日期過濾（YYYY-MM-DD）')
+    ap.add_argument('--all',     action='store_true')
+    ap.add_argument('--port-id', default=None, dest='port_id',
+                    help='僅處理指定基金（如 BHMMF001），精確匹配，避免 I/II 混淆')
     args = ap.parse_args()
 
-    if args.data:   json_files = [Path(args.data)]
-    elif args.all or args.date:
-        pat = f'outputdata_{args.date.replace("-","")}_*.json' if args.date else 'outputdata_*.json'
-        json_files = sorted(OUTPUT_DIR.glob(pat))
+    if args.data:
+        json_files = [Path(args.data)]
     else:
-        json_files = sorted(OUTPUT_DIR.glob('outputdata_*.json'))
-        json_files = [json_files[-1]] if json_files else []
+        pat = f'outputdata_{args.date.replace("-","")}_*.json' if args.date else 'outputdata_*.json'
+        all_files = sorted(OUTPUT_DIR.glob(pat))
+        if args.port_id:
+            fund_name = PORT_ID_MAP.get(args.port_id, "")
+            # 精確匹配：文件名必須包含完整基金名，且下一字符不是中文字（避免 I 命中 II）
+            json_files = [
+                f for f in all_files
+                if fund_name and (
+                    f.stem.endswith(fund_name) or
+                    f'_{fund_name}_' in f.stem or
+                    f.stem.endswith(fund_name.replace(' ', '_'))
+                )
+            ]
+        elif args.all or args.date:
+            json_files = all_files
+        else:
+            json_files = [all_files[-1]] if all_files else []
 
-    if not json_files: print('✗ 找不到 outputdata 文件'); return
+    if not json_files:
+        print('✗ 找不到 outputdata 文件')
+        return
     print(f'[create_word_report] 處理 {len(json_files)} 個文件')
     for jf in json_files:
         print(f'  讀取：{jf.name}')
         process_one(jf)
+
 
 if __name__ == '__main__':
     main()

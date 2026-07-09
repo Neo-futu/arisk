@@ -107,6 +107,57 @@ export interface AgentTaskStatus {
   error?: string
 }
 
+// ── 定時報表 ─────────────────────────────────────────────────────
+export interface Schedule {
+  schedule_id: string
+  name: string
+  report_id: string
+  report_name: string
+  fund_id: string
+  fund_name: string
+  hour: number
+  minute: number
+  enabled: boolean
+  run_count: number
+  last_run: string | null
+  last_status: "completed" | "failed" | null
+  created_at: string
+}
+
+export interface ScheduleHistory {
+  run_id: string
+  schedule_id: string
+  report_id: string
+  fund_id: string
+  as_of_date: string
+  status: "completed" | "failed"
+  output_file: string | null
+  message: string
+  started_at: string
+  finished_at: string
+}
+
+export interface ScheduleFile {
+  filename: string
+  size_kb: number
+  modified: string
+}
+
+// ── 報表生成 ────────────────────────────────────────────────────
+export interface ReportTask {
+  task_id: string
+  report_id: string
+  fund_id: string
+  as_of_date: string
+  status: "queued" | "running" | "completed" | "failed"
+  progress: number
+  message: string
+  output_file: string | null          // 主文件（兼容舊版）
+  output_files?: string[]             // 全部文件：xlsx + docx + pdf
+  created_at: string
+  finished_at: string | null
+}
+
 export interface AgentChatResponse {
   reply: string
   model: string
@@ -114,6 +165,25 @@ export interface AgentChatResponse {
 
 export interface AgentVarSkillResponse extends VarCompareResult {
   summary: string
+}
+
+// ── Chat 持久化 ───────────────────────────────────────────────────
+export interface ChatSessionRecord {
+  id:         string
+  title:      string
+  agent_id:   string
+  model_id:   string
+  created_at: string
+  updated_at: string
+}
+
+export interface ChatMessageRecord {
+  id:         string
+  session_id: string
+  role:       "user" | "assistant"
+  content:    string
+  tool_calls: string   // JSON string
+  created_at: string
 }
 
 // ── API 調用 ──────────────────────────────────────────────────────
@@ -201,6 +271,83 @@ export const fsiApi = {
     )
   },
 
+  // ── 定時報表 API ──────────────────────────────────────────────
+  listSchedules() {
+    return axios.get<Schedule[]>(`${BASE}/api/v1/fsi/schedules/`, { headers: authHeaders() })
+  },
+  createSchedule(data: { name: string; report_id: string; fund_id: string; hour: number; minute: number; enabled: boolean }) {
+    return axios.post<Schedule>(`${BASE}/api/v1/fsi/schedules/`, data, { headers: authHeaders() })
+  },
+  updateSchedule(scheduleId: string, data: Partial<Schedule>) {
+    return axios.patch<Schedule>(`${BASE}/api/v1/fsi/schedules/${scheduleId}`, data, { headers: authHeaders() })
+  },
+  deleteSchedule(scheduleId: string) {
+    return axios.delete(`${BASE}/api/v1/fsi/schedules/${scheduleId}`, { headers: authHeaders() })
+  },
+  runScheduleNow(scheduleId: string) {
+    return axios.post(`${BASE}/api/v1/fsi/schedules/${scheduleId}/run-now`, {}, { headers: authHeaders() })
+  },
+  getScheduleHistory(scheduleId: string) {
+    return axios.get<ScheduleHistory[]>(`${BASE}/api/v1/fsi/schedules/${scheduleId}/history`, { headers: authHeaders() })
+  },
+  getScheduleFiles(scheduleId: string) {
+    return axios.get<ScheduleFile[]>(`${BASE}/api/v1/fsi/schedules/${scheduleId}/files`, { headers: authHeaders() })
+  },
+  async downloadScheduleFile(scheduleId: string, filename: string): Promise<void> {
+    const resp = await axios.get(
+      `${BASE}/api/v1/fsi/schedules/${scheduleId}/download/${encodeURIComponent(filename)}`,
+      { headers: authHeaders(), responseType: "blob" },
+    )
+    const url = URL.createObjectURL(new Blob([resp.data]))
+    const a = document.createElement("a"); a.href = url; a.download = filename; a.click()
+    URL.revokeObjectURL(url)
+  },
+
+  /** 查詢已生成文件（頁面刷新後恢復，無需任務 ID） */
+  getReportResult(reportId: string, fundId: string, asOfDate: string) {
+    return axios.get<{
+      found: boolean
+      output_files: string[]
+      report_id: string
+      fund_id: string
+      as_of_date: string
+    }>(
+      `${BASE}/api/v1/fsi/reports/result/${reportId}`,
+      { params: { fund_id: fundId, as_of_date: asOfDate }, headers: authHeaders() },
+    )
+  },
+
+  /** 觸發報表生成任務 */
+  generateReport(reportId: string, fundId: string, asOfDate: string) {
+    return axios.post<ReportTask>(
+      `${BASE}/api/v1/fsi/reports/generate`,
+      { report_id: reportId, fund_id: fundId, as_of_date: asOfDate },
+      { headers: authHeaders() },
+    )
+  },
+
+  /** 查詢任務進度 */
+  getReportTask(taskId: string) {
+    return axios.get<ReportTask>(
+      `${BASE}/api/v1/fsi/reports/tasks/${taskId}`,
+      { headers: authHeaders() },
+    )
+  },
+
+  /** 下載報表文件（axios blob → 觸發瀏覽器另存） */
+  async downloadReport(reportId: string, filename: string): Promise<void> {
+    const resp = await axios.get(
+      `${BASE}/api/v1/fsi/reports/download/${reportId}/${encodeURIComponent(filename)}`,
+      { headers: authHeaders(), responseType: "blob" },
+    )
+    const url = URL.createObjectURL(new Blob([resp.data]))
+    const a = document.createElement("a")
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+  },
+
   getAgentVarSkill(
     fundId: string,
     asOfDate: string,
@@ -217,5 +364,94 @@ export const fsiApi = {
       },
       { headers: authHeaders() },
     )
+  },
+
+  // ── Agent V2 API（SSE 流式 + tool_use） ──────────────────────────
+
+  /** 可用 Agent 列表 */
+  listAgents() {
+    return axios.get<Array<{ id: string; name: string }>>(
+      `${BASE}/api/v1/fsi/agent/v2/agents`,
+      { headers: authHeaders() },
+    )
+  },
+
+  /** 支持的模型列表（含 Provider 和默認標記） */
+  listModels() {
+    return axios.get<Array<{
+      id: string
+      label: string
+      provider: "anthropic" | "openai" | "gemini" | "moonshot" | "deepseek" | "openrouter"
+      default: boolean
+    }>>(
+      `${BASE}/api/v1/fsi/agent/v2/models`,
+      { headers: authHeaders() },
+    )
+  },
+
+  /** Agent V2 非流式 chat */
+  chatV2(message: string, agent: string, context?: { fund_id?: string; as_of_date?: string }) {
+    return axios.post<{ reply: string; agent: string; tool_calls: unknown[] }>(
+      `${BASE}/api/v1/fsi/agent/v2/chat`,
+      { message, agent, context },
+      { headers: authHeaders() },
+    )
+  },
+
+  // ── Chat 歷史 API ────────────────────────────────────────────────
+
+  listChatSessions() {
+    return axios.get<ChatSessionRecord[]>(`${BASE}/api/v1/chat/sessions`, { headers: authHeaders() })
+  },
+
+  createChatSession(data: { title?: string; agent_id?: string; model_id?: string }) {
+    return axios.post<ChatSessionRecord>(`${BASE}/api/v1/chat/sessions`, data, { headers: authHeaders() })
+  },
+
+  updateChatSession(id: string, data: { title?: string; agent_id?: string; model_id?: string }) {
+    return axios.patch<ChatSessionRecord>(`${BASE}/api/v1/chat/sessions/${id}`, data, { headers: authHeaders() })
+  },
+
+  deleteChatSession(id: string) {
+    return axios.delete(`${BASE}/api/v1/chat/sessions/${id}`, { headers: authHeaders() })
+  },
+
+  getChatMessages(sessionId: string) {
+    return axios.get<ChatMessageRecord[]>(`${BASE}/api/v1/chat/sessions/${sessionId}/messages`, { headers: authHeaders() })
+  },
+
+  saveChatMessages(sessionId: string, messages: Array<{ role: string; content: string; tool_calls?: unknown[] }>) {
+    return axios.post<ChatMessageRecord[]>(
+      `${BASE}/api/v1/chat/sessions/${sessionId}/messages`,
+      { messages },
+      { headers: authHeaders() },
+    )
+  },
+
+  /**
+   * Agent V2 SSE 流式對話（主要接口）。
+   *
+   * 返回原始 Response，由調用方使用 ReadableStream 處理 SSE 事件。
+   * SSE 事件格式：{"type":"text"|"tool_call"|"tool_result"|"done"|"error", ...}
+   *
+   * 使用示例：
+   *   const res = await fsiApi.streamAgentChat(messages, "risk-analyst", ctx)
+   *   const reader = res.body!.getReader()
+   */
+  async streamAgentChat(
+    messages: Array<{ role: string; content: string }>,
+    agent: string,
+    context?: { fund_id?: string; as_of_date?: string },
+    model?: string,
+  ): Promise<Response> {
+    const token = localStorage.getItem("access_token") ?? ""
+    return fetch(`${BASE}/api/v1/fsi/agent/v2/stream`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ messages, agent, context, model }),
+    })
   },
 }

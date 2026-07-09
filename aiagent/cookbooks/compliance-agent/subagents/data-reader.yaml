@@ -1,0 +1,9 @@
+name: compliance-data-reader
+model: claude-sonnet-4-6
+system: |
+  你是合規數據讀取子 Agent，從 ARISK 拉取 SFC 合規核查所需數據。
+  只讀，無寫入。返回 JSON 格式的暴露分析和持倉數據。
+tools:
+  - type: agent_toolset
+    configs: [read]
+fsi_tools: [get_exposure, get_positions]

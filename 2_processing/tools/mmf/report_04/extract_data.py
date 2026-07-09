@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.stdout.reconfigure(encoding='utf-8')
 
-SQL_MMF    = Path(__file__).parent.parent.parent / "sql" / "mmf"
+SQL_MMF    = Path(__file__).parent.parent.parent.parent / "sql" / "mmf"
 OUTPUT_DIR = SQL_MMF / 'output' / 'report_04_mmf_monthly'
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -66,14 +66,27 @@ class MmfDataExtractor:
     def _format_date(value):
         return value.isoformat() if hasattr(value, 'isoformat') else str(value)
 
-    def get_active_funds(self, fund_name=None):
+    def get_active_funds(self, fund_name: str | None = None, port_id: str | None = None):
+        """
+        port_id 優先：直接查 port_id = %s（精確匹配，避免 BHMMF001/BHMMF002 混淆）。
+        fund_name 降級：用精確 = 匹配，不再用 in（子串匹配會讓「基金I」誤匹配「基金II」）。
+        """
+        if port_id:
+            sql = (
+                'SELECT p.port_name FROM fsi.para_portfolio p '
+                'WHERE p.port_id = %s AND p.is_mmf=TRUE AND p.is_active=TRUE'
+            )
+            with self._conn() as conn:
+                return [row['port_name'] for row in self._query(conn, sql, (port_id,))]
+
         sql = (
             'SELECT p.port_name FROM fsi.para_portfolio p '
             'WHERE p.is_mmf=TRUE AND p.is_active=TRUE ORDER BY p.port_name'
         )
         with self._conn() as conn:
             funds = [row['port_name'] for row in self._query(conn, sql)]
-        return [name for name in funds if fund_name in name] if fund_name else funds
+        # 精確匹配（= 而非 in），解決「基金I」子串命中「基金II」的 bug
+        return [name for name in funds if name == fund_name] if fund_name else funds
 
     def extract(self, fund_name: str, ev: date) -> dict:
         d = ev.isoformat()
@@ -338,29 +351,80 @@ class MmfDataExtractor:
         return out_path
 
 
+# port_id → 基金全名映射（避免 shell 中文傳參編碼問題）
+PORT_ID_MAP: dict[str, str] = {
+    "BHMMF001": "博匯港元貨幣市場基金I",
+    "BHMMF002": "博匯港元貨幣市場基金II",
+}
+
+
+def _placeholder_data(fund_name: str, ev: date) -> dict:
+    """無數據時返回佔位結構，確保 PDF/Word 管道繼續執行（字段顯示 —）。"""
+    return {
+        "fund_name":          fund_name,
+        "base_currency":      "HKD",
+        "eval_date":          ev.isoformat(),
+        "nav_millions":       0.0,
+        "wam_days":           0.0,
+        "wal_days":           0.0,
+        "ytm_pct":            0.0,
+        "investment_manager": "博匯投資管理有限公司",
+        "trustee":            "博匯保誠信託有限公司",
+        "custodian":          "中國銀行（香港）有限公司",
+        "nav_classes":        [],
+        "performance":        {},
+        "annual_performance": [],
+        "asset_allocation":   [],
+        "maturity_dist":      [],
+        "_empty_data":        True,
+    }
+
+
 def main():
     ap = argparse.ArgumentParser(description='MMF 月報資料提取 → outputdata.json')
-    ap.add_argument('--date', default=date.today().isoformat(), help='估值日期 YYYY-MM-DD')
-    ap.add_argument('--fund', default=None, help='基金名稱（缺省=全部 MMF）')
+    ap.add_argument('--date',    default=date.today().isoformat(), help='估值日期 YYYY-MM-DD')
+    ap.add_argument('--fund',    default=None, help='基金名稱（缺省=全部 MMF）')
+    ap.add_argument('--port-id', default=None, dest='port_id',
+                    help='基金 port_id（ASCII，避免 shell 編碼問題，如 BHMMF001）')
     args = ap.parse_args()
     ev = date.fromisoformat(args.date)
 
     extractor = MmfDataExtractor()
-    funds = extractor.get_active_funds(args.fund)
+
+    # port_id 優先（ASCII，避免 Windows shell 中文傳參問題；精確匹配避免 I/II 混淆）
+    if args.port_id:
+        if args.port_id not in PORT_ID_MAP:
+            print(f'⚠ 未知 port_id：{args.port_id}，將提取全部 MMF 基金')
+        funds = extractor.get_active_funds(port_id=args.port_id)
+    elif args.fund:
+        funds = extractor.get_active_funds(fund_name=args.fund)
+    else:
+        funds = extractor.get_active_funds()
     if not funds:
-        print('✗ 找不到符合條件的基金')
+        # 有 port_id 但 DB 沒有匹配基金 → 用佔位名生成空 JSON，確保 PDF/Word 管道繼續
+        fallback_name = fund_filter or "MMF基金"
+        print(f'⚠ 找不到符合條件的基金（{fund_filter}），使用空白佔位數據繼續生成...')
+        data = _placeholder_data(fallback_name, ev)
+        out = extractor.save_output(data, ev, fallback_name)
+        print(f'  → 佔位文件：{out.name}')
         return
 
-    print(f'[extract_data] 估值日期：{ev}')
+    print(f'[extract_data] 估值日期：{ev}  基金數：{len(funds)}')
     for fund_name in funds:
         print(f'  提取：{fund_name} ...', end='', flush=True)
         try:
             data = extractor.extract(fund_name, ev)
+            # 如果關鍵數據為空（該日期無 NAV），補充佔位結構
+            if not data.get('nav_millions') and not data.get('asset_allocation'):
+                print(' ⚠ 無數據，使用空白佔位', end='')
+                data = _placeholder_data(fund_name, ev)
             out = extractor.save_output(data, ev, fund_name)
             print(f' ✅  →  {out.name}')
         except Exception as exc:
-            print(f'\n  ✗ {exc}')
-            import traceback; traceback.print_exc()
+            print(f'\n  ⚠ {exc}，使用空白佔位')
+            data = _placeholder_data(fund_name, ev)
+            out = extractor.save_output(data, ev, fund_name)
+            print(f'  → 佔位文件：{out.name}')
 
 
 if __name__ == '__main__':

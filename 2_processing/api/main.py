@@ -6,13 +6,17 @@ from datetime import date
 
 from fastapi import Depends, FastAPI, HTTPException, Security
 from fastapi.security import APIKeyHeader
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .deps import get_db, verify_api_key
-from .routers import op_logs, positions, review, risk
+from .routers import op_logs, positions, reports, review, risk, schedules
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 在 ASGI worker 進程的生命週期內啟動調度器（避免 uvicorn reload 雙進程問題）
+    from .routers.schedules import start_scheduler
+    start_scheduler()
     yield
 
 app = FastAPI(
@@ -24,6 +28,8 @@ app = FastAPI(
 
 app.include_router(positions.router, prefix="/positions", tags=["持倉"])
 app.include_router(risk.router,      prefix="/risk",      tags=["風控"])
+app.include_router(reports.router,   prefix="/reports",   tags=["報表生成"])
+app.include_router(schedules.router, prefix="/schedules", tags=["定時報表"])
 app.include_router(review.router,    prefix="/review",    tags=["人工審核"])
 app.include_router(op_logs.router,   prefix="/op-logs",   tags=["操作日誌"])
 
@@ -31,3 +37,23 @@ app.include_router(op_logs.router,   prefix="/op-logs",   tags=["操作日誌"])
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/context", dependencies=[Depends(verify_api_key)])
+async def get_system_context(db: AsyncSession = Depends(get_db)):
+    """返回系統上下文：在管基金列表 + 當前日期。供 Agent 動態獲取基礎信息。"""
+    funds = []
+    try:
+        rows = await db.execute(text(
+            "SELECT port_id, port_name FROM fsi.para_portfolio "
+            "WHERE is_active = TRUE ORDER BY port_id"
+        ))
+        funds = [{"fund_id": r[0], "fund_name": r[1]} for r in rows.fetchall()]
+    except Exception:
+        await db.rollback()
+
+    return {
+        "current_date": date.today().isoformat(),
+        "funds": funds,
+        "note": "fund_id 用於所有工具調用的 fund_id 參數",
+    }

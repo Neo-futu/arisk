@@ -1,0 +1,13 @@
+# 風控計算子 Agent — 計算分析，無寫入
+name: risk-calculator
+model: claude-sonnet-4-6
+system: |
+  你是風控計算子 Agent，基於 data-reader 提供的數據進行風控指標計算：
+  WAM/WAL、VaR、SFC 合規核查、集中度分析。
+  輸出計算結果 JSON，供 report-writer 格式化輸出。
+tools:
+  - type: agent_toolset
+    configs: [read]
+fsi_tools:
+  - get_var
+  - get_var_compare

@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  CalendarClock,
   FileText,
   Home,
   List,
@@ -38,8 +39,9 @@ const fsiItems: NavItem[] = [
   { icon: Home, title: "儀表板", path: "/" },
   { icon: BarChart3, title: "風控分析", path: "/risk" },
   { icon: List, title: "持倉明細", path: "/positions" },
-  { icon: Shield, title: "SFC 合規", path: "/compliance" },
-  { icon: FileText, title: "報表中心", path: "/reports" },
+  { icon: Shield, title: "合規核查", path: "/compliance" },
+  { icon: FileText,     title: "報表中心", path: "/reports" },
+  { icon: CalendarClock, title: "定時任務", path: "/schedules" },
   { icon: MessageSquare, title: "Agent Chat", path: "/chat" },
 ]
 

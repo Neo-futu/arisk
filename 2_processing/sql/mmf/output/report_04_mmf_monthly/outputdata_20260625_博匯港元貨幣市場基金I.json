@@ -2,83 +2,17 @@
   "fund_name": "博匯港元貨幣市場基金I",
   "base_currency": "HKD",
   "eval_date": "2026-06-25",
-  "nav_millions": 2704.5,
-  "wam_days": 52.0,
-  "wal_days": 68.0,
-  "ytm_pct": 2.7066,
+  "nav_millions": 0.0,
+  "wam_days": 0.0,
+  "wal_days": 0.0,
+  "ytm_pct": 0.0,
   "investment_manager": "博匯投資管理有限公司",
   "trustee": "博匯保誠信託有限公司",
   "custodian": "中國銀行（香港）有限公司",
-  "nav_classes": [
-    {
-      "class_id": "Base",
-      "nav_per_unit": 1.0,
-      "issue_date": "2026-06-25"
-    }
-  ],
-  "performance": {
-    "ret_1m": null,
-    "ret_3m": null,
-    "ret_6m": null,
-    "ret_1y": null,
-    "ret_since_inception": 0.0,
-    "ret_ann_since_inception": 0.0,
-    "ret_7d_ann": 4.32,
-    "inception_date": "2026-06-23"
-  },
+  "nav_classes": [],
+  "performance": {},
   "annual_performance": [],
-  "asset_allocation": [
-    {
-      "asset_class": "BOND_GOVT",
-      "label": "政府/公共債券",
-      "pct_of_nav": 28.0
-    },
-    {
-      "asset_class": "CD",
-      "label": "同業存單",
-      "pct_of_nav": 22.0
-    },
-    {
-      "asset_class": "DEPOSIT",
-      "label": "定期存款",
-      "pct_of_nav": 18.0
-    },
-    {
-      "asset_class": "BOND_CORP",
-      "label": "企業債券",
-      "pct_of_nav": 15.0
-    },
-    {
-      "asset_class": "REV_REPO",
-      "label": "REV_REPO",
-      "pct_of_nav": 10.0
-    },
-    {
-      "asset_class": "CASH",
-      "label": "現金及等價物",
-      "pct_of_nav": 7.0
-    }
-  ],
-  "maturity_dist": [
-    {
-      "bucket": "1天以內",
-      "pct_of_nav": 4.81
-    },
-    {
-      "bucket": "2-7天",
-      "pct_of_nav": 3.7
-    },
-    {
-      "bucket": "31-60天",
-      "pct_of_nav": 7.39
-    },
-    {
-      "bucket": "91-180天",
-      "pct_of_nav": 5.73
-    },
-    {
-      "bucket": "超365天",
-      "pct_of_nav": 2.28
-    }
-  ]
+  "asset_allocation": [],
+  "maturity_dist": [],
+  "_empty_data": true
 }

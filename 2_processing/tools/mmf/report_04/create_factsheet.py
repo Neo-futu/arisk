@@ -12,7 +12,7 @@ sys.stdout.reconfigure(encoding='utf-8')
 from datetime import date, timedelta
 from pathlib import Path
 
-SQL_MMF     = Path(__file__).parent.parent.parent / "sql" / "mmf"
+SQL_MMF     = Path(__file__).parent.parent.parent.parent / "sql" / "mmf"
 LAYOUT_FILE = SQL_MMF / 'report_04_mmf_monthly' / 'ref_layout.json'
 OUTPUT_DIR  = SQL_MMF / 'output' / 'report_04_mmf_monthly'
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -330,32 +330,41 @@ def build_pdf(data: dict, layout: dict, out_path: Path):
 # ══════════════════════════════════════════════════════════
 # 入口：讀取 outputdata.json 生成 PDF
 # ══════════════════════════════════════════════════════════
+PORT_ID_MAP = {
+    "BHMMF001": "博匯港元貨幣市場基金I",
+    "BHMMF002": "博匯港元貨幣市場基金II",
+}
+
+
 def main():
     ap = argparse.ArgumentParser(description='讀取 outputdata.json → 生成 Factsheet PDF')
-    ap.add_argument('--data', required=False, default=None,
+    ap.add_argument('--data',    required=False, default=None,
                     help='outputdata JSON 文件路徑（缺省=output 目錄中最新的）')
-    ap.add_argument('--date', default=None, help='估值日期（搭配 --all 使用）')
-    ap.add_argument('--all', action='store_true', help='處理 output 目錄中所有 outputdata 文件')
+    ap.add_argument('--date',    default=None, help='估值日期（搭配 --all 使用）')
+    ap.add_argument('--all',     action='store_true', help='處理 output 目錄中所有 outputdata 文件')
+    ap.add_argument('--port-id', default=None, dest='port_id',
+                    help='僅處理指定基金（如 BHMMF001），精確匹配，避免 I/II 混淆')
     args = ap.parse_args()
 
     if not LAYOUT_FILE.exists():
         print(f'✗ 找不到 PDF 模版：{LAYOUT_FILE}'); return
     layout = json.load(open(LAYOUT_FILE, encoding='utf-8'))
 
-    # 決定要處理哪些 JSON 文件
     if args.data:
         json_files = [Path(args.data)]
-    elif args.all or args.date:
+    else:
         pattern = f'outputdata_{args.date.replace("-","")}_*.json' if args.date else 'outputdata_*.json'
-        json_files = sorted(OUTPUT_DIR.glob(pattern))
+        all_files = sorted(OUTPUT_DIR.glob(pattern))
+        if args.port_id:
+            fund_name = PORT_ID_MAP.get(args.port_id, "")
+            json_files = [f for f in all_files if fund_name and f.stem.endswith(fund_name)]
+        elif args.all or args.date:
+            json_files = all_files
+        else:
+            json_files = [all_files[-1]] if all_files else []
+
         if not json_files:
             print(f'✗ 找不到符合條件的 outputdata 文件（{OUTPUT_DIR}/{pattern}）'); return
-    else:
-        # 缺省：取最新的
-        json_files = sorted(OUTPUT_DIR.glob('outputdata_*.json'))
-        if not json_files:
-            print('✗ 找不到 outputdata 文件，請先執行 extract_data.py'); return
-        json_files = [json_files[-1]]   # 最新
 
     print(f'[create_factsheet] 處理 {len(json_files)} 個文件')
     for jf in json_files:

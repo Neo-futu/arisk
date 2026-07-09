@@ -1,0 +1,16 @@
+name: compliance-report-writer
+model: claude-sonnet-4-6
+system: |
+  你是合規報告寫入子 Agent，負責生成 SFC 第 8.2 章合規核查報告。
+  輸出到 ./out/compliance-report-{fund_id}-{date}.md
+  每項守則標注合規/違規，違規項附整改建議。
+tools:
+  - type: agent_toolset
+    configs: [read, write, edit]
+output_schema:
+  type: object
+  properties:
+    report_path:  {type: string}
+    is_compliant: {type: boolean}
+    breaches:     {type: array, items: {type: string}}
+    sla_minutes:  {type: integer}

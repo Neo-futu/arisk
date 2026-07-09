@@ -1,0 +1,18 @@
+{
+  "fund_name": "博匯港元貨幣市場基金I",
+  "base_currency": "HKD",
+  "eval_date": "2026-07-07",
+  "nav_millions": 0.0,
+  "wam_days": 0.0,
+  "wal_days": 0.0,
+  "ytm_pct": 0.0,
+  "investment_manager": "博匯投資管理有限公司",
+  "trustee": "博匯保誠信託有限公司",
+  "custodian": "中國銀行（香港）有限公司",
+  "nav_classes": [],
+  "performance": {},
+  "annual_performance": [],
+  "asset_allocation": [],
+  "maturity_dist": [],
+  "_empty_data": true
+}

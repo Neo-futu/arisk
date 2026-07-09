@@ -1,0 +1,39 @@
+# ARISK 風控 Agent — Managed Agent 部署範本
+# 整合自 claude-risk-agent/managed-agent-cookbooks 模式
+# 部署方式：Anthropic Managed Agents API（claude beta）或 ARISK 本地執行引擎
+#
+# 架構：三子 Agent（最小權限原則）
+#   data-reader    — 只讀，拉取 processing API 數據
+#   risk-calculator — 計算 VaR/暴露，無寫入
+#   report-writer  — 唯一擁有輸出寫入的子 Agent
+
+name: arisk-risk-agent
+model: claude-sonnet-4-6
+
+system:
+  file: ../../agents/risk-analyst.md
+  append: |
+    你正在 headless 模式下運行。通過 callable_agents 委派子任務。
+    最終輸出報告到 ./out/ 目錄（由 report-writer 子 Agent 生成）。
+
+tools:
+  - type: agent_toolset
+    configs: [read, grep, glob]
+
+# FSI 數據工具（代替 claude-risk-agent 的 MCP 服務器）
+# 本地部署時通過 aiagent/engine/tools.py 提供
+fsi_tools:
+  - get_exposure
+  - get_var
+  - get_var_compare
+  - get_positions
+  - get_nav_history
+  - sector_overview
+
+skills:
+  - from_plugin: ../../agents/risk-analyst.md
+
+callable_agents:
+  - manifest: ./subagents/data-reader.yaml
+  - manifest: ./subagents/risk-calculator.yaml
+  - manifest: ./subagents/report-writer.yaml   # 唯一有寫入權的葉節點

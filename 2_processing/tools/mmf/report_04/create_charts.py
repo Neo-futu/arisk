@@ -10,7 +10,7 @@ import sys, os, json, argparse
 sys.stdout.reconfigure(encoding='utf-8')
 from pathlib import Path
 
-SQL_MMF    = Path(__file__).parent.parent.parent / "sql" / "mmf"
+SQL_MMF    = Path(__file__).parent.parent.parent.parent / "sql" / "mmf"
 OUTPUT_DIR = SQL_MMF / 'output' / 'report_04_mmf_monthly'
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -151,20 +151,35 @@ class MmfChartGenerator:
         return results
 
 
+PORT_ID_MAP = {
+    "BHMMF001": "博匯港元貨幣市場基金I",
+    "BHMMF002": "博匯港元貨幣市場基金II",
+}
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--data', default=None)
-    ap.add_argument('--all', action='store_true')
+    ap.add_argument('--data',    default=None, help='指定單個 outputdata.json 文件路徑')
+    ap.add_argument('--date',    default=None, help='按估值日期過濾（YYYY-MM-DD）')
+    ap.add_argument('--all',     action='store_true', help='處理所有 outputdata 文件')
+    ap.add_argument('--port-id', default=None, dest='port_id',
+                    help='僅處理指定 port_id 的基金（如 BHMMF001），配合 --all 使用')
     args = ap.parse_args()
 
     generator = MmfChartGenerator()
+
     if args.data:
         json_files = [Path(args.data)]
-    elif args.all:
-        json_files = sorted(generator.output_dir.glob('outputdata_*.json'))
     else:
-        json_files = sorted(generator.output_dir.glob('outputdata_*.json'))
-        json_files = [json_files[-1]] if json_files else []
+        pat = f'outputdata_{args.date.replace("-","")}_*.json' if args.date else 'outputdata_*.json'
+        all_files = sorted(generator.output_dir.glob(pat))
+        if args.port_id:
+            fund_name = PORT_ID_MAP.get(args.port_id, "")
+            json_files = [f for f in all_files if fund_name and f.stem.endswith(fund_name)]
+        elif args.all or args.date:
+            json_files = all_files
+        else:
+            json_files = [all_files[-1]] if all_files else []
 
     if not json_files:
         print('✗ 找不到 outputdata 文件')
