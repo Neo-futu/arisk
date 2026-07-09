@@ -10,9 +10,23 @@ import ReactDOM from "react-dom/client"
 import { ApiError, OpenAPI } from "./client"
 import { ThemeProvider } from "./components/theme-provider"
 import { Toaster } from "./components/ui/sonner"
+import { logger } from "./lib/logger"
 import "./index.css"
 import "react-day-picker/style.css"
 import { routeTree } from "./routeTree.gen"
+
+// ── 全局錯誤追蹤 ─────────────────────────────────────────────────
+window.addEventListener("error", (ev) => {
+  logger.error("window", "uncaught_error", {
+    message:  ev.message,
+    filename: ev.filename,
+    lineno:   ev.lineno,
+    colno:    ev.colno,
+  })
+})
+window.addEventListener("unhandledrejection", (ev) => {
+  logger.error("window", "unhandled_rejection", { reason: String(ev.reason) })
+})
 
 OpenAPI.BASE = import.meta.env.VITE_API_URL
 OpenAPI.TOKEN = async () => {

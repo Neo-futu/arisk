@@ -290,6 +290,9 @@ export const fsiApi = {
   getScheduleHistory(scheduleId: string) {
     return axios.get<ScheduleHistory[]>(`${BASE}/api/v1/fsi/schedules/${scheduleId}/history`, { headers: authHeaders() })
   },
+  deleteScheduleHistory(runId: string) {
+    return axios.delete(`${BASE}/api/v1/fsi/schedules/history/${runId}`, { headers: authHeaders() })
+  },
   getScheduleFiles(scheduleId: string) {
     return axios.get<ScheduleFile[]>(`${BASE}/api/v1/fsi/schedules/${scheduleId}/files`, { headers: authHeaders() })
   },

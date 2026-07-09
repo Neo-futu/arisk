@@ -394,6 +394,17 @@ def get_all_history(limit: int = 100):
     return _load_history()[:limit]
 
 
+@router.delete("/history/{run_id}", summary="刪除單條歷史記錄")
+def delete_history_entry(run_id: str):
+    with _lock:
+        hist = _load_history()
+        filtered = [h for h in hist if h.get("run_id") != run_id]
+        if len(filtered) == len(hist):
+            raise HTTPException(404, f"歷史記錄不存在：{run_id}")
+        _save_history(filtered)
+    return {"deleted": run_id}
+
+
 @router.get("/{schedule_id}/history", summary="查詢單個任務歷史")
 def get_schedule_history(schedule_id: str, limit: int = 50):
     hist = _load_history()

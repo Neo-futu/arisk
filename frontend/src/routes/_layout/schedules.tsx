@@ -31,19 +31,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Switch } from "@/components/ui/switch"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { fsiApi, type Schedule, type ScheduleHistory, type ScheduleFile } from "@/fsiClient"
+import { fsiApi, type Schedule } from "@/fsiClient"
 
 export const Route = createFileRoute("/_layout/schedules")({
   component: SchedulesPage,
-  head: () => ({ meta: [{ title: "定時報表 — ARISK" }] }),
+  head: () => ({ meta: [{ title: "定時任務 — ARISK" }] }),
 })
 
 // ── 常量 ─────────────────────────────────────────────────────────
@@ -204,6 +196,11 @@ function ScheduleDetail({ schedule }: { schedule: Schedule }) {
 
   const [downloading, setDownloading] = useState<string | null>(null)
 
+  const deleteHistoryMut = useMutation({
+    mutationFn: (runId: string) => fsiApi.deleteScheduleHistory(runId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["schedule-history", schedule.schedule_id] }),
+  })
+
   const download = async (filename: string) => {
     setDownloading(filename)
     try { await fsiApi.downloadScheduleFile(schedule.schedule_id, filename) }
@@ -226,14 +223,23 @@ function ScheduleDetail({ schedule }: { schedule: Schedule }) {
             : (
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {history.map(h => (
-                  <div key={h.run_id} className="flex items-start gap-2 text-xs border-b pb-2 last:border-0">
+                  <div key={h.run_id} className="flex items-start gap-2 text-xs border-b pb-2 last:border-0 group">
                     {h.status === "completed"
                       ? <CheckCircle2 className="h-3.5 w-3.5 text-green-500 mt-0.5 shrink-0" />
                       : <XCircle className="h-3.5 w-3.5 text-destructive mt-0.5 shrink-0" />}
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <div className="text-muted-foreground">{fmtDate(h.started_at)}</div>
-                      <div className="truncate">{h.message}</div>
+                      <div className={h.status === "failed" ? "text-destructive/80 break-all" : "truncate"}>
+                        {h.message}
+                      </div>
                     </div>
+                    <button
+                      className="invisible group-hover:visible shrink-0 rounded p-0.5 text-muted-foreground hover:text-destructive transition-colors"
+                      title="刪除此記錄"
+                      onClick={() => deleteHistoryMut.mutate(h.run_id)}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -331,7 +337,7 @@ function SchedulesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">定時報表</h1>
+          <h1 className="text-2xl font-bold tracking-tight">定時任務</h1>
           <p className="text-muted-foreground text-sm">
             設置報表自動生成任務，每天指定時間執行，結果存儲於 artefacts/scheduled/
           </p>
