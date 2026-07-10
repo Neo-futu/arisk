@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from .routers import agent_mode, agent_v2, direct_query, op_logs_ui, review_ui
+from .routers import agent_mode, agent_v2, direct_query, op_logs_ui, platform_v1, review_ui
 
 CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(",")
 
@@ -33,8 +33,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Agent V2：SSE 流式 + tool_use + 多 Agent（整合 aiagent 模塊）
-app.include_router(agent_v2.router, prefix="/agent/v2", tags=["Agent V2"])
+# Agent V2：SSE 流式 + tool_use + 多 Agent（整合 aiagent 模塊）— 業務用戶
+app.include_router(agent_v2.router, prefix="/agent/v2", tags=["Agent V2 — Business"])
+
+# Platform Agent：開發工具 Agent — 僅開發者使用
+app.include_router(platform_v1.router, prefix="/platform/v1", tags=["Platform Agent — Developer"])
 
 # Agent V1（兼容舊版）
 app.include_router(agent_mode.router, prefix="/agent", tags=["Agent V1"])

@@ -124,6 +124,7 @@ async def _run_anthropic(
     system: str,
     model: str,
     stream_callback,
+    extra_tools: list[dict] | None = None,
 ) -> None:
     """Anthropic Claude tool_use 循環。"""
     try:
@@ -147,6 +148,7 @@ async def _run_anthropic(
     client = _anthropic.Anthropic(api_key=key)
     working_messages = list(messages)
     loop_count = 0
+    effective_tools = extra_tools if extra_tools else TOOLS
 
     while loop_count < MAX_TOOL_LOOPS:
         loop_count += 1
@@ -155,7 +157,7 @@ async def _run_anthropic(
                 model=model,
                 system=system,
                 messages=working_messages,
-                tools=TOOLS,
+                tools=effective_tools,
                 max_tokens=4096,
             )
         except Exception as exc:
@@ -212,6 +214,7 @@ async def _run_openai(
     base_url: str | None = None,
     api_key_env: str = "OPENAI_API_KEY",
     provider_label: str = "OpenAI",
+    extra_tools: list[dict] | None = None,
 ) -> None:
     """
     OpenAI-compatible API function_calling 循環。
@@ -239,7 +242,7 @@ async def _run_openai(
     oai_messages = [{"role": "system", "content": system}] + [
         {"role": m["role"], "content": m["content"]} for m in messages
     ]
-    oai_tools = _tools_for_openai(TOOLS)
+    oai_tools = _tools_for_openai(extra_tools if extra_tools else TOOLS)
     loop_count = 0
 
     while loop_count < MAX_TOOL_LOOPS:
@@ -438,68 +441,235 @@ def load_agent_prompt(agent_name: str) -> str:
     return agent_prompt
 
 
+async def _load_user_custom_tools(user_id: str) -> list[dict]:
+    """
+    從 iam.user_custom_tool 加載用戶個人工具，
+    動態追加到 LLM 的 tool_use 聲明中。
+    """
+    try:
+        import asyncpg
+        import json as _json
+        db_url = os.getenv("DATABASE_URL") or (
+            f"postgresql://{os.getenv('POSTGRES_USER','postgres')}:"
+            f"{os.getenv('POSTGRES_PASSWORD','postgres')}@"
+            f"{os.getenv('POSTGRES_SERVER','localhost')}:"
+            f"{os.getenv('POSTGRES_PORT','5432')}/"
+            f"{os.getenv('POSTGRES_DB','fsi_risk')}"
+        )
+        conn = await asyncpg.connect(db_url)
+        rows = await conn.fetch(
+            """SELECT tool_name, display_name, description, endpoint, method, parameters
+               FROM iam.user_custom_tool
+               WHERE user_id = $1::uuid AND enabled = true
+               ORDER BY created_at""",
+            user_id,
+        )
+        await conn.close()
+        tools = []
+        for r in rows:
+            try:
+                params = _json.loads(r["parameters"] or "{}")
+            except Exception:
+                params = {}
+            tools.append({
+                "name":         r["tool_name"],
+                "description":  f"[用戶自定義工具] {r['display_name']}: {r['description']}",
+                "input_schema": params if params.get("type") == "object" else {
+                    "type": "object", "properties": params, "required": []
+                },
+                "_user_tool":   True,
+                "_endpoint":    r["endpoint"],
+                "_method":      r["method"],
+            })
+        return tools
+    except Exception as exc:
+        logger.debug("[runner] load_user_custom_tools failed: %s", exc)
+        return []
+
+
+async def _load_user_agent_config(user_id: str) -> dict:
+    """
+    從 iam.user_agent_config 加載用戶專屬 Agent 配置。
+    不存在或 DB 不可用時返回空 dict（使用系統默認值）。
+    """
+    try:
+        import asyncpg
+        db_url = os.getenv("DATABASE_URL") or (
+            f"postgresql://{os.getenv('POSTGRES_USER','postgres')}:"
+            f"{os.getenv('POSTGRES_PASSWORD','postgres')}@"
+            f"{os.getenv('POSTGRES_SERVER','localhost')}:"
+            f"{os.getenv('POSTGRES_PORT','5432')}/"
+            f"{os.getenv('POSTGRES_DB','fsi_risk')}"
+        )
+        conn = await asyncpg.connect(db_url)
+        row = await conn.fetchrow(
+            """SELECT default_agent_id, default_model_id, custom_instructions,
+                      tools_enabled, memory_enabled, rag_enabled, max_context_turns,
+                      agent_name
+               FROM iam.user_agent_config WHERE user_id = $1::uuid""",
+            user_id,
+        )
+        await conn.close()
+        return dict(row) if row else {}
+    except Exception as exc:
+        logger.debug("[runner] load_user_agent_config failed: %s", exc)
+        return {}
+
+
+async def _summarize_messages(messages: list[dict]) -> str:
+    """用於 ContextManager.maybe_compress 的摘要函數（注入給上下文管理器）。"""
+    key = os.getenv("ANTHROPIC_API_KEY", "")
+    if not key:
+        # 無 API Key 時降級：拼接前幾條
+        snippets = [f"{m['role']}: {m['content'][:100]}" for m in messages[:5]]
+        return "（歷史摘要）" + " | ".join(snippets)
+    try:
+        import anthropic as _anthropic
+        client = _anthropic.Anthropic(api_key=key)
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            system="請將以下對話歷史壓縮為簡潔摘要（200字以內），保留關鍵數據和結論。",
+            messages=[{"role": "user", "content": str(messages)}],
+            max_tokens=300,
+        )
+        return resp.content[0].text if resp.content else ""
+    except Exception as exc:
+        logger.warning("[runner] summarize_messages failed: %s", exc)
+        return ""
+
+
 async def run_agent(
     messages: list[dict],
     agent_name: str,
     context: dict | None = None,
     jwt_token: str | None = None,
     model: str | None = None,
+    session_id: str | None = None,
+    user_id: str | None = None,
 ) -> AsyncIterator[dict]:
     """
     多模型 tool_use 執行循環（async generator）。
 
+    Layer 整合：
+      Layer 1 (Brain):  多模型 ReAct 循環 + 用戶自定義指令注入
+      Layer 2 (Memory): ContextManager 滑動窗口 + 摘要壓縮；結束後保存情景記憶
+      Layer 3 (Tools):  execute_tool 工具調用（含 knowledge_search）
+
     model 參數優先級：
       1. 調用方顯式傳入
-      2. 環境變量 ANTHROPIC_MODEL
-      3. 默認 claude-sonnet-4-6
+      2. 用戶個人配置 default_model_id（iam.user_agent_config）
+      3. 環境變量 ANTHROPIC_MODEL
+      4. 默認 claude-sonnet-4-6
     """
-    selected_model = model or DEFAULT_MODEL
+    # ── 加載用戶專屬 Agent 配置 ──────────────────────────────────
+    user_cfg: dict = {}
+    if user_id:
+        user_cfg = await _load_user_agent_config(user_id)
+
+    # model 優先級：調用方 > 用戶配置 > 環境變量 > 默認
+    selected_model = model or user_cfg.get("default_model_id") or DEFAULT_MODEL
     provider = detect_provider(selected_model)
 
+    # ── Layer 2: 上下文管理（短期記憶）────────────────────────────
+    try:
+        from aiagent.memory.context_manager import ContextManager
+        cm = ContextManager(session_id=session_id)
+        for m in messages:
+            cm.add(m["role"], m["content"])
+        await cm.maybe_compress(_summarize_messages)
+        working_messages = cm.get_messages()
+    except Exception:
+        working_messages = messages   # 降級：直接使用原始消息
+
     system = load_agent_prompt(agent_name)
+
+    # ── 注入用戶自定義指令（Layer 1 個人化） ─────────────────────
+    custom_instr = user_cfg.get("custom_instructions", "")
+    if custom_instr:
+        system = f"【用戶個人指令】\n{custom_instr}\n\n{system}"
+
     if context:
         ctx_lines = []
         if context.get("fund_id"):    ctx_lines.append(f"當前基金：{context['fund_id']}")
         if context.get("as_of_date"): ctx_lines.append(f"估值日期：{context['as_of_date']}")
+        if context.get("_plan"):      ctx_lines.append(context["_plan"])
         if ctx_lines:
             system = "【查詢上下文】\n" + "\n".join(ctx_lines) + "\n\n" + system
 
+    # ── 加載用戶個人工具（動態擴展 tool_use） ────────────────────
+    user_custom_tools: list[dict] = []
+    if user_id and user_cfg.get("tools_enabled") != '["none"]':
+        user_custom_tools = await _load_user_custom_tools(user_id)
+
     events: list[dict] = []
+    tool_calls_used: list[dict] = []
 
     async def _collect(event: dict) -> None:
         events.append(event)
+        if event.get("type") == "tool_call":
+            tool_calls_used.append({"name": event.get("name"), "input": event.get("input")})
 
     # 根據 Provider 路由
     model_info = SUPPORTED_MODELS.get(selected_model, {})
     base_url   = model_info.get("base_url")
 
+    # 合并系統工具 + 用戶個人工具（過濾掉內部字段 _user_tool/_endpoint/_method）
+    all_tools = TOOLS + [
+        {k: v for k, v in t.items() if not k.startswith("_")}
+        for t in user_custom_tools
+    ]
+
     if provider == "openai":
-        await _run_openai(messages, system, selected_model, _collect)
+        await _run_openai(working_messages, system, selected_model, _collect, extra_tools=all_tools)
     elif provider == "gemini":
-        await _run_gemini(messages, system, selected_model, _collect)
+        await _run_gemini(working_messages, system, selected_model, _collect)
     elif provider == "moonshot":
         await _run_openai(
-            messages, system, selected_model, _collect,
+            working_messages, system, selected_model, _collect,
             base_url=base_url or "https://api.moonshot.cn/v1",
             api_key_env="MOONSHOT_API_KEY",
             provider_label="Kimi（Moonshot）",
+            extra_tools=all_tools,
         )
     elif provider == "deepseek":
         await _run_openai(
-            messages, system, selected_model, _collect,
+            working_messages, system, selected_model, _collect,
             base_url=base_url or "https://api.deepseek.com/v1",
             api_key_env="DEEPSEEK_API_KEY",
             provider_label="DeepSeek",
+            extra_tools=all_tools,
         )
     elif provider == "openrouter":
         await _run_openai(
-            messages, system, selected_model, _collect,
+            working_messages, system, selected_model, _collect,
             base_url=base_url or "https://openrouter.ai/api/v1",
             api_key_env="OPENROUTER_API_KEY",
             provider_label="OpenRouter xAI Grok",
+            extra_tools=all_tools,
         )
     else:
-        await _run_anthropic(messages, system, selected_model, _collect)
+        await _run_anthropic(working_messages, system, selected_model, _collect, extra_tools=all_tools)
+
+    # ── Layer 2: 保存情景記憶（成功完成時）────────────────────────
+    has_error = any(e.get("type") == "error" for e in events)
+    if not has_error and events and session_id:
+        text_parts = [e["content"] for e in events if e.get("type") == "text" and e.get("content")]
+        summary = " ".join(text_parts)[:500]
+        if summary and messages:
+            last_user = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
+            try:
+                from aiagent.memory.vector_store import save_episode
+                await save_episode(
+                    agent_id=agent_name,
+                    model_id=selected_model,
+                    query=last_user[:500],
+                    summary=summary,
+                    tool_calls=tool_calls_used,
+                    outcome="success",
+                    user_id=user_id,
+                )
+            except Exception as exc:
+                logger.debug("[runner] save_episode skipped: %s", exc)
 
     for event in events:
         yield event

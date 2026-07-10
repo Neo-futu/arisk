@@ -1,7 +1,16 @@
 import sentry_sdk
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
+from pathlib import Path
 from starlette.middleware.cors import CORSMiddleware
+
+# 把 .env 裡所有變量加載進 os.environ
+# pydantic-settings 只載入它聲明的字段，這裡補充其餘變量（如 LLM API Keys）
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).parent.parent.parent / ".env", override=False)
+except ImportError:
+    pass
 
 from app.api.main import api_router
 from app.core.config import settings

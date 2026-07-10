@@ -167,6 +167,32 @@ export interface AgentVarSkillResponse extends VarCompareResult {
   summary: string
 }
 
+// ── 用戶專屬 Agent 配置 ───────────────────────────────────────────
+export interface UserAgentConfig {
+  user_id:             string
+  agent_name:          string | null
+  default_agent_id:    string
+  default_model_id:    string
+  custom_instructions: string | null
+  tools_enabled:       string   // JSON array string
+  memory_enabled:      boolean
+  rag_enabled:         boolean
+  max_context_turns:   number
+  created_at:          string
+  updated_at:          string
+}
+
+export interface UserAgentConfigUpdate {
+  agent_name?:          string | null
+  default_agent_id?:    string
+  default_model_id?:    string
+  custom_instructions?: string | null
+  tools_enabled?:       string
+  memory_enabled?:      boolean
+  rag_enabled?:         boolean
+  max_context_turns?:   number
+}
+
 // ── Chat 持久化 ───────────────────────────────────────────────────
 export interface ChatSessionRecord {
   id:         string
@@ -401,6 +427,20 @@ export const fsiApi = {
     )
   },
 
+  // ── 用戶專屬 Agent 配置 API ──────────────────────────────────────
+
+  getMyAgentConfig() {
+    return axios.get<UserAgentConfig>(`${BASE}/api/v1/agent-config/me`, { headers: authHeaders() })
+  },
+
+  updateMyAgentConfig(data: UserAgentConfigUpdate) {
+    return axios.put<UserAgentConfig>(`${BASE}/api/v1/agent-config/me`, data, { headers: authHeaders() })
+  },
+
+  resetMyAgentConfig() {
+    return axios.delete<UserAgentConfig>(`${BASE}/api/v1/agent-config/me/reset`, { headers: authHeaders() })
+  },
+
   // ── Chat 歷史 API ────────────────────────────────────────────────
 
   listChatSessions() {
@@ -442,10 +482,12 @@ export const fsiApi = {
    *   const reader = res.body!.getReader()
    */
   async streamAgentChat(
-    messages: Array<{ role: string; content: string }>,
-    agent: string,
-    context?: { fund_id?: string; as_of_date?: string },
-    model?: string,
+    messages:   Array<{ role: string; content: string }>,
+    agent:      string,
+    context?:   { fund_id?: string; as_of_date?: string },
+    model?:     string,
+    sessionId?: string,
+    userId?:    string,
   ): Promise<Response> {
     const token = localStorage.getItem("access_token") ?? ""
     return fetch(`${BASE}/api/v1/fsi/agent/v2/stream`, {
@@ -454,7 +496,14 @@ export const fsiApi = {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ messages, agent, context, model }),
+      body: JSON.stringify({
+        messages,
+        agent,
+        context,
+        model,
+        session_id: sessionId,
+        user_id:    userId,
+      }),
     })
   },
 }

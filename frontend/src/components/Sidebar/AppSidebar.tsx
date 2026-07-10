@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  BookOpen,
   CalendarClock,
   FileText,
   Home,
@@ -43,6 +44,7 @@ const fsiItems: NavItem[] = [
   { icon: FileText,     title: "報表中心", path: "/reports" },
   { icon: CalendarClock, title: "定時任務", path: "/schedules" },
   { icon: MessageSquare, title: "Agent Chat", path: "/chat" },
+  { icon: BookOpen,      title: "專家知識庫", path: "/expert" },
 ]
 
 const adminItems: NavItem[] = [

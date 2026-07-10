@@ -1,7 +1,7 @@
 """前端日誌收集端點。
 
 接收瀏覽器端上報的日誌（用戶行為 / 操作 / 審計 / 錯誤），
-持久化到 iam.frontend_log 表，供後台審計和排障使用。
+持久化到 chatdb.frontend_log 表，供後台審計和排障使用。
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from app.api.deps import CurrentUser, SessionDep
-from app.models import IAM_SCHEMA
+from app.models import IAM_SCHEMA, CHAT_SCHEMA
 
 router = APIRouter()
 
@@ -67,7 +67,7 @@ def save_log_batch(
     if rows:
         session.exec(  # type: ignore[call-overload]
             text(f"""
-                INSERT INTO {IAM_SCHEMA}.frontend_log
+                INSERT INTO {CHAT_SCHEMA}.frontend_log
                     (id, user_id, log_type, level, module, action, detail, user_agent, url, created_at)
                 VALUES
                     (:id, :user_id, :log_type, :level, :module, :action, :detail, :user_agent, :url, :created_at)
@@ -102,7 +102,7 @@ def list_logs(
     rows = session.exec(  # type: ignore[call-overload]
         text(f"""
             SELECT id, user_id, log_type, level, module, action, detail, url, created_at
-            FROM {IAM_SCHEMA}.frontend_log
+            FROM {CHAT_SCHEMA}.frontend_log
             WHERE {' AND '.join(where)}
             ORDER BY created_at DESC
             LIMIT :limit

@@ -8,7 +8,8 @@ from sqlalchemy import DateTime
 from sqlmodel import Field, SQLModel
 
 
-IAM_SCHEMA = "iam"
+IAM_SCHEMA  = "iam"     # 用戶身份認證 + 用戶個人配置
+CHAT_SCHEMA = "chatdb"  # AI 對話數據 + 知識庫（獨立於業務數據）
 
 
 def get_datetime_utc() -> datetime:
@@ -242,7 +243,7 @@ class NewPassword(SQLModel):
 
 class ChatSession(SQLModel, table=True):
     __tablename__ = "chat_session"
-    __table_args__ = {"schema": IAM_SCHEMA}
+    __table_args__ = {"schema": CHAT_SCHEMA}
 
     id:         uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     user_id:    uuid.UUID = Field(foreign_key=f"{IAM_SCHEMA}.user.id")
@@ -255,10 +256,10 @@ class ChatSession(SQLModel, table=True):
 
 class ChatMessage(SQLModel, table=True):
     __tablename__ = "chat_message"
-    __table_args__ = {"schema": IAM_SCHEMA}
+    __table_args__ = {"schema": CHAT_SCHEMA}
 
     id:         uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    session_id: uuid.UUID = Field(foreign_key=f"{IAM_SCHEMA}.chat_session.id")
+    session_id: uuid.UUID = Field(foreign_key=f"{CHAT_SCHEMA}.chat_session.id")
     role:       str       = Field(max_length=20)
     content:    str       = Field(default="")
     tool_calls: str       = Field(default="[]")   # JSON string
@@ -299,3 +300,100 @@ class ChatMessagePublic(SQLModel):
 
 class ChatMessageBatch(SQLModel):
     messages: list[dict]   # [{role, content, tool_calls?}]
+
+
+# ── User Agent Config ──────────────────────────────────────────────
+
+class UserAgentConfig(SQLModel, table=True):
+    """每個用戶的專屬 AI Agent 配置（1:1 with User）。"""
+    __tablename__ = "user_agent_config"
+    __table_args__ = {"schema": IAM_SCHEMA}
+
+    user_id:             uuid.UUID = Field(foreign_key=f"{IAM_SCHEMA}.user.id", primary_key=True)
+    agent_name:          str | None = Field(default=None, max_length=100)      # 用戶為 Agent 起的名字
+    default_agent_id:    str        = Field(default="general", max_length=50)
+    default_model_id:    str        = Field(default="claude-sonnet-4-6", max_length=100)
+    custom_instructions: str | None = Field(default=None)                      # 注入 system prompt
+    tools_enabled:       str        = Field(default="[]")                      # JSON array
+    memory_enabled:      bool       = Field(default=True)
+    rag_enabled:         bool       = Field(default=True)
+    max_context_turns:   int        = Field(default=40)
+    created_at:          datetime   = Field(default_factory=get_datetime_utc)
+    updated_at:          datetime   = Field(default_factory=get_datetime_utc)
+
+
+class UserAgentConfigPublic(SQLModel):
+    user_id:             uuid.UUID
+    agent_name:          str | None
+    default_agent_id:    str
+    default_model_id:    str
+    custom_instructions: str | None
+    tools_enabled:       str
+    memory_enabled:      bool
+    rag_enabled:         bool
+    max_context_turns:   int
+    created_at:          datetime
+    updated_at:          datetime
+
+
+class UserAgentConfigUpdate(SQLModel):
+    agent_name:          str | None = None
+    default_agent_id:    str | None = None
+    default_model_id:    str | None = None
+    custom_instructions: str | None = None
+    tools_enabled:       str | None = None
+    memory_enabled:      bool | None = None
+    rag_enabled:         bool | None = None
+    max_context_turns:   int | None = None
+
+
+# ── User Custom Tool（用戶個人工具擴展）────────────────────────────
+
+class UserCustomTool(SQLModel, table=True):
+    """用戶為自己的 Chat Agent 定義的個人工具。"""
+    __tablename__ = "user_custom_tool"
+    __table_args__ = {"schema": IAM_SCHEMA}
+
+    id:           uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id:      uuid.UUID = Field(foreign_key=f"{IAM_SCHEMA}.user.id")
+    tool_name:    str       = Field(max_length=100)    # snake_case ID
+    display_name: str       = Field(max_length=200)
+    description:  str       = Field()                  # LLM 工具調用說明
+    endpoint:     str       = Field(max_length=500)    # HTTP endpoint
+    method:       str       = Field(default="GET", max_length=10)
+    parameters:   str       = Field(default="{}")      # JSON Schema string
+    enabled:      bool      = Field(default=True)
+    created_at:   datetime  = Field(default_factory=get_datetime_utc)
+    updated_at:   datetime  = Field(default_factory=get_datetime_utc)
+
+
+class UserCustomToolPublic(SQLModel):
+    id:           uuid.UUID
+    tool_name:    str
+    display_name: str
+    description:  str
+    endpoint:     str
+    method:       str
+    parameters:   str
+    enabled:      bool
+    created_at:   datetime
+    updated_at:   datetime
+
+
+class UserCustomToolCreate(SQLModel):
+    tool_name:    str
+    display_name: str
+    description:  str
+    endpoint:     str
+    method:       str = "GET"
+    parameters:   str = "{}"
+    enabled:      bool = True
+
+
+class UserCustomToolUpdate(SQLModel):
+    display_name: str  | None = None
+    description:  str  | None = None
+    endpoint:     str  | None = None
+    method:       str  | None = None
+    parameters:   str  | None = None
+    enabled:      bool | None = None

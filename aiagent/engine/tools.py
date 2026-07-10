@@ -168,6 +168,136 @@ TOOLS: list[dict] = [
             "required": ["topic"],
         },
     },
+    # ── Layer 2: 知識庫搜索（RAG） ───────────────────────────────────
+    {
+        "name": "knowledge_search",
+        "description": (
+            "從知識庫中搜索相關信息（支持中英文，自動 BM25+ILIKE 搜索）。\n"
+            "知識庫包含：SFC規例、基金文件、公司制度、專家上傳文檔、業務技能說明。\n"
+            "適用場景：\n"
+            "  • 查詢 SFC 守則具體條款\n"
+            "  • 搜索公司內部制度文件（如氣候風險管理、投資政策等）\n"
+            "  • 檢索業務技能知識\n"
+            "重要：不要指定 source 過濾，除非明確知道文檔來源類型，否則搜不到結果。\n"
+            "觸發詞：制度、守則、規定、條款、知識庫、參考文件"
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "搜索問題或關鍵詞（中英文均可，無需完全匹配）",
+                },
+                "source": {
+                    "type": "string",
+                    "description": (
+                        "可選：限定來源（skill_doc / agent_prompt / expert_chat / "
+                        "sfc_regulation / fund_doc / manual）。"
+                        "不確定時留空，搜索所有來源。"
+                    ),
+                },
+                "top_k": {
+                    "type": "integer",
+                    "description": "返回結果數量，默認 5，最大 10",
+                },
+            },
+            "required": ["query"],
+        },
+    },
+    # ── Layer 2+3: 技能執行工具（從 3_skills RAG 加載技能並指導執行） ──
+    {
+        "name": "execute_skill",
+        "description": (
+            "從 3_skills 知識庫加載指定業務技能的執行指南，"
+            "獲取技能的執行步驟、工具調用順序和輸出格式。\n"
+            "調用後，按返回的步驟依次調用相應業務工具完成任務。\n"
+            "可用技能：\n"
+            "  • mmf-compliance  — SFC 守則第8.2章合規核查\n"
+            "  • risk-analysis   — 風控指標全面分析（WAM/WAL/VaR/集中度）\n"
+            "  • var-analysis    — VaR 三方法詳細計算與對比\n"
+            "  • performance-report — 業績報告生成\n"
+            "  • human-review    — 人工審核流程\n"
+            "觸發詞：按技能執行、用XXX技能分析、complete skill、run skill"
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "skill_name": {
+                    "type": "string",
+                    "enum": ["mmf-compliance", "risk-analysis", "var-analysis",
+                             "performance-report", "human-review", "xlsx-report"],
+                    "description": "3_skills 中的技能名稱",
+                },
+                "fund_id": {
+                    "type": "string",
+                    "description": "基金 ID（執行時傳入，如 BHMMF001）",
+                },
+                "as_of_date": {
+                    "type": "string",
+                    "description": "估值日期 YYYY-MM-DD",
+                },
+            },
+            "required": ["skill_name"],
+        },
+    },
+    # ── Layer 3: 報表生成工具（AI → 2_processing 報表引擎） ──────────
+    {
+        "name": "generate_report",
+        "description": (
+            "觸發生成基金報表並返回任務狀態。支持三種報表類型：\n"
+            "  • report_03_mmf       — MMF 日報（SFC 合規版，Excel）\n"
+            "  • report_04_mmf_monthly — MMF 月報 Factsheet（Word）\n"
+            "  • report_06           — 基金詳細分析報告（Excel）\n"
+            "任務異步執行，返回 task_id 可供輪詢進度。\n"
+            "觸發詞：生成報告、生成報表、輸出報表、製作日報、製作月報"
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "report_id": {
+                    "type": "string",
+                    "enum": ["report_03_mmf", "report_04_mmf_monthly", "report_06"],
+                    "description": "報表類型 ID",
+                },
+                "fund_id": {
+                    "type": "string",
+                    "description": "基金 ID，如 BHMMF001",
+                },
+                "as_of_date": {
+                    "type": "string",
+                    "description": "報表日期 YYYY-MM-DD",
+                },
+            },
+            "required": ["report_id", "fund_id", "as_of_date"],
+        },
+    },
+    # ── Layer 3: 內部數據庫直查工具（AI → 4_mcp 內部 MCP） ──────────
+    {
+        "name": "query_internal_db",
+        "description": (
+            "直接查詢內部數據庫的原始數據，用於深度分析。\n"
+            "支持查詢類型：\n"
+            "  • fund_list      — 查詢所有在管基金列表\n"
+            "  • nav_history    — 查詢基金 NAV 歷史（需 fund_id + start_date + end_date）\n"
+            "  • risk_snapshot  — 查詢最新風控快照數據（需 fund_id）\n"
+            "  • var_series     — 查詢 VaR 歷史序列（需 fund_id + start_date）\n"
+            "觸發詞：原始數據、歷史序列、數據庫查詢、VAR趨勢、NAV走勢"
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query_type": {
+                    "type": "string",
+                    "enum": ["fund_list", "nav_history", "risk_snapshot", "var_series"],
+                    "description": "查詢類型",
+                },
+                "fund_id":    {"type": "string", "description": "基金 ID（多數查詢需要）"},
+                "start_date": {"type": "string", "description": "開始日期 YYYY-MM-DD"},
+                "end_date":   {"type": "string", "description": "結束日期 YYYY-MM-DD"},
+            },
+            "required": ["query_type"],
+        },
+    },
 ]
 
 
@@ -188,6 +318,22 @@ async def execute_tool(
     if name == "get_system_info":
         return await _execute_get_system_info()
 
+    if name == "knowledge_search":
+        return await _execute_knowledge_search(tool_input)
+
+    if name == "execute_skill":
+        return await _execute_skill(tool_input)
+
+    if name == "generate_report":
+        return await _execute_generate_report(tool_input)
+
+    if name == "query_internal_db":
+        return await _execute_query_internal_db(tool_input)
+
+    # 用戶自定義工具（動態 HTTP 調用）
+    if tool_input.get("_user_tool"):
+        return await _execute_user_custom_tool(name, tool_input)
+
     # sector_overview 是本地技能（SKILL.md），不調用外部 API
     if name == "sector_overview":
         return await _execute_sector_overview(tool_input)
@@ -199,6 +345,236 @@ async def execute_tool(
     except Exception as exc:
         logger.error("[tool] %s failed: %s", name, exc)
         return {"error": str(exc), "tool": name}
+
+
+async def _execute_skill(inp: dict) -> dict:
+    """
+    Layer 2+3 — 從 3_skills RAG 加載技能執行指南。
+
+    流程：
+      1. 從 fsi.knowledge_chunk 搜索技能名稱
+      2. 返回技能的執行步驟、工具調用清單、輸出格式
+      3. LLM 接收後按步驟依次調用業務工具完成任務
+
+    這是 3_skills → RAG → Chat Agent 工具執行 的關鍵橋樑。
+    """
+    skill_name = inp.get("skill_name", "")
+    fund_id    = inp.get("fund_id", "")
+    as_of_date = inp.get("as_of_date", "")
+
+    if not skill_name:
+        return {"error": "缺少 skill_name"}
+
+    # 先嘗試直接讀取 SKILL.md 文件（最準確）
+    try:
+        from pathlib import Path
+        repo_root = Path(__file__).parent.parent.parent
+        # 搜索 3_skills 目錄中的對應技能
+        skill_path = None
+        for p in repo_root.rglob(f"{skill_name}/SKILL.md"):
+            if "3_skills" in str(p) or "aiagent/skills" in str(p):
+                skill_path = p
+                break
+
+        if skill_path and skill_path.exists():
+            import re
+            raw = skill_path.read_text(encoding="utf-8")
+            # 去掉 frontmatter
+            content = re.sub(r"^---\n.*?\n---\n", "", raw, flags=re.DOTALL).strip()
+            return {
+                "skill_name":  skill_name,
+                "source":      "3_skills/" + str(skill_path.relative_to(repo_root)),
+                "content":     content,
+                "fund_id":     fund_id,
+                "as_of_date":  as_of_date,
+                "instruction": (
+                    f"已加載技能「{skill_name}」的完整執行指南。\n"
+                    f"請按上方 content 中的「執行步驟」依次調用對應工具：\n"
+                    f"  基金 ID：{fund_id or '請先調用 get_system_info 確認'}\n"
+                    f"  估值日期：{as_of_date or '請先調用 get_system_info 確認'}\n"
+                    f"執行完所有步驟後，按「輸出格式」輸出最終結果。"
+                ),
+            }
+    except Exception as exc:
+        logger.warning("[execute_skill] direct file read failed: %s", exc)
+
+    # 降級：從 RAG 搜索
+    try:
+        from aiagent.memory.vector_store import hybrid_search
+        results = await hybrid_search(skill_name, top_k=5)
+        if results:
+            combined = "\n\n---\n\n".join(r["content"] for r in results[:3])
+            return {
+                "skill_name":  skill_name,
+                "source":      "RAG knowledge_chunk",
+                "content":     combined,
+                "fund_id":     fund_id,
+                "as_of_date":  as_of_date,
+                "instruction": (
+                    f"已從知識庫搜索到「{skill_name}」相關執行指南。\n"
+                    f"請按 content 中的步驟執行，基金={fund_id}，日期={as_of_date}。"
+                ),
+            }
+    except Exception as exc:
+        logger.error("[execute_skill] RAG fallback failed: %s", exc)
+
+    return {
+        "error": f"技能「{skill_name}」未找到，請確認技能名稱或先運行知識庫索引",
+        "available_skills": ["mmf-compliance", "risk-analysis", "var-analysis",
+                             "performance-report", "human-review"],
+    }
+
+
+async def _execute_user_custom_tool(tool_name: str, inp: dict) -> dict:
+    """
+    執行用戶自定義工具（動態 HTTP 調用）。
+    endpoint 和 method 由 runner 從 DB 加載後注入 tool_input。
+    """
+    endpoint = inp.get("_endpoint", "")
+    method   = inp.get("_method", "GET").upper()
+    # 過濾掉內部字段，只傳業務參數
+    params   = {k: v for k, v in inp.items() if not k.startswith("_")}
+    if not endpoint:
+        return {"error": f"用戶工具 '{tool_name}' 缺少 endpoint 配置"}
+    try:
+        async with httpx.AsyncClient(timeout=15) as c:
+            if method == "GET":
+                r = await c.get(endpoint, params=params)
+            else:
+                r = await c.post(endpoint, json=params)
+            if r.status_code == 200:
+                try:
+                    return r.json()
+                except Exception:
+                    return {"content": r.text[:500]}
+            return {"error": f"HTTP {r.status_code}", "detail": r.text[:200]}
+    except Exception as exc:
+        return {"error": str(exc)[:200]}
+
+
+async def _execute_knowledge_search(inp: dict) -> dict:
+    """Layer 2 — RAG 知識庫搜索：調用 vector_store 的混合搜索。"""
+    query  = inp.get("query", "")
+    source = inp.get("source")
+    top_k  = min(int(inp.get("top_k", 5)), 10)
+
+    if not query:
+        return {"error": "query 不能為空"}
+
+    try:
+        from pathlib import Path
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+        from aiagent.memory.vector_store import hybrid_search
+        results = await hybrid_search(query, top_k=top_k, source_filter=source)
+        if not results:
+            return {
+                "query":   query,
+                "results": [],
+                "note":    "知識庫中未找到相關內容。請嘗試不同的關鍵詞，或考慮知識庫尚未收錄此類文件。",
+            }
+        return {
+            "query":   query,
+            "results": [
+                {
+                    "title":    r["title"],
+                    "source":   r["source"],
+                    "content":  r["content"][:800],   # 截斷避免 context 過長
+                    "score":    round(r["score"], 4),
+                }
+                for r in results
+            ],
+        }
+    except Exception as exc:
+        logger.error("[tool] knowledge_search failed: %s", exc)
+        return {"error": f"知識庫搜索失敗：{str(exc)[:200]}"}
+
+
+async def _execute_generate_report(inp: dict) -> dict:
+    """
+    Layer 3 — 觸發報表生成（AI → 2_processing 報表引擎）。
+    調用 processing API POST /reports/generate，異步任務。
+    """
+    report_id  = inp.get("report_id", "")
+    fund_id    = inp.get("fund_id", "")
+    as_of_date = inp.get("as_of_date", "")
+    if not all([report_id, fund_id, as_of_date]):
+        return {"error": "缺少必要參數：report_id / fund_id / as_of_date"}
+
+    try:
+        async with httpx.AsyncClient(
+            base_url=PROCESSING_URL,
+            headers={"X-API-Key": PROCESSING_KEY},
+            timeout=30,
+        ) as c:
+            r = await c.post("/reports/generate", json={
+                "report_id":  report_id,
+                "fund_id":    fund_id,
+                "as_of_date": as_of_date,
+            })
+            if r.status_code not in (200, 201, 202):
+                return {"error": f"HTTP {r.status_code}", "detail": r.text[:200]}
+            data = r.json()
+            return {
+                "task_id":   data.get("task_id"),
+                "status":    data.get("status", "queued"),
+                "message":   f"報表生成任務已提交（{report_id} / {fund_id} / {as_of_date}）",
+                "poll_hint": "任務異步執行，通常需要 10-60 秒，請稍後查詢結果",
+            }
+    except Exception as exc:
+        logger.error("[tool] generate_report failed: %s", exc)
+        return {"error": str(exc)[:200]}
+
+
+async def _execute_query_internal_db(inp: dict) -> dict:
+    """
+    Layer 3 — 查詢內部數據庫（AI → 4_mcp 內部 MCP 查詢邏輯）。
+    直接調用 processing API 獲取結構化數據。
+    """
+    qtype    = inp.get("query_type", "")
+    fund_id  = inp.get("fund_id", "")
+    start    = inp.get("start_date", "")
+    end      = inp.get("end_date", "")
+
+    try:
+        async with httpx.AsyncClient(
+            base_url=PROCESSING_URL,
+            headers={"X-API-Key": PROCESSING_KEY},
+            timeout=20,
+        ) as c:
+            if qtype == "fund_list":
+                r = await c.get("/context")
+                return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}"}
+
+            elif qtype == "nav_history":
+                if not (fund_id and start):
+                    return {"error": "nav_history 需要 fund_id 和 start_date"}
+                r = await c.get(f"/positions/{fund_id}/nav", params={"start": start, "end": end or start})
+                return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}", "detail": r.text[:200]}
+
+            elif qtype == "risk_snapshot":
+                if not fund_id:
+                    return {"error": "risk_snapshot 需要 fund_id"}
+                from datetime import date
+                today = date.today().isoformat()
+                r = await c.get(f"/risk/exposure/{fund_id}", params={"as_of_date": end or today})
+                return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}", "detail": r.text[:200]}
+
+            elif qtype == "var_series":
+                if not (fund_id and start):
+                    return {"error": "var_series 需要 fund_id 和 start_date"}
+                r = await c.get(f"/risk/var/{fund_id}", params={
+                    "as_of_date": end or start,
+                    "method": "historical",
+                    "confidence": 0.99,
+                })
+                return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}"}
+
+            else:
+                return {"error": f"未知查詢類型：{qtype}"}
+    except Exception as exc:
+        logger.error("[tool] query_internal_db failed: %s", exc)
+        return {"error": str(exc)[:200]}
 
 
 async def _execute_get_system_info() -> dict:

@@ -21,6 +21,7 @@ import { Route as LayoutRiskRouteImport } from './routes/_layout/risk'
 import { Route as LayoutReportsRouteImport } from './routes/_layout/reports'
 import { Route as LayoutPositionsRouteImport } from './routes/_layout/positions'
 import { Route as LayoutItemsRouteImport } from './routes/_layout/items'
+import { Route as LayoutExpertRouteImport } from './routes/_layout/expert'
 import { Route as LayoutComplianceRouteImport } from './routes/_layout/compliance'
 import { Route as LayoutChatRouteImport } from './routes/_layout/chat'
 import { Route as LayoutAdminRouteImport } from './routes/_layout/admin'
@@ -84,6 +85,11 @@ const LayoutItemsRoute = LayoutItemsRouteImport.update({
   path: '/items',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutExpertRoute = LayoutExpertRouteImport.update({
+  id: '/expert',
+  path: '/expert',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const LayoutComplianceRoute = LayoutComplianceRouteImport.update({
   id: '/compliance',
   path: '/compliance',
@@ -109,6 +115,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof LayoutAdminRoute
   '/chat': typeof LayoutChatRoute
   '/compliance': typeof LayoutComplianceRoute
+  '/expert': typeof LayoutExpertRoute
   '/items': typeof LayoutItemsRoute
   '/positions': typeof LayoutPositionsRoute
   '/reports': typeof LayoutReportsRoute
@@ -124,6 +131,7 @@ export interface FileRoutesByTo {
   '/admin': typeof LayoutAdminRoute
   '/chat': typeof LayoutChatRoute
   '/compliance': typeof LayoutComplianceRoute
+  '/expert': typeof LayoutExpertRoute
   '/items': typeof LayoutItemsRoute
   '/positions': typeof LayoutPositionsRoute
   '/reports': typeof LayoutReportsRoute
@@ -142,6 +150,7 @@ export interface FileRoutesById {
   '/_layout/admin': typeof LayoutAdminRoute
   '/_layout/chat': typeof LayoutChatRoute
   '/_layout/compliance': typeof LayoutComplianceRoute
+  '/_layout/expert': typeof LayoutExpertRoute
   '/_layout/items': typeof LayoutItemsRoute
   '/_layout/positions': typeof LayoutPositionsRoute
   '/_layout/reports': typeof LayoutReportsRoute
@@ -161,6 +170,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/chat'
     | '/compliance'
+    | '/expert'
     | '/items'
     | '/positions'
     | '/reports'
@@ -176,6 +186,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/chat'
     | '/compliance'
+    | '/expert'
     | '/items'
     | '/positions'
     | '/reports'
@@ -193,6 +204,7 @@ export interface FileRouteTypes {
     | '/_layout/admin'
     | '/_layout/chat'
     | '/_layout/compliance'
+    | '/_layout/expert'
     | '/_layout/items'
     | '/_layout/positions'
     | '/_layout/reports'
@@ -296,6 +308,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutItemsRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/expert': {
+      id: '/_layout/expert'
+      path: '/expert'
+      fullPath: '/expert'
+      preLoaderRoute: typeof LayoutExpertRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/compliance': {
       id: '/_layout/compliance'
       path: '/compliance'
@@ -324,6 +343,7 @@ interface LayoutRouteChildren {
   LayoutAdminRoute: typeof LayoutAdminRoute
   LayoutChatRoute: typeof LayoutChatRoute
   LayoutComplianceRoute: typeof LayoutComplianceRoute
+  LayoutExpertRoute: typeof LayoutExpertRoute
   LayoutItemsRoute: typeof LayoutItemsRoute
   LayoutPositionsRoute: typeof LayoutPositionsRoute
   LayoutReportsRoute: typeof LayoutReportsRoute
@@ -337,6 +357,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutAdminRoute: LayoutAdminRoute,
   LayoutChatRoute: LayoutChatRoute,
   LayoutComplianceRoute: LayoutComplianceRoute,
+  LayoutExpertRoute: LayoutExpertRoute,
   LayoutItemsRoute: LayoutItemsRoute,
   LayoutPositionsRoute: LayoutPositionsRoute,
   LayoutReportsRoute: LayoutReportsRoute,

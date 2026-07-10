@@ -20,8 +20,17 @@ export function useChatSession() {
 
   useEffect(() => { sessionIdRef.current = currentSessionId }, [currentSessionId])
 
-  // 載入會話列表
+  // 載入用戶專屬 Agent 配置 + 會話列表
   useEffect(() => {
+    // 優先加載用戶個人配置，設置默認 Agent 和模型
+    fsiApi.getMyAgentConfig()
+      .then(r => {
+        const cfg = r.data
+        if (cfg.default_agent_id) setAgentId(cfg.default_agent_id)
+        if (cfg.default_model_id) setModelId(cfg.default_model_id)
+      })
+      .catch(() => {}) // 加載失敗時保持系統默認值
+
     fsiApi.listChatSessions()
       .then(r => setSessions(r.data))
       .catch(() => {})
@@ -114,7 +123,17 @@ export function useChatSession() {
     const assistantToolCalls: ToolCallRecord[] = []
 
     try {
-      const response = await fsiApi.streamAgentChat(historyForApi, agentId, undefined, modelId)
+      // 從 JWT 中取 user_id（base64 decode payload）
+      let userId: string | undefined
+      try {
+        const token = localStorage.getItem("access_token") ?? ""
+        const payload = JSON.parse(atob(token.split(".")[1]))
+        userId = payload.sub
+      } catch { /* ignore */ }
+
+      const response = await fsiApi.streamAgentChat(
+        historyForApi, agentId, undefined, modelId, sid ?? undefined, userId,
+      )
       if (!response.ok) {
         const err = await response.text()
         updateLastAssistant(m => ({ ...m, isStreaming: false, error: `請求失敗 (${response.status})：${err.slice(0, 200)}` }))

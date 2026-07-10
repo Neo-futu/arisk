@@ -110,3 +110,45 @@ async def get_position_summary(
         )
     summary = dict(row.mappings().fetchone() or {})
     return {"fund_id": fund_id, "as_of_date": as_of_date, **summary}
+
+
+@router.get("/{fund_id}/nav")
+async def get_nav_history(
+    fund_id:    str,
+    start:      Annotated[date, Query(description="開始日期 YYYY-MM-DD")],
+    end:        Annotated[date | None, Query(description="結束日期 YYYY-MM-DD")] = None,
+    db:         AsyncSession = Depends(get_db),
+):
+    """查詢基金 NAV 歷史（來源：fsi.balance_portfolio_nav）。"""
+    end_date = end or date.today()
+    try:
+        rows = await db.execute(
+            text("""
+                SELECT
+                    evaluate_date   AS date,
+                    port_id         AS fund_id,
+                    currency,
+                    net_asset       AS net_asset_hkd,
+                    unit_nav,
+                    acc_unit_nav,
+                    shares_outstanding,
+                    day_return
+                FROM fsi.balance_portfolio_nav
+                WHERE port_id = :fid
+                  AND evaluate_date BETWEEN :start AND :end
+                ORDER BY evaluate_date ASC
+            """),
+            {"fid": fund_id, "start": start, "end": end_date},
+        )
+        records = [dict(r) for r in rows.mappings().fetchall()]
+    except ProgrammingError:
+        await db.rollback()
+        return {"fund_id": fund_id, "start": str(start), "end": str(end_date), "nav_history": [], "error": "NAV 表不存在"}
+
+    return {
+        "fund_id":     fund_id,
+        "start":       str(start),
+        "end":         str(end_date),
+        "count":       len(records),
+        "nav_history": records,
+    }
