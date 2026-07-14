@@ -95,6 +95,23 @@ async def list_tools() -> list[Tool]:
             description="查詢所有活躍基金列表。",
             inputSchema={"type": "object", "properties": {}},
         ),
+        Tool(
+            name="get_context",
+            description="查詢系統上下文：當前日期 + 在管基金列表。",
+            inputSchema={"type": "object", "properties": {}},
+        ),
+        Tool(
+            name="query_business_db",
+            description="只讀 SQL 查詢業務資料（僅允許 SELECT）。",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "sql": {"type": "string", "description": "SELECT 查詢語句"},
+                    "limit": {"type": "integer", "default": 50},
+                },
+                "required": ["sql"],
+            },
+        ),
     ]
 
 
@@ -136,6 +153,22 @@ async def _dispatch(name: str, args: dict, conn: asyncpg.Connection) -> dict:
     elif name == "get_fund_list":
         rows = await conn.fetch(GET_FUND_LIST_SQL)
         return {"funds": [dict(r) for r in rows]}
+
+    elif name == "get_context":
+        rows = await conn.fetch(GET_FUND_LIST_SQL)
+        return {
+            "current_date": date.today().isoformat(),
+            "funds": [dict(r) for r in rows],
+            "note": "fund_id 用於所有工具調用的 fund_id 參數",
+        }
+
+    elif name == "query_business_db":
+        sql = str(args.get("sql", "")).strip().rstrip(";")
+        limit = min(int(args.get("limit", 50)), 200)
+        if not sql.upper().startswith("SELECT"):
+            return {"error": "只允許 SELECT 查詢"}
+        rows = await conn.fetch(f"{sql} LIMIT {limit}")
+        return {"row_count": len(rows), "rows": [dict(r) for r in rows]}
 
     return {"error": f"Unknown tool: {name}"}
 

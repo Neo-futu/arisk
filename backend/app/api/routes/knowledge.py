@@ -437,7 +437,45 @@ async def save_skill_to_file(
             result["index_error"] = str(exc)[:200]
             result["message"]    += "（知識庫索引失敗，技能文件已保存）"
 
+    if body.layer == "expert":
+        try:
+            import sys
+            sys.path.insert(0, str(repo_root))
+            from aiagent.memory.knowledge_indexer import refresh_skill_docs
+
+            refresh_result = await refresh_skill_docs()
+            result["refreshed"] = True
+            result["refresh_scanned"] = refresh_result["scanned"]
+            result["refresh_indexed"] = refresh_result["indexed"]
+            result["message"] += f"，並已刷新 3_skills（{refresh_result['indexed']}/{refresh_result['scanned']}）"
+        except Exception as exc:
+            result["refreshed"] = False
+            result["refresh_error"] = str(exc)[:200]
+            result["message"] += "（3_skills 刷新失敗）"
+
     return result
+
+
+@router.post("/refresh-skills")
+async def refresh_skills(current_user: CurrentUser) -> Any:
+    """
+    重新掃描 3_skills/skills/，讓 Chat 進入時能自動載入新建立的 expert skills。
+    """
+    import sys
+    from pathlib import Path
+
+    repo_root = Path(__file__).parent.parent.parent.parent.parent
+    sys.path.insert(0, str(repo_root))
+
+    from aiagent.memory.knowledge_indexer import refresh_skill_docs
+
+    result = await refresh_skill_docs()
+    return {
+        "ok": True,
+        "scanned": result["scanned"],
+        "indexed": result["indexed"],
+        "message": f"已重新掃描 3_skills/skills：{result['indexed']} / {result['scanned']} 個技能",
+    }
 
 
 # ── 查詢和刪除 ────────────────────────────────────────────────────

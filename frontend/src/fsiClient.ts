@@ -441,6 +441,14 @@ export const fsiApi = {
     return axios.delete<UserAgentConfig>(`${BASE}/api/v1/agent-config/me/reset`, { headers: authHeaders() })
   },
 
+  refreshSkills() {
+    return axios.post<{ ok: boolean; scanned: number; indexed: number; message: string }>(
+      `${BASE}/api/v1/knowledge/refresh-skills`,
+      {},
+      { headers: authHeaders() },
+    )
+  },
+
   // ── Chat 歷史 API ────────────────────────────────────────────────
 
   listChatSessions() {

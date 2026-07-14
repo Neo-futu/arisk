@@ -7,11 +7,12 @@ scripts/dev.py — FSI 本地整合開發啟動器
 預設 profile：
     web       processing + 6_entry + backend + frontend
     agent     processing + 6_entry
-    full      web + internal-mcp + wind-mcp
+    full      web + mcp-gateway + internal-mcp + wind-mcp
 
 典型用法：
     python scripts/dev.py
     python scripts/dev.py --profile agent
+    python scripts/dev.py --with-mcp
     python scripts/dev.py --with-internal-mcp
     python scripts/dev.py --only backend
     python scripts/dev.py --parts processing backend frontend
@@ -36,6 +37,7 @@ COLORS = {
     "entry":      "\033[34m",   # 藍
     "backend":    "\033[32m",   # 綠
     "frontend":   "\033[35m",   # 紫
+    "mcp-gateway": "\033[92m",  # 亮綠
     "internal-mcp": "\033[96m", # 亮青
     "wind-mcp":   "\033[95m",   # 亮紫
     "reset":      "\033[0m",
@@ -55,7 +57,7 @@ DEFAULTS = {
 PROFILES = {
     "web": ["processing", "entry", "backend", "frontend"],
     "agent": ["processing", "entry"],
-    "full": ["processing", "entry", "backend", "frontend", "internal-mcp", "wind-mcp"],
+    "full": ["processing", "entry", "backend", "frontend", "mcp-gateway", "internal-mcp", "wind-mcp"],
 }
 
 
@@ -132,6 +134,18 @@ def build_processes() -> dict[str, dict]:
             "env_defaults": {},
             "ready_msg": "ready in",
             "url": "http://localhost:5173",
+            "kind": "service",
+        },
+        "mcp-gateway": {
+            "cmd": [sys.executable, "-m", "4_mcp.gateway.mcp_gateway"],
+            "cwd": ROOT,
+            "env_extra": {"PYTHONPATH": str(ROOT)},
+            "env_defaults": {
+                "MCP_GATEWAY_PORT": "8002",
+                "MCP_GATEWAY_URL": "http://127.0.0.1:8002",
+            },
+            "ready_msg": "Uvicorn running on",
+            "url": "http://localhost:8002/health",
             "kind": "service",
         },
         "internal-mcp": {
@@ -224,6 +238,8 @@ def parse_args():
     p.add_argument("--no-backend", action="store_true", help="不啟動 backend")
     p.add_argument("--no-entry", action="store_true", help="不啟動 6_entry")
     p.add_argument("--no-processing", action="store_true", help="不啟動 processing")
+    p.add_argument("--with-mcp", action="store_true", help="附帶啟動 MCP 全套（gateway + internal + wind）")
+    p.add_argument("--with-mcp-gateway", action="store_true", help="附帶啟動 MCP Gateway（8002）")
     p.add_argument("--with-internal-mcp", action="store_true", help="附帶啟動 internal MCP")
     p.add_argument("--with-wind-mcp", action="store_true", help="附帶啟動 Wind MCP")
     p.add_argument(
@@ -274,6 +290,14 @@ def main() -> None:
             targets.remove("entry")
         if args.no_processing and "processing" in targets:
             targets.remove("processing")
+        if args.with_mcp or args.with_mcp_gateway:
+            if "mcp-gateway" not in targets:
+                targets.append("mcp-gateway")
+        if args.with_mcp:
+            if "internal-mcp" not in targets:
+                targets.append("internal-mcp")
+            if "wind-mcp" not in targets:
+                targets.append("wind-mcp")
         if args.with_internal_mcp and "internal-mcp" not in targets:
             targets.append("internal-mcp")
         if args.with_wind_mcp and "wind-mcp" not in targets:
@@ -323,6 +347,8 @@ def main() -> None:
     print("  backend    : 8000")
     print("  6_entry    : 8010")
     print("  processing : 8001")
+    if "mcp-gateway" in targets:
+        print("  mcp-gateway: 8002")
 
     print(f"\n按 Ctrl+C 停止所有進程\n")
 

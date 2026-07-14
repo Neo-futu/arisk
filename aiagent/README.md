@@ -31,7 +31,7 @@ Chat Agent 調用 execute_skill("mmf-compliance", "BHMMF001", today)
 
 ---
 
-## 四層架構
+## 五層架構
 
 ```
 +------------------------------------------------------------------+
@@ -56,13 +56,20 @@ Chat Agent 調用 execute_skill("mmf-compliance", "BHMMF001", today)
 |  3_skills 技能庫（通過 execute_skill 工具調用）                     |
 |  用戶個人工具（iam.user_custom_tool，用戶自定義 HTTP 工具）           |
 +------------------------------------------------------------------+
-| L4: 編排與通訊層 (Orchestration)                                   |
+| L4: 外部 / 內部連接層 (MCP / Data Connector)                       |
+|  4_mcp/wind       — 外部行情 / 財務 / 指數 / 評級                   |
+|  4_mcp/internal   — 內部只讀資料 / 風控快照 / 持倉 / NAV            |
+|  4_mcp/gateway    — 統一 MCP 入口                                   |
++------------------------------------------------------------------+
+| L5: 編排與通訊層 (Orchestration)                                   |
 |  supervisor.py  — 意圖路由（10個專業 Agent 角色）                   |
 |  task_state.py  — Redis 狀態機（QUEUED→DONE）                     |
 |  stream.py      — SSE 流式輸出（plan/text/tool_call/reflection）   |
 |  端點：6_entry:8010/agent/v2/stream                               |
 +------------------------------------------------------------------+
 ```
+
+> 原來的編排層就是這一組：`aiagent/orchestrator/supervisor.py`、`aiagent/orchestrator/task_state.py`、`aiagent/engine/stream.py`，以及 `6_entry/web/routers/agent_v2.py` 的對外入口。引入 `4_mcp` 後，這部分職責順延為 L5，L4 專門做資料連接。
 
 ---
 
@@ -137,7 +144,7 @@ API：`POST /api/v1/custom-tools/`
 瀏覽器 /chat
   → POST /api/v1/fsi/agent/v2/stream (backend:8000, JWT)
   → POST /agent/v2/stream (6_entry:8010)
-  → stream.py [L1 Planner 複雜任務規劃]
+  → stream.py [L5 編排入口]
   → runner.py [L1 ReAct 循環 + L2 記憶加載 + 用戶配置注入]
   → execute_tool() [L3 工具調用]
       ├── get_exposure/get_var → processing:8001

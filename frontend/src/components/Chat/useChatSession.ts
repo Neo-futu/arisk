@@ -17,8 +17,15 @@ export function useChatSession() {
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef  = useRef<HTMLTextAreaElement>(null)
   const sessionIdRef = useRef<string | null>(null)
+  const skillsRefreshPromiseRef = useRef<Promise<void> | null>(null)
 
   useEffect(() => { sessionIdRef.current = currentSessionId }, [currentSessionId])
+
+  useEffect(() => {
+    skillsRefreshPromiseRef.current = fsiApi.refreshSkills()
+      .then(() => {})
+      .catch(() => {})
+  }, [])
 
   // 載入用戶專屬 Agent 配置 + 會話列表
   useEffect(() => {
@@ -91,6 +98,10 @@ export function useChatSession() {
     const userText = input.trim()
     if (!userText || streaming) return
     setInput("")
+
+    if (skillsRefreshPromiseRef.current) {
+      await skillsRefreshPromiseRef.current.catch(() => {})
+    }
 
     // 確保有會話（第一條消息時新建）
     let sid = sessionIdRef.current

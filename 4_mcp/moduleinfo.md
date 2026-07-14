@@ -1,13 +1,18 @@
-# 4_mcp — 數據連接層
+# 4_mcp — 外部 / 內部數據連接層
 
 ## 模塊定位
 
-FSI 風控業績平台六層架構的**第四層**，是平台的**數據連接器**。基於 MCP（Model Context Protocol）協議，將外部數據源（Wind）和內部數據庫封裝為標準化工具，讓 Claude Agent 和技能層可以直接調用，無需關心底層連接細節。
+FSI 風控業績平台的**統一數據連接層**。MCP（Model Context Protocol）在這裡的意義不是再做一個業務層，而是把所有**外部數據源**與**內部數據庫**封裝成標準化工具，讓 Agent / Skills 只透過一致協議取數，不直接綁死在底層實作上。
+
+換句話說：
+- **外部連接**：Wind、行情、財務、評級、指數等
+- **內部連接**：只讀業務資料、風控快照、組合持倉等
+- **職責邊界**：只負責連接與調度，不承擔業務決策、不承擔知識推理
 
 ```
-3_skills / Agent
-    ↓ MCP Tool 調用
-【4_mcp】  ← 本層
+3_skills / Agent / Platform Agent
+  ↓ MCP Tool 調用
+【4_mcp】  ← 統一數據連接層
     ├── wind/          外部：Wind API 行情/財務數據
     ├── internal/      內部：Postgres 只讀查詢
     └── Gateway        統一路由入口
@@ -20,6 +25,9 @@ FSI 風控業績平台六層架構的**第四層**，是平台的**數據連接�
 ```
 4_mcp/
 ├── .mcp.json                MCP 服務器配置（供 Claude Code / Agent 使用）
+├── client.py                MCP 客戶端適配器（gateway 優先，stdio 回退）
+├── gateway/
+│   └── mcp_gateway.py       統一 HTTP Gateway（/mcp/{server}/{tool}）
 ├── wind/
 │   └── wind_mcp_server.py   WindAPI MCP Server
 └── internal/
@@ -137,10 +145,10 @@ fsi-gateway (port 8002)
 
 | 調用方 | 調用哪個 MCP | 用途 |
 |---|---|---|
-| `3_skills` Agent | `fsi-gateway` → `wind` | 拉取最新行情/評級 |
-| `3_skills` Agent | `fsi-gateway` → `internal-db` | 查詢清洗後的業務數據 |
+| `3_skills` / `aiagent` | `fsi-gateway` → `wind` | 拉取最新行情/評級/指數等外部資料 |
+| `3_skills` / `platform_agent` | `fsi-gateway` → `internal-db` | 查詢清洗後的內部業務數據 |
 | `2_processing` ETL | 直接調用 Wind Python SDK | 批量歷史數據載入（不走 MCP） |
-| `5_deploy` Agent | `fsi-gateway` | Agent 執行時的數據獲取 |
+| `5_deploy` / orchestration | `fsi-gateway` | 任務編排或多 Agent 執行時的統一數據入口 |
 
 ---
 
@@ -159,6 +167,9 @@ fsi-gateway (port 8002)
 ## 快速啟動
 
 ```bash
+# 啟動 MCP Gateway（統一入口，推薦）
+python -m 4_mcp.gateway.mcp_gateway
+
 # 啟動 Wind MCP Server
 python -m 4_mcp.wind.wind_mcp_server
 
@@ -168,3 +179,10 @@ python -m 4_mcp.internal.internal_mcp_server
 # Claude Code 中使用（.mcp.json 已配置）
 # Agent 啟動時自動連接所有 MCP Server
 ```
+
+## 統一再分拆（建議模式）
+
+- 先統一：在應用層設置 `MCP_GATEWAY_URL=http://127.0.0.1:8002`，client 會優先走 gateway
+- 再分拆：若 gateway 不可用，`4_mcp/client.py` 會自動回退到 stdio 直連 `internal` / `wind`
+
+這樣可以先收斂入口、再逐步拆分服務，不會阻塞現有流程。

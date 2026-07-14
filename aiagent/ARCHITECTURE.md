@@ -1,4 +1,4 @@
-# ARISK AI Agent 四層架構
+# ARISK AI Agent 五層架構
 
 > 完整架構說明。開發日誌和接入指南請見 README.md。
 
@@ -15,12 +15,16 @@
 |  memory/context_manager.py — 短期：滑動窗口 + LLM 摘要壓縮        |
 |  memory/vector_store.py    — 長期：pgvector RAG（混合搜索）        |
 |  DB: fsi.knowledge_chunk (向量) + iam.agent_episode (情景記憶)    |
-+------------------------------------------------------------------+
 | Layer 3: 工具與技能層 (Tools / Skills)                            |
-|  engine/tools.py — 8 個 FSI 業務工具                              |
+|  engine/tools.py — 業務工具 + skill 加載入口                      |
 |  skills/         — SKILL.md 模板庫                               |
 +------------------------------------------------------------------+
-| Layer 4: 編排與通訊層 (Orchestration / Multi-Agent)               |
+| Layer 4: 外部 / 內部連接層 (MCP / Data Connector)                 |
+|  4_mcp/wind       — Wind / 行情 / 財務 / 指數                     |
+|  4_mcp/internal   — Postgres 只讀 / 風控 / 持倉                   |
+|  4_mcp/gateway    — 統一 MCP 入口                                 |
++------------------------------------------------------------------+
+| Layer 5: 編排與通訊層 (Orchestration / Multi-Agent)               |
 |  orchestrator/supervisor.py  — 意圖路由 + Multi-Agent Handoff     |
 |  orchestrator/task_state.py  — Redis 狀態機                       |
 |  engine/stream.py            — SSE 流式輸出（含 plan/reflection） |
@@ -32,14 +36,15 @@
 ```
 Browser /chat
   → backend:8000  [JWT 認證]
-  → 6_entry:8010  [agent_v2.py]
-  → stream.py     [Layer 4 入口]
+    → 6_entry:8010  [agent_v2.py]
+    → stream.py     [Layer 5 入口]
       ├─ Planner.create_plan()      [L1: 複雜任務規劃]
       ├─ run_agent()                [L1: ReAct 循環]
       │    ├─ ContextManager        [L2: 短期記憶]
       │    ├─ LLM API               [L1: 推理]
       │    └─ execute_tool()        [L3: 工具執行]
-      │         └─ knowledge_search [L2: RAG]
+      │         ├─ knowledge_search [L2: RAG]
+      │         └─ 4_mcp gateway    [L4: 外部 / 內部資料連接]
       └─ Reflector.detect_issues()  [L1: 自我反思]
   → save_episode()                  [L2: 情景記憶]
 ```
@@ -75,6 +80,17 @@ Browser /chat
 | `get_nav_history` | NAV 歷史 |
 | `sector_overview` | 市場行業概覽（SKILL.md） |
 | `knowledge_search` | **RAG 知識庫搜索**（新增） |
+
+## MCP 的角色
+
+`4_mcp` 不是另一個業務 AI 層，而是 `aiagent`、`platform_agent`、`3_skills` 與外部/內部資料源之間的**標準連接層**：
+
+- 需要即時行情、指數、評級、財務數據時，走 `4_mcp/wind`
+- 需要只讀業務數據、風控快照、持倉、NAV 歷史時，走 `4_mcp/internal`
+- 需要統一入口與授權時，走 `4_mcp/gateway`
+- 需要業務知識與 SOP 時，仍然走 `knowledge_search` / `execute_skill`
+
+這樣可以把「取數」與「判斷」分離：MCP 負責取數，Agent / Skills 負責推理與業務編排。
 
 ## 環境變量
 

@@ -19,7 +19,11 @@ Platform Agent（系統層業務 AI）
   - 索引入知識庫後，AI 可搜索引用
 
 aiagent / Chat Agent（用戶層業務 AI）
-  ↕ 對話中通過 knowledge_search / execute_skill 引用 3_skills
+  ↕ 可搜索 3_skills 知識
+  ↕ 需要即時數據時通過 4_mcp 取得外部 / 內部資料
+
+注意：3_skills 現在支持獨立 skill-agent 編排運行，
+與 aiagent 的 execute_skill 工具解耦，屬於兩套 agent runtime。
 ```
 
 ---
@@ -85,14 +89,21 @@ Step 3: 按閾值判斷...
 → 回答：「根據 SFC 守則第8.2(f)條，WAL ≤ 120 天」
 ```
 
-**方式二：execute_skill（按技能執行）**
+### 3_skills 獨立 Agent 使用方式（推薦）
+
+3_skills 提供獨立編排 runtime：
+
 ```
-用戶問：「請對 BHMMF001 做完整合規核查」
-→ Agent 調用 execute_skill("mmf-compliance", "BHMMF001", "2026-07-09")
-→ 加載 mmf-compliance/SKILL.md 的執行步驟
-→ 依次調用 get_exposure, get_positions 等工具
-→ 按 SKILL.md 的輸出格式生成標準化報告
+python 3_skills/commands/run_skill_agent.py --query "請做 BHMMF001 合規核查" --skill mmf-compliance
 ```
+
+編排模塊位置：
+
+- `3_skills/runtime/skill_registry.py`：技能註冊與匹配
+- `3_skills/runtime/orchestrator.py`：任務規劃與執行計劃輸出
+- `3_skills/commands/run_skill_agent.py`：CLI 調用入口
+
+該 runtime 不依賴 aiagent，不接入 aiagent 的 execute_skill。
 
 ### Platform Agent 使用方式
 
@@ -101,6 +112,17 @@ Step 3: 按閾值判斷...
 → 調用 knowledge_search("SFC WAM WAL 閾值")
 → 獲取 risk-analysis SKILL.md 中的閾值定義
 → 與快照數據對比，判斷是否需要告警
+```
+
+### 4_mcp 使用方式
+
+`3_skills` 的核心價值是「業務 SOP 與判斷規則」，不是自己去做底層連接。
+當技能需要最新行情、評級、持倉、NAV 或其他內外部資料時，應優先透過 `4_mcp/gateway` 取數，再由技能步驟做業務判斷。
+
+```
+技能需要即時行情 → 4_mcp/wind
+技能需要內部持倉 / 快照 → 4_mcp/internal
+技能需要統一入口 / 授權 → 4_mcp/gateway
 ```
 
 ---

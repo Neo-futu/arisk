@@ -7,6 +7,7 @@
 > - **Platform Agent（本模塊）：系統層業務 AI（自動運維）** ← 你在這裡
 > - 3_skills：專家級業務技能（領域知識編碼）
 > - aiagent：用戶層業務 AI（個人對話助理）
+> - 4_mcp：外部 / 內部數據連接層（統一取數入口）
 
 ---
 
@@ -34,7 +35,7 @@
 
 ---
 
-## 四層架構
+## 五層架構
 
 ```
 +------------------------------------------------------------------+
@@ -49,6 +50,7 @@
 |  時序數據：TimescaleDB（NAV歷史、VaR趨勢）                          |
 |  操作緩存：Redis DB0（行情緩存）+ DB1/DB2（Celery 隊列/結果）        |
 |  業務技能知識：通過 knowledge_search 查詢 3_skills（同一知識庫）     |
+|  外部/內部取數：通過 4_mcp/gateway 連 Wind 與 internal-db            |
 |  文件：1_datastorage/ + 2_processing/api/deps.py                  |
 +------------------------------------------------------------------+
 | L3: 工具與技能層 (Tools + Skills)                                  |
@@ -57,10 +59,16 @@
 |    query_business_db / trigger_report / get_queue_stats           |
 |    scaffold_system_tool / scaffold_system_skill / scaffold_agent  |
 |  knowledge_search：查詢 3_skills 業務技能知識                      |
+|  4_mcp：外部行情 / 內部只讀資料 / 標準化 Gateway                   |
 |  系統運維技能：platform_agent/skills/（操作手冊）                   |
 |  文件：platform_agent/engine/system_tools.py                      |
 +------------------------------------------------------------------+
-| L4: 編排與通訊層 (Orchestration)                                   |
+| L4: 外部 / 內部連接層 (MCP / Data Connector)                       |
+|  4_mcp/wind       — 外部行情 / 財務 / 指數 / 評級                   |
+|  4_mcp/internal   — 內部只讀資料 / 快照 / 持倉 / NAV               |
+|  4_mcp/gateway    — 統一 MCP 入口                                   |
++------------------------------------------------------------------+
+| L5: 編排與通訊層 (Orchestration)                                   |
 |  Celery Beat：定時任務調度（ETL/快照/行情）                         |
 |  Redis：任務隊列 + 結果存儲 + 狀態緩存                              |
 |  服務網格：processing:8001 → entry:8010 → backend:8000            |
@@ -137,6 +145,35 @@ query_business_db("SELECT fund_id, COUNT(*) FROM fsi.positions WHERE ...") → �
 
 **注意**：這些是 Platform Agent 的操作手冊（Private），
 `3_skills/skills/` 才是公共的專家業務技能（被索引入知識庫，兩層 AI 都能查）。
+
+## MCP 的意義
+
+Platform Agent 需要的是「穩定取數」而不是自己直連所有資料源，因此 4_mcp 應被視為這一層的標準連接器：
+
+- 外部資料：Wind / 行情 / 財務 / 指數 / 評級
+- 內部資料：只讀業務查詢、風控快照、持倉、NAV 歷史
+- 業務推理：仍由 Platform Agent + skills 負責
+
+這樣可以把資料存取、業務邏輯和策略判斷分開，避免 Agent 直接綁死在資料庫或第三方 SDK 上。
+
+## 原來的編排層在哪裡
+
+如果你說的是這份文件原本的編排層，它現在對應的是 L5，核心入口在 `6_entry/web/routers/platform_v1.py`，執行鏈會落到 `platform_agent/engine/platform_runner.py` 和 Celery 調度流程。
+
+## 新增：platform_agent 獨立編排模塊
+
+為了與 aiagent 解耦，platform_agent 現在具備自己的 orchestrator：
+
+- `platform_agent/orchestrator/supervisor.py`
+  - 調度 `scheduler / monitor / etl-coordinator`
+  - 支持多階段鏈式流程（例如日終 EOD）
+- `platform_agent/orchestrator/task_state.py`
+  - Redis 任務狀態機（prefix: `arisk:platform_task`）
+- `platform_agent/engine/stream.py`
+  - SSE 編排封裝，通過 supervisor 調度 `run_platform_agent`
+
+`/platform/v1/stream` 已改為使用 `platform_sse_generator`，
+因此 platform 的編排邏輯不再直接混在 router 內。
 
 ---
 

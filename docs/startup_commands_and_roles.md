@@ -78,7 +78,7 @@ python scripts/dev.py
 |---|---|---|
 | `web`（默認） | processing + **entry** + backend + frontend | 日常前後端開發 |
 | `agent` | processing + **entry** | 只調試 Agent/LLM，不啟前端 |
-| `full` | web + internal-mcp + wind-mcp | 含 Wind 行情接入的完整環境 |
+| `full` | web + mcp-gateway + internal-mcp + wind-mcp | 含 MCP Gateway + Wind 行情接入的完整環境 |
 
 ### 3.3 常用腳本參數
 
@@ -100,15 +100,42 @@ python scripts/dev.py --parts processing entry backend frontend --dry-run
 
 # 啟動完整環境 + Wind MCP
 python scripts/dev.py --profile full --with-wind-mcp
+
+# 統一啟動 MCP 全套（gateway + internal + wind）
+python scripts/dev.py --profile web --with-mcp
+
+# 只加 MCP Gateway（AI 調用先走統一入口）
+python scripts/dev.py --profile web --with-mcp-gateway
 ```
 
 ```powershell
 # PowerShell 版本
 ./scripts/dev.ps1 -Profile web
 ./scripts/dev.ps1 -Parts processing,entry,backend,frontend
+./scripts/dev.ps1 -Profile web -WithMcp
+./scripts/dev.ps1 -Profile web -WithMcpGateway
 ./scripts/dev.ps1 -Only entry
 ./scripts/dev.ps1 -Parts processing,backend,frontend -DryRun
 ```
+
+### 3.4 AI 命令與 MCP 使用建議
+
+```bash
+# AI 日常（不強制 Gateway）：MCP client 會 stdio fallback
+python scripts/dev.py --profile web
+
+# AI + 統一 MCP 入口（推薦調試）
+python scripts/dev.py --profile web --with-mcp-gateway
+
+# AI + MCP 全套（Gateway + internal + wind）
+python scripts/dev.py --profile web --with-mcp
+```
+
+當啟動 `mcp-gateway` 時，本地應有：
+
+- `MCP_GATEWAY_URL=http://127.0.0.1:8002`
+- 健康檢查：`http://127.0.0.1:8002/health`
+- 工具列表：`http://127.0.0.1:8002/tools`
 
 ---
 
@@ -161,6 +188,38 @@ npm run dev
 
 作用：啟動唯一 Web UI（Vite 開發服務），訪問 http://localhost:5173。
 
+### 4.5 MCP Gateway（8002，可選但推薦）
+
+```powershell
+Set-Location "d:\vsproject\fsi-risk-platform"
+$env:MCP_GATEWAY_PORT='8002'
+$env:MCP_GATEWAY_URL='http://127.0.0.1:8002'
+python -m 4_mcp.gateway.mcp_gateway
+```
+
+作用：統一 MCP HTTP 入口，AI 工具調用可先走 gateway，再由 gateway 路由到 internal/wind。
+
+### 4.6 internal MCP（stdio）
+
+```powershell
+Set-Location "d:\vsproject\fsi-risk-platform"
+$env:DATABASE_URL='postgresql+asyncpg://fsi_user:change_me@localhost:5432/fsi_risk'
+python 4_mcp/internal/internal_mcp_server.py
+```
+
+作用：提供內部只讀工具（fund list / positions / nav / risk snapshot / query_business_db）。
+
+### 4.7 wind MCP（stdio）
+
+```powershell
+Set-Location "d:\vsproject\fsi-risk-platform"
+$env:WIND_USERNAME='your_wind_user'
+$env:WIND_PASSWORD='your_wind_password'
+python 4_mcp/wind/wind_mcp_server.py
+```
+
+作用：提供 Wind 行情、指數、評級等外部工具。
+
 ---
 
 ## 5. 端口占用清理
@@ -196,6 +255,10 @@ curl http://127.0.0.1:8000/docs
 
 # 前端
 open http://localhost:5173
+
+# MCP Gateway
+curl http://127.0.0.1:8002/health
+curl http://127.0.0.1:8002/tools
 ```
 
 業務鏈路冒煙驗證：
@@ -204,6 +267,54 @@ open http://localhost:5173
 # 直接查詢 entry -> processing（跳過 LLM）
 curl "http://127.0.0.1:8010/query/risk/var-compare/BHMMF001?as_of_date=2026-06-25"
 # 期望：200，results 有值
+```
+
+MCP 鏈路冒煙驗證：
+
+```powershell
+# 1) 驗證 gateway 可用
+Invoke-RestMethod http://127.0.0.1:8002/health
+
+# 2) 透過 gateway 調 internal get_context
+Invoke-RestMethod -Method Post http://127.0.0.1:8002/mcp/internal/get_context -ContentType 'application/json' -Body '{"arguments":{}}'
+
+# 3) 透過 shared client 驗證 MCP 調用（gateway 優先）
+$env:MCP_GATEWAY_URL='http://127.0.0.1:8002'
+@'
+import asyncio
+import importlib
+m = importlib.import_module("4_mcp.client")
+async def main():
+     r = await m.call_internal_tool("get_context", {})
+     print(r)
+asyncio.run(main())
+'@ | python -
+```
+
+---
+
+## 6.1 完整使用 MCP 的完整命令（推薦直接複製）
+
+```bash
+# A. 一鍵啟動 Web + MCP 全套（gateway + internal + wind）
+python scripts/dev.py --profile web --with-mcp
+
+# B. 一鍵啟動完整 profile（已含 mcp-gateway/internal/wind）
+python scripts/dev.py --profile full
+
+# C. 顯式 parts 啟動（最清楚）
+python scripts/dev.py --parts processing entry backend frontend mcp-gateway internal-mcp wind-mcp
+```
+
+```powershell
+# A. PowerShell 一鍵 Web + MCP 全套
+./scripts/dev.ps1 -Profile web -WithMcp
+
+# B. PowerShell 完整 profile
+./scripts/dev.ps1 -Profile full
+
+# C. PowerShell 顯式 parts
+./scripts/dev.ps1 -Parts processing,entry,backend,frontend,mcp-gateway,internal-mcp,wind-mcp
 ```
 
 ---

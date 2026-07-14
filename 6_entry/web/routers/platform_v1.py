@@ -26,7 +26,7 @@ from pydantic import BaseModel
 REPO_ROOT = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from platform_agent.engine import run_platform_agent, PLATFORM_AGENT_NAMES, PLATFORM_TOOLS
+from platform_agent.engine import platform_sse_generator, PLATFORM_AGENT_NAMES, PLATFORM_TOOLS
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -68,25 +68,18 @@ async def platform_stream(req: PlatformStreamRequest):
 
     messages = [{"role": m.get("role"), "content": m.get("content")} for m in req.messages]
 
-    def _sse(event: dict) -> str:
-        return f"data: {json.dumps(event, ensure_ascii=False, default=str)}\n\n"
-
     async def _stream():
-        yield _sse({"type": "start", "agent": req.agent,
-                    "agent_name": PLATFORM_AGENT_NAMES[req.agent]})
         try:
-            async for event in run_platform_agent(
+            async for event in platform_sse_generator(
                 messages=messages,
                 agent_name=req.agent,
                 model=req.model,
             ):
-                yield _sse(event)
-                if event.get("type") in ("done", "error"):
-                    return
+                yield event
         except Exception as exc:
             logger.exception("Platform Agent stream error")
-            yield _sse({"type": "error", "message": str(exc)})
-        yield _sse({"type": "done"})
+            yield f"data: {json.dumps({'type': 'error', 'message': str(exc)}, ensure_ascii=False)}\n\n"
+            yield "data: {\"type\": \"done\"}\n\n"
 
     return StreamingResponse(
         _stream(),

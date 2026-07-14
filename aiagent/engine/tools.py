@@ -15,6 +15,8 @@ from __future__ import annotations
 import json
 import logging
 import os
+import importlib
+from datetime import date
 from typing import Any
 
 import httpx
@@ -23,6 +25,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+
+async def _call_internal_mcp(tool_name: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
+    """透過 4_mcp/internal MCP server 讀取內部資料。"""
+    try:
+        client_mod = importlib.import_module("4_mcp.client")
+        return await client_mod.call_internal_tool(tool_name, arguments)
+    except Exception as exc:
+        logger.error("[mcp] internal %s failed: %s", tool_name, exc)
+        return {"error": str(exc)[:200], "tool": tool_name}
 
 # ── 調用路徑配置 ───────────────────────────────────────────────────
 TOOL_MODE        = os.getenv("AGENT_TOOL_MODE", "direct")          # direct | via_backend
@@ -529,12 +541,40 @@ async def _execute_generate_report(inp: dict) -> dict:
 async def _execute_query_internal_db(inp: dict) -> dict:
     """
     Layer 3 — 查詢內部數據庫（AI → 4_mcp 內部 MCP 查詢邏輯）。
-    直接調用 processing API 獲取結構化數據。
+    優先走 4_mcp/internal 的只讀 MCP tool。
     """
     qtype    = inp.get("query_type", "")
     fund_id  = inp.get("fund_id", "")
     start    = inp.get("start_date", "")
     end      = inp.get("end_date", "")
+
+    if qtype == "fund_list":
+        return await _call_internal_mcp("get_fund_list", {})
+
+    if qtype == "nav_history":
+        if not (fund_id and start):
+            return {"error": "nav_history 需要 fund_id 和 start_date"}
+        return await _call_internal_mcp("get_nav_history", {
+            "fund_id": fund_id,
+            "start_date": start,
+            "end_date": end or start,
+        })
+
+    if qtype == "risk_snapshot":
+        if not fund_id:
+            return {"error": "risk_snapshot 需要 fund_id"}
+        return await _call_internal_mcp("get_risk_snapshot", {
+            "fund_id": fund_id,
+            "as_of_date": end or date.today().isoformat(),
+        })
+
+    if qtype == "var_series":
+        if not (fund_id and start):
+            return {"error": "var_series 需要 fund_id 和 start_date"}
+        return await _call_internal_mcp("get_var_three_methods", {
+            "fund_id": fund_id,
+            "as_of_date": end or start,
+        })
 
     try:
         async with httpx.AsyncClient(
@@ -542,43 +582,25 @@ async def _execute_query_internal_db(inp: dict) -> dict:
             headers={"X-API-Key": PROCESSING_KEY},
             timeout=20,
         ) as c:
-            if qtype == "fund_list":
-                r = await c.get("/context")
-                return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}"}
-
-            elif qtype == "nav_history":
-                if not (fund_id and start):
-                    return {"error": "nav_history 需要 fund_id 和 start_date"}
-                r = await c.get(f"/positions/{fund_id}/nav", params={"start": start, "end": end or start})
-                return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}", "detail": r.text[:200]}
-
-            elif qtype == "risk_snapshot":
+            if qtype == "risk_snapshot":
                 if not fund_id:
                     return {"error": "risk_snapshot 需要 fund_id"}
-                from datetime import date
                 today = date.today().isoformat()
                 r = await c.get(f"/risk/exposure/{fund_id}", params={"as_of_date": end or today})
                 return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}", "detail": r.text[:200]}
 
-            elif qtype == "var_series":
-                if not (fund_id and start):
-                    return {"error": "var_series 需要 fund_id 和 start_date"}
-                r = await c.get(f"/risk/var/{fund_id}", params={
-                    "as_of_date": end or start,
-                    "method": "historical",
-                    "confidence": 0.99,
-                })
-                return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}"}
-
-            else:
-                return {"error": f"未知查詢類型：{qtype}"}
+            return {"error": f"未知查詢類型：{qtype}"}
     except Exception as exc:
         logger.error("[tool] query_internal_db failed: %s", exc)
         return {"error": str(exc)[:200]}
 
 
 async def _execute_get_system_info() -> dict:
-    """調用 processing /context 端點，返回基金列表 + 當前日期。"""
+    """優先調用 4_mcp/internal 的 get_context，再降級到 processing /context。"""
+    result = await _call_internal_mcp("get_context", {})
+    if result and not result.get("error"):
+        return result
+
     try:
         async with httpx.AsyncClient(
             base_url=PROCESSING_URL,
@@ -644,6 +666,80 @@ async def _execute_sector_overview(inp: dict) -> dict:
 
 async def _call_direct(name: str, inp: dict) -> dict:
     """路徑 A：直接調用 processing:8001"""
+    if name == "get_positions":
+        return await _call_internal_mcp("get_positions", {
+            "fund_id": inp.get("fund_id", ""),
+            "as_of_date": inp.get("as_of_date", ""),
+            "asset_type": inp.get("asset_type"),
+            "limit": inp.get("limit", 50),
+        })
+
+    if name == "get_nav_history":
+        return await _call_internal_mcp("get_nav_history", {
+            "fund_id": inp.get("fund_id", ""),
+            "start_date": inp.get("start_date", ""),
+            "end_date": inp.get("end_date", ""),
+        })
+
+    if name == "get_var_compare":
+        result = await _call_internal_mcp("get_var_three_methods", {
+            "fund_id": inp.get("fund_id", ""),
+            "as_of_date": inp.get("as_of_date", ""),
+            "confidence": inp.get("confidence", 0.99),
+            "horizon_days": inp.get("horizon_days", 1),
+            "lookback_days": inp.get("lookback_days", 252),
+            "min_observations": inp.get("min_observations", 30),
+            "simulations": inp.get("simulations", 10000),
+        })
+        if result.get("error"):
+            return result
+        raw_results = result.get("results", [])
+        if isinstance(raw_results, list):
+            max_var = max(float(r.get("var_pct_nav") or 0) for r in raw_results if isinstance(r, dict)) if raw_results else 0
+            result["max_var_pct_nav"] = max_var
+        return result
+
+    if name == "get_var":
+        result = await _call_internal_mcp("get_var_three_methods", {
+            "fund_id": inp.get("fund_id", ""),
+            "as_of_date": inp.get("as_of_date", ""),
+            "confidence": inp.get("confidence", 0.99),
+            "horizon_days": inp.get("horizon_days", 1),
+            "lookback_days": inp.get("lookback_days", 252),
+            "min_observations": inp.get("min_observations", 30),
+            "simulations": inp.get("simulations", 10000),
+        })
+        if result.get("error"):
+            return result
+        method = str(inp.get("method", "historical"))
+        method_map = {
+            "historical": "HISTORICAL_SIMULATION",
+            "monte_carlo": "MONTE_CARLO",
+            "distribution": "DISTRIBUTION_FORMULA",
+        }
+        desired = method_map.get(method, "HISTORICAL_SIMULATION")
+        chosen = None
+        for item in result.get("results", []):
+            if isinstance(item, dict) and item.get("method") == desired:
+                chosen = item
+                break
+        if chosen is None and isinstance(result.get("results"), list) and result["results"]:
+            chosen = result["results"][0]
+        if isinstance(chosen, dict):
+            return {
+                "fund_id": result.get("fund_id", inp.get("fund_id", "")),
+                "as_of_date": result.get("as_of_date", inp.get("as_of_date", "")),
+                "confidence": result.get("confidence", inp.get("confidence", 0.99)),
+                "horizon_days": result.get("horizon_days", inp.get("horizon_days", 1)),
+                "var_hkd": chosen.get("var_hkd", 0),
+                "var_pct_nav": chosen.get("var_pct_nav", 0),
+                "cvar_hkd": chosen.get("cvar_hkd", 0),
+                "method": chosen.get("method", desired),
+                "sample_size": chosen.get("sample_size", 0),
+                "method_requested": method,
+            }
+        return result
+
     headers = {"X-API-Key": PROCESSING_KEY}
     fund_id = inp.get("fund_id", "")
 

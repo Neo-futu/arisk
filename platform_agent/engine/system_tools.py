@@ -17,12 +17,23 @@ from __future__ import annotations
 import json
 import logging
 import os
+import importlib
 from pathlib import Path
 from typing import Any
 
 import httpx
 
 logger = logging.getLogger(__name__)
+
+
+async def _call_internal_mcp(tool_name: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
+    """透過 4_mcp/internal MCP server 讀取內部只讀資料。"""
+    try:
+        client_mod = importlib.import_module("4_mcp.client")
+        return await client_mod.call_internal_tool(tool_name, arguments)
+    except Exception as exc:
+        logger.error("[mcp] internal %s failed: %s", tool_name, exc)
+        return {"error": str(exc)[:200], "tool": tool_name}
 
 PROCESSING_URL = os.getenv("PROCESSING_API_URL", "http://localhost:8001")
 PROCESSING_KEY = os.getenv("PROCESSING_API_KEY", "internal_key_change_me")
@@ -325,11 +336,16 @@ async def _check_system_health(inp: dict) -> dict:
 
 
 async def _query_business_db(inp: dict) -> dict:
-    """只讀查詢業務數據（僅 SELECT）。"""
+    """只讀查詢業務數據（僅 SELECT），優先走 4_mcp/internal 的 query_business_db。"""
     sql   = inp.get("sql", "").strip()
     limit = min(int(inp.get("limit", 50)), 200)
     if not sql.upper().lstrip().startswith("SELECT"):
         return {"error": "安全限制：只允許 SELECT 查詢"}
+
+    mcp_result = await _call_internal_mcp("query_business_db", {"sql": sql, "limit": limit})
+    if not mcp_result.get("error"):
+        return mcp_result
+
     db_url = os.getenv("DATABASE_URL") or (
         f"postgresql://{os.getenv('POSTGRES_USER','postgres')}:"
         f"{os.getenv('POSTGRES_PASSWORD','postgres')}@"

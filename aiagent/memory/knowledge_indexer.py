@@ -182,6 +182,25 @@ async def run_default_indexing() -> None:
         logger.info("  %s: %d 個", src, cnt)
 
 
+async def refresh_skill_docs() -> dict[str, int]:
+    """
+    只重新掃描 3_skills/skills/ 下的專家技能。
+
+    這個入口適合在 Chat 載入時呼叫，讓新建的 expert skill 可以立即被索引。
+    """
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    logger.info("\n[refresh] 3_skills/skills/ → skill_doc（業務技能）...")
+
+    docs = _collect_skill_docs()
+    if not docs:
+        logger.warning("[refresh] 未找到可索引的 3_skills/skills 文檔")
+        return {"scanned": 0, "indexed": 0}
+
+    indexed = await index_all(docs)
+    logger.info("[refresh] 完成：%d / %d", indexed, len(docs))
+    return {"scanned": len(docs), "indexed": indexed}
+
+
 # ── CLI 入口 ─────────────────────────────────────────────────────
 
 def main() -> None:
