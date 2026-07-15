@@ -41,6 +41,66 @@ TOOL_MODE        = os.getenv("AGENT_TOOL_MODE", "direct")          # direct | vi
 PROCESSING_URL   = os.getenv("PROCESSING_API_URL", "http://localhost:8001")
 PROCESSING_KEY   = os.getenv("PROCESSING_API_KEY", "internal_key_change_me")
 BACKEND_URL      = os.getenv("BACKEND_URL", "http://localhost:8000")
+REVIEW_REQUIRED  = os.getenv("SKILL_EXTRACTION_REVIEW_REQUIRED", "true").lower() in {"1", "true", "yes", "on"}
+
+
+async def _request_skill_extraction_approval(
+    *,
+    channel: str,
+    fund_id: str | None,
+    as_of_date: str | None,
+    skill_name: str | None,
+    query: str | None,
+    triggered_by: str,
+    payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """
+    在提取專家知識或執行技能前先走審批 gate。
+
+    gate 由 Processing 層實現（requires_review + checkpoint），
+    本函數只負責把請求送入 gate 並等待審批結果。
+    """
+    if not REVIEW_REQUIRED:
+        return {"approved": True, "review_bypassed": True}
+
+    params = {}
+    if fund_id:
+        params["fund_id"] = fund_id
+    if as_of_date:
+        params["as_of_date"] = as_of_date
+
+    body = {
+        "channel": channel,
+        "skill_name": skill_name,
+        "query": query,
+        "triggered_by": triggered_by,
+        "payload": payload or {},
+    }
+
+    try:
+        async with httpx.AsyncClient(
+            base_url=PROCESSING_URL,
+            headers={"X-API-Key": PROCESSING_KEY},
+            timeout=930,
+        ) as client:
+            resp = await client.post("/review/gates/skill-extraction", params=params, json=body)
+
+        if resp.status_code == 200:
+            return resp.json()
+
+        detail = resp.text[:300]
+        return {
+            "approved": False,
+            "status_code": resp.status_code,
+            "error": f"技能提取未通過審批（HTTP {resp.status_code}）：{detail}",
+        }
+    except Exception as exc:
+        logger.error("[review-gate] skill extraction approval call failed: %s", exc)
+        return {
+            "approved": False,
+            "status_code": 500,
+            "error": f"技能提取審批調用失敗：{str(exc)[:200]}",
+        }
 
 # ── Claude tool_use 格式工具定義 ───────────────────────────────────
 # 參考 claude-risk-agent/plugins/vertical-plugins/financial-analysis/ 的 Skill 模式
@@ -377,6 +437,22 @@ async def _execute_skill(inp: dict) -> dict:
     if not skill_name:
         return {"error": "缺少 skill_name"}
 
+    gate = await _request_skill_extraction_approval(
+        channel="agentchat-skill",
+        fund_id=fund_id or None,
+        as_of_date=as_of_date or None,
+        skill_name=skill_name,
+        query=None,
+        triggered_by="aiagent.execute_skill",
+        payload={"tool": "execute_skill", "input": inp},
+    )
+    if not gate.get("approved", False):
+        return {
+            "error": gate.get("error", "技能提取審批未通過"),
+            "review_required": True,
+            "action": "請到 /review-ui/inbox 完成審批後重試",
+        }
+
     # 先嘗試直接讀取 SKILL.md 文件（最準確）
     try:
         from pathlib import Path
@@ -472,6 +548,26 @@ async def _execute_knowledge_search(inp: dict) -> dict:
 
     if not query:
         return {"error": "query 不能為空"}
+
+    source_value = (source or "").strip().lower()
+    requires_gate = source_value in {"skill_doc", "agent_prompt", "expert_chat"}
+
+    if requires_gate:
+        gate = await _request_skill_extraction_approval(
+            channel="expert-knowledge",
+            fund_id=inp.get("fund_id"),
+            as_of_date=inp.get("as_of_date"),
+            skill_name=None,
+            query=query,
+            triggered_by="aiagent.knowledge_search",
+            payload={"tool": "knowledge_search", "source": source, "top_k": top_k},
+        )
+        if not gate.get("approved", False):
+            return {
+                "error": gate.get("error", "專家知識提取審批未通過"),
+                "review_required": True,
+                "action": "請到 /review-ui/inbox 完成審批後重試",
+            }
 
     try:
         from pathlib import Path

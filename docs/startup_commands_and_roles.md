@@ -317,6 +317,39 @@ python scripts/dev.py --parts processing entry backend frontend mcp-gateway inte
 ./scripts/dev.ps1 -Parts processing,entry,backend,frontend,mcp-gateway,internal-mcp,wind-mcp
 ```
 
+## 6.2 專家知識提取 / Agent Chat 技能提取審批（新）
+
+以下流程已接入強制審批 gate：
+
+- `aiagent.engine.tools.execute_skill`（Agent Chat 的技能提取）
+- `aiagent.engine.tools.knowledge_search`（當 source=skill_doc / agent_prompt / expert_chat 的專家知識提取）
+
+實現方式：
+
+- Agent 工具層先調用 `POST /review/gates/skill-extraction`
+- Processing 端點使用 `requires_review(...)` 建立審批請求 + checkpoint 阻塞
+- 審核員在 `http://127.0.0.1:8010` 的「審核收件箱」完成批准/拒絕
+- 小富 AI 會自動給出審核建議（APPROVE/REJECT/ESCALATE/REQUIRE_HUMAN），人工可採納
+- 批准後工具繼續執行；拒絕則工具返回審批未通過
+
+快速演示（已啟動 `processing entry backend frontend`）：
+
+```powershell
+# 1) 直接觸發審批 gate（模擬 Agent Chat 技能提取）
+Invoke-RestMethod -Method Post `
+     -Uri "http://127.0.0.1:8001/review/gates/skill-extraction?fund_id=BHMMF001&as_of_date=2026-06-25" `
+     -Headers @{ "X-API-Key" = "internal_key_change_me" } `
+     -ContentType "application/json" `
+     -Body '{"channel":"agentchat-skill","skill_name":"risk-analysis","query":"請提取風控技能流程","triggered_by":"demo-cli"}'
+
+# 2) 打開審核頁，處理待審核單
+#    http://127.0.0.1:8010  -> 審核收件箱
+
+# 3) 批准後重新執行第 1 步，將返回 approved=true
+```
+
+更多設計與狀態機說明見：`docs/skill_approval_workflow.md`
+
 ---
 
 ## 7. 依賴 API Key 說明

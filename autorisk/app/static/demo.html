@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AutoRisk · 智能風控評估台</title>
+  <link rel="stylesheet" href="/static/demo.css">
+</head>
+<body>
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
+  <header class="topbar">
+    <a class="brand" href="/demo" aria-label="AutoRisk 首頁">
+      <span class="brand-mark">AR</span>
+      <span><strong>AutoRisk</strong><small>INTELLIGENT RISK CONTROL</small></span>
+    </a>
+    <div class="health" id="health"><span></span>正在連接服務</div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div>
+        <p class="eyebrow">PRE-TRADE RISK ASSESSMENT</p>
+        <h1>加倉風險評估<br><em>全流程可視化</em></h1>
+        <p class="hero-copy">從加倉請求、風險計算和規則判定，到 AI Risk Officer 與 AI MIC 雙級覆核、報告生成和執行決策。</p>
+      </div>
+      <div class="hero-stat">
+        <span>工作流</span><strong id="workflowMode">—</strong>
+        <span>AI Provider</span><strong id="aiProvider">—</strong>
+      </div>
+    </section>
+
+    <section class="workspace">
+      <aside class="request-panel card">
+        <div class="section-heading">
+          <span class="step-number">01</span>
+          <div><h2>提交加倉請求</h2><p>輸入業務條件，系統自動補全演示市場數據</p></div>
+        </div>
+        <form id="assessmentForm">
+          <label>基金名稱
+            <input id="fundName" name="fundName" value="平衡增長一號基金" maxlength="120" required>
+          </label>
+          <label>評估日期
+            <input id="evaluationDate" name="evaluationDate" type="date" required>
+          </label>
+          <label>請求加倉金額（HKD）
+            <div class="money-input"><span>HK$</span><input id="addAmount" name="addAmount" type="number" value="10000000" min="100000" max="10000000000" step="100000" required></div>
+          </label>
+          <label>API Key
+            <input id="apiKey" name="apiKey" type="password" value="autorisk-dev-key" autocomplete="off" required>
+          </label>
+          <div class="quick-amounts">
+            <button type="button" data-amount="5000000">500 萬</button>
+            <button type="button" data-amount="10000000">1,000 萬</button>
+            <button type="button" data-amount="30000000">3,000 萬</button>
+            <button type="button" data-amount="60000000">6,000 萬</button>
+          </div>
+          <button class="primary" id="submitButton" type="submit"><span>開始智能風控評估</span><b>→</b></button>
+          <p class="form-note">演示數據根據基金名稱與日期確定性生成。生產環境應接入真實 NAV、持倉和市場數據 API。</p>
+        </form>
+      </aside>
+
+      <section class="result-panel">
+        <div id="emptyState" class="empty-state card">
+          <div class="radar"><i></i><i></i><i></i><b></b></div>
+          <h2>等待風控請求</h2>
+          <p>提交表單後，完整評估鏈路會顯示在這裡。</p>
+        </div>
+
+        <div id="loadingState" class="loading-state card hidden">
+          <div class="section-heading"><span class="step-number">AI</span><div><h2>正在執行智能風控</h2><p id="loadingMessage">接收並驗證加倉請求</p></div></div>
+          <div class="progress-track"><span id="progressBar"></span></div>
+          <div class="pipeline" id="pipeline"></div>
+        </div>
+
+        <div id="resultState" class="hidden">
+          <section class="decision-card card" id="decisionCard">
+            <div>
+              <p class="eyebrow">FINAL EXECUTION DECISION</p>
+              <div class="decision-line"><span id="severityBadge">—</span><h2 id="decisionText">—</h2></div>
+              <p id="finalCommentary"></p>
+            </div>
+            <div class="decision-meta">
+              <span>報告編號</span><strong id="reportId">—</strong>
+              <span>狀態</span><strong id="reportStatus">—</strong>
+            </div>
+          </section>
+
+          <section class="metrics-grid" id="metricsGrid"></section>
+
+          <section class="chart-card card">
+            <div class="section-heading compact"><span class="step-number">02</span><div><h2>今年以來淨值與回撤</h2><p id="chartSubtitle">演示 NAV 時序</p></div></div>
+            <div class="chart-wrap"><svg id="navChart" viewBox="0 0 900 260" preserveAspectRatio="none" role="img" aria-label="基金淨值走勢圖"></svg></div>
+          </section>
+
+          <section class="rules-card card">
+            <div class="section-heading compact"><span class="step-number">03</span><div><h2>規則引擎判定</h2><p id="ruleVersion">—</p></div></div>
+            <div id="violations"></div>
+          </section>
+
+          <section class="reviews">
+            <article class="review-card card" id="firstReview"></article>
+            <article class="review-card card" id="secondReview"></article>
+          </section>
+
+          <section class="report-card card">
+            <div class="section-heading compact"><span class="step-number">06</span><div><h2>評估報告與審計證據</h2><p>結構化結論、雙簽和可驗證工件</p></div></div>
+            <div class="report-summary" id="reportSummary"></div>
+            <div class="evidence-grid" id="evidenceGrid"></div>
+            <div class="actions">
+              <button type="button" id="verifyButton">驗證完整性</button>
+              <button type="button" data-format="json">下載 JSON</button>
+              <button type="button" data-format="md">下載 Markdown</button>
+              <button type="button" data-format="html">下載 HTML</button>
+            </div>
+            <pre id="verifyResult" class="verify-result hidden"></pre>
+          </section>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <footer>AutoRisk · 規則驅動 · AI 雙級覆核 · 可驗證審計</footer>
+  <script src="/static/demo.js"></script>
+</body>
+</html>

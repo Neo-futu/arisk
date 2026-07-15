@@ -142,6 +142,7 @@ def requires_review(
     title: str,
     summary: str = "",
     fund_id_param: str = "fund_id",
+    timeout_seconds: int = MAX_WAIT_SECONDS,
 ):
     """
     裝飾器版本：適合 FastAPI 路由或普通 async 函數。
@@ -175,6 +176,7 @@ def requires_review(
                 triggered_by=caller,
                 payload={"args": str(kwargs)[:500]},
                 fund_id=fund_id,
+                timeout_seconds=timeout_seconds,
             ) as approved:
                 if approved:
                     return await func(*args, **kwargs)

@@ -1,0 +1,65 @@
+{
+  "version": "2026.07.15",
+  "rules": [
+    {
+      "rule_id": "LIMIT_LEVERAGE",
+      "name": "基金槓桿率限制",
+      "metric": "leverage_ratio",
+      "direction": "HIGH_IS_RISK",
+      "yellow_threshold": 1.15,
+      "red_threshold": 1.30,
+      "yellow_action": "WARN_AND_SIGNOFF",
+      "red_action": "BLOCK",
+      "regulatory_ref": "基金合同及公司槓桿內控規則",
+      "enabled": true
+    },
+    {
+      "rule_id": "LIMIT_SINGLE_STOCK",
+      "name": "單一標的集中度限制",
+      "metric": "single_stock_concentration",
+      "direction": "HIGH_IS_RISK",
+      "yellow_threshold": 0.085,
+      "red_threshold": 0.10,
+      "yellow_action": "WARN_AND_SIGNOFF",
+      "red_action": "BLOCK",
+      "regulatory_ref": "基金合同單一資產集中度限制",
+      "enabled": true
+    },
+    {
+      "rule_id": "LIMIT_VAR_95_1D",
+      "name": "1日95% VaR 限制",
+      "metric": "var_95_1d",
+      "direction": "HIGH_IS_RISK",
+      "yellow_threshold": 0.020,
+      "red_threshold": 0.025,
+      "yellow_action": "WARN_AND_SIGNOFF",
+      "red_action": "BLOCK",
+      "regulatory_ref": "公司市場風險限額",
+      "enabled": true
+    },
+    {
+      "rule_id": "LIMIT_LIQUIDITY",
+      "name": "最低流動性比例",
+      "metric": "liquidity_ratio",
+      "direction": "LOW_IS_RISK",
+      "yellow_threshold": 0.15,
+      "red_threshold": 0.10,
+      "yellow_action": "WARN_AND_SIGNOFF",
+      "red_action": "BLOCK",
+      "regulatory_ref": "基金合同及流動性風險管理政策",
+      "enabled": true
+    },
+    {
+      "rule_id": "LIMIT_MAX_DRAWDOWN",
+      "name": "年內最大回撤限制",
+      "metric": "max_drawdown",
+      "direction": "HIGH_IS_RISK",
+      "yellow_threshold": 0.10,
+      "red_threshold": 0.15,
+      "yellow_action": "WARN_AND_SIGNOFF",
+      "red_action": "BLOCK",
+      "regulatory_ref": "公司市場風險及回撤限額管理政策",
+      "enabled": true
+    }
+  ]
+}

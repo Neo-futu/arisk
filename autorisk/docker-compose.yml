@@ -1,0 +1,10 @@
+services:
+  autorisk:
+    build: .
+    ports:
+      - "8100:8100"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

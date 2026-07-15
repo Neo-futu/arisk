@@ -18,6 +18,7 @@ from ...review.review_manager import (
     reject_review,
 )
 from ...review.checkpoint import notify_decision
+from ...review.checkpoint import requires_review
 
 router = APIRouter(dependencies=[Depends(verify_api_key)])
 
@@ -50,6 +51,17 @@ class RejectRequest(BaseModel):
 
 class ClaimRequest(BaseModel):
     reviewer: str
+
+
+class SkillExtractionGateRequest(BaseModel):
+    """審批 gate：專家知識/技能提取前先經過人工或小富 AI 審核。"""
+    channel: str = "agentchat"
+    skill_name: str | None = None
+    query: str | None = None
+    triggered_by: str = "aiagent.execute_tool"
+    session_id: str | None = None
+    user_id: str | None = None
+    payload: dict = {}
 
 
 # ─── Endpoints ───────────────────────────────────────────────────
@@ -92,6 +104,45 @@ async def list_pending_reviews(
     """
     reviews = await get_pending_reviews(db, fund_id=fund_id, category=category, limit=limit)
     return {"count": len(reviews), "reviews": reviews}
+
+
+@router.post("/gates/skill-extraction")
+@requires_review(
+    category="AGENT_HANDOFF",
+    title="專家/Agent Chat 技能提取審批",
+    summary="敏感技能提取請求，需人工或小富 AI 建議後放行",
+    fund_id_param="fund_id",
+    timeout_seconds=900,
+)
+async def gate_skill_extraction(
+    body: SkillExtractionGateRequest,
+    fund_id: str | None = Query(default=None),
+    as_of_date: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    redis: aioredis.Redis = Depends(get_redis),
+):
+    """
+    讓專家知識提取與 Agent Chat 技能提取走統一審批門禁。
+
+    行為說明：
+    1. 進入端點即由 requires_review 建立 review_request + checkpoint 並阻塞
+    2. 審核員在 /review-ui/inbox 批准/拒絕，或採納小富 AI 建議
+    3. 批准後端點返回 200；拒絕時 requires_review 直接拋出 403
+    """
+    return {
+        "approved": True,
+        "category": "AGENT_HANDOFF",
+        "channel": body.channel,
+        "skill_name": body.skill_name,
+        "query": body.query,
+        "fund_id": fund_id,
+        "as_of_date": as_of_date,
+        "triggered_by": body.triggered_by,
+        "session_id": body.session_id,
+        "user_id": body.user_id,
+        "payload": body.payload,
+        "message": "審批已通過，允許技能提取。",
+    }
 
 
 @router.get("/{review_id}")
