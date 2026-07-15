@@ -32,6 +32,18 @@ const authHeaders = () => {
   return t ? { Authorization: `Bearer ${t}` } : {}
 }
 
+const extractSkillNameFromContent = (content: string) => {
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/)
+  if (!match) return ""
+  const nameLine = match[1].split("\n").find(line => line.startsWith("name:"))
+  return nameLine ? nameLine.split(":", 2)[1].trim() : ""
+}
+
+const isPlaceholderSkillTitle = (title: string) => {
+  const normalized = title.trim().toLowerCase()
+  return ["new-skill", "new skill", "skill", "untitled-skill", "placeholder-skill"].includes(normalized)
+}
+
 // ── 知識文檔列表 ────────────────────────────────────────────────
 function DocumentList() {
   const qc = useQueryClient()
@@ -41,6 +53,7 @@ function DocumentList() {
       { headers: authHeaders() }).then(r => r.data),
     staleTime: 10_000,
   })
+  const visibleDocs = docs.filter((d: any) => !(d.source === "skill_doc" && isPlaceholderSkillTitle(String(d.title ?? ""))))
   const sourceColor: Record<string, string> = {
     skill_doc:    "bg-blue-100 text-blue-700",
     agent_prompt: "bg-purple-100 text-purple-700",
@@ -55,15 +68,15 @@ function DocumentList() {
         <CardTitle className="text-sm flex items-center gap-2">
           <BookOpen className="h-4 w-4" />
           已索引知識文檔
-          <Badge variant="outline" className="ml-auto">{docs.length} 篇</Badge>
+          <Badge variant="outline" className="ml-auto">{visibleDocs.length} 篇</Badge>
         </CardTitle>
       </CardHeader>
       <CardContent>
         {isLoading ? <p className="text-xs text-muted-foreground animate-pulse">載入中...</p>
-          : docs.length === 0 ? <p className="text-xs text-muted-foreground">暫無文檔</p>
+          : visibleDocs.length === 0 ? <p className="text-xs text-muted-foreground">暫無文檔</p>
           : (
             <div className="space-y-1.5 max-h-64 overflow-y-auto">
-              {docs.map((d: any) => (
+              {visibleDocs.map((d: any) => (
                 <div key={d.id} className="flex items-center gap-2 text-xs group">
                   <span className={`rounded px-1.5 py-0.5 text-[10px] shrink-0 ${sourceColor[d.source] ?? "bg-gray-100 text-gray-700"}`}>
                     {d.source}
@@ -215,7 +228,8 @@ function ExpertPage() {
   const saveSkillAsFile = async () => {
     if (!extractedSkill.trim() || !topic.trim()) return
     setSaving(true); setSaveMsg("")
-    const skillName = topic.trim().toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "").replace(/-+/g, "-") || "new-skill"
+    const frontmatterName = extractSkillNameFromContent(extractedSkill)
+    const skillName = (frontmatterName || topic.trim().toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "").replace(/-+/g, "-")) || "skill"
     try {
       const resp = await axios.post(`${BASE}/api/v1/knowledge/save-skill`,
         { skill_name: skillName, skill_content: extractedSkill, layer: layer === "platform" ? "expert" : "chat", also_index: true },

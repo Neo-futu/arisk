@@ -29,6 +29,44 @@ backend/         統一 API / JWT / FSI 代理
 1_datastorage/   PostgreSQL / Redis / S3
 ```
 
+## 平台分層設計策略
+
+ARISK 採用「上層負責體驗與編排、下層負責計算與取數」的分層方式，目標是把 UI、認證、Agent 編排、技能知識、資料連接、業務計算、資料儲存拆開，避免互相耦合。
+
+核心原則：
+
+- **唯一前端入口**：`frontend/` 是唯一對使用者開放的 Web 入口。
+- **統一後端收口**：`backend/` 負責 JWT、權限與 API 代理，不直接承擔業務計算。
+- **Agent 執行入口獨立**：`6_entry/` 負責 LLM 對話、tool_use 循環與內部直查，不直接對外暴露成主產品 Web。
+- **技能與知識分離**：`3_skills/` 存放可被索引的技能與命令，是知識資產層，不是長駐服務。
+- **資料連接與業務邏輯分離**：`4_mcp/` 只負責外部/內部資料連接，不做業務判斷。
+- **計算與查詢確定化**：`2_processing/` 承擔風控計算、業績分析、SQL 核心查詢。
+- **儲存層獨立**：`1_datastorage/` 只管 PostgreSQL / Redis / S3 等底層資源。
+
+## 各子文件夾作用
+
+| 目錄 | 作用 | 目的 |
+|---|---|---|
+| `1_datastorage/` | PostgreSQL / Redis / S3 / migrations / docker-compose | 提供所有資料與快取基礎設施 |
+| `2_processing/` | FastAPI 計算核心、風控指標、業績分析、Celery workers | 提供確定性業務計算與查詢結果 |
+| `3_skills/` | SKILL.md 技能庫、commands、agents、prompts | 提供可索引的業務知識與技能資產 |
+| `4_mcp/` | Wind MCP、Internal MCP、MCP Gateway、client | 提供統一資料連接入口，屏蔽底層來源差異 |
+| `5_deploy/` | Agent 編排、部署腳本、k8s、Docker、subagents | 提供部署與多 Agent 編排配置 |
+| `6_entry/` | Agent / Direct / CLI / Excel 內部入口 | 提供 LLM 執行與內部調用入口 |
+| `backend/` | JWT、RBAC、統一 API、FSI 代理路由 | 提供對外收口與安全邊界 |
+| `frontend/` | React SPA（Dashboard + Chat） | 提供唯一瀏覽器 UI |
+| `aiagent/` | 用戶層業務 AI 的執行與知識模塊 | 處理 Chat Agent 的對話、工具與記憶 |
+| `platform_agent/` | 系統層業務 AI 的執行與運維模塊 | 處理自動運維、排程與平台級流程 |
+
+## 分層邊界
+
+- `frontend/` 只呼叫 `backend/`。
+- `backend/` 只代理到 `6_entry/` 或 `2_processing/`。
+- `6_entry/` 透過工具層與 `2_processing/`、`4_mcp/`、`3_skills/` 協作。
+- `3_skills/` 只保存技能與命令，不承擔 UI 或長駐服務。
+- `4_mcp/` 只做資料連接，不實作業務策略。
+- `platform_agent/` 與 `aiagent/` 是兩套不同的 agent runtime，目標不同、入口不同。
+
 ## 快速開始
 
 ### 1. 環境設置

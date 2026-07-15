@@ -279,6 +279,19 @@ class SaveSkillRequest(BaseModel):
     also_index:    bool = True      # 同時索引到知識庫
 
 
+def _extract_skill_frontmatter_name(skill_content: str) -> str | None:
+    import re
+
+    m = re.match(r"^---\r?\n(.*?)\r?\n---\r?\n", skill_content, flags=re.DOTALL)
+    if not m:
+        return None
+    for line in m.group(1).splitlines():
+        if line.startswith("name:"):
+            value = line.split(":", 1)[1].strip()
+            return value or None
+    return None
+
+
 async def _call_llm_for_skill(model_id: str, prompt: str) -> str | None:
     """
     根據 model_id 路由到對應 LLM API，執行技能提取。
@@ -392,6 +405,10 @@ async def save_skill_to_file(
     if not skill_name:
         raise HTTPException(400, "技能名稱無效（只允許小寫字母、數字、連字符）")
 
+    expert_skill_name = _extract_skill_frontmatter_name(body.skill_content) if body.layer == "expert" else None
+    if expert_skill_name:
+        skill_name = re.sub(r"[^a-z0-9-]", "", expert_skill_name.lower().replace(" ", "-").replace("_", "-")) or skill_name
+
     repo_root = Path(__file__).parent.parent.parent.parent.parent
 
     # 確定目標路徑
@@ -424,8 +441,9 @@ async def save_skill_to_file(
             import sys
             sys.path.insert(0, str(repo_root))
             from aiagent.memory.vector_store import index_document
+            title_name = skill_name if body.layer != "expert" else skill_name
             doc_id = await index_document(
-                title    = f"[專家技能] {skill_name}",
+                title    = f"[專家技能] {title_name}",
                 content  = body.skill_content,
                 source   = source,
                 doc_type = "skill",

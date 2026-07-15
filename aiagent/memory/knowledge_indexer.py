@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
 import re
 import sys
 from pathlib import Path
@@ -25,6 +26,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).parent.parent.parent
+DB_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/fsi_risk")
 
 # ── 知識庫來源（只有 3_skills/ 進入知識庫）────────────────────────
 KNOWLEDGE_SKILLS_DIR = REPO_ROOT / "3_skills" / "skills"   # skill_doc
@@ -138,6 +140,27 @@ async def index_all(docs: list[dict]) -> int:
     return success
 
 
+async def _clear_skill_doc_entries() -> int:
+    """Delete previously indexed skill_doc documents so refresh mirrors filesystem state."""
+    import asyncpg
+
+    conn = await asyncpg.connect(DB_URL)
+    try:
+        doc_ids = await conn.fetch(
+            "SELECT id FROM chatdb.knowledge_document WHERE source = 'skill_doc'"
+        )
+        if not doc_ids:
+            return 0
+
+        ids = [row["id"] for row in doc_ids]
+        await conn.execute(
+            "DELETE FROM chatdb.knowledge_document WHERE source = 'skill_doc'"
+        )
+        return len(ids)
+    finally:
+        await conn.close()
+
+
 async def run_default_indexing() -> None:
     """
     默認索引任務：只索引 3_skills/ 目錄。
@@ -190,6 +213,10 @@ async def refresh_skill_docs() -> dict[str, int]:
     """
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     logger.info("\n[refresh] 3_skills/skills/ → skill_doc（業務技能）...")
+
+    deleted = await _clear_skill_doc_entries()
+    if deleted:
+        logger.info("[refresh] 已清理舊 skill_doc 文檔：%d", deleted)
 
     docs = _collect_skill_docs()
     if not docs:
