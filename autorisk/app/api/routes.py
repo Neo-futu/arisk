@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from ..core.scenario import DemoScenarioCalculator
 from ..schemas import (
     AssessRequest,
+    AssessmentConclusion,
     DemoAssessRequest,
+    ExecutionFeedbackReceipt,
+    ExecutionFeedbackRequest,
     RejectRequest,
     RiskEvalListResponse,
     SignRequest,
@@ -53,6 +58,87 @@ async def get_report(report_id: str):
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
     return report
+
+
+@router.get(
+    "/reports/{report_id}/conclusion",
+    response_model=AssessmentConclusion,
+)
+async def get_conclusion(report_id: str):
+    try:
+        conclusion = service.get_conclusion(report_id)
+    except WorkflowConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if not conclusion:
+        raise HTTPException(status_code=404, detail="Report not found")
+    return conclusion
+
+
+@router.get("/reports/{report_id}/conclusion/download")
+async def download_conclusion(
+    report_id: str,
+    output_format: str = Query(default="json", alias="format", pattern="^(json|html)$"),
+):
+    try:
+        path = service.resolve_conclusion_artifact(report_id, output_format)
+    except WorkflowConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if not path:
+        raise HTTPException(status_code=404, detail="Report not found")
+    media_type = "application/json" if output_format == "json" else "text/html; charset=utf-8"
+    return FileResponse(path=path, filename=path.name, media_type=media_type)
+
+
+@router.post(
+    "/reports/{report_id}/feedback",
+    response_model=ExecutionFeedbackReceipt,
+)
+async def submit_feedback(report_id: str, body: ExecutionFeedbackRequest):
+    try:
+        receipt = service.submit_feedback(report_id, body)
+    except WorkflowConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if not receipt:
+        raise HTTPException(status_code=404, detail="Report not found")
+    return receipt
+
+
+@router.get("/reports/{report_id}/feedback")
+async def list_feedback(
+    report_id: str,
+    limit: int = Query(default=100, ge=1, le=500),
+):
+    try:
+        receipts = service.list_feedback(report_id, limit=limit)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Report not found") from exc
+    return {"count": len(receipts), "receipts": receipts}
+
+
+@router.get(
+    "/reports/{report_id}/feedback/{idempotency_key}",
+    response_model=ExecutionFeedbackReceipt,
+)
+async def get_feedback(report_id: str, idempotency_key: str):
+    receipt = service.get_feedback(report_id, idempotency_key)
+    if not receipt:
+        raise HTTPException(status_code=404, detail="Feedback receipt not found")
+    return receipt
+
+
+@router.get("/reports/{report_id}/feedback/{idempotency_key}/download")
+async def download_feedback(report_id: str, idempotency_key: str):
+    receipt = service.get_feedback(report_id, idempotency_key)
+    if not receipt:
+        raise HTTPException(status_code=404, detail="Feedback receipt not found")
+    content = json.dumps(receipt.model_dump(mode="json"), ensure_ascii=False, indent=2)
+    return Response(
+        content=content,
+        media_type="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="{receipt.receipt_id}.json"',
+        },
+    )
 
 
 @router.get("/reports/{report_id}/verify")

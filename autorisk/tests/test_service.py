@@ -20,7 +20,7 @@ from app.schemas import (
     WorkflowMode,
 )
 from app.service import RiskEvalService, WorkflowConflict
-from app.store import ReportStore
+from app.store import FeedbackStore, ReportStore
 
 
 RULES = Path(__file__).resolve().parents[1] / "config" / "rules.json"
@@ -33,6 +33,7 @@ def make_service(tmp_path: Path) -> RiskEvalService:
         audit_log=AuditLog(tmp_path / "audit.jsonl"),
         artifact_writer=ArtifactWriter(tmp_path / "artifacts"),
         ai_reviewer=AIReviewEngine(),
+        feedback_store=FeedbackStore(tmp_path / "feedback.json"),
     )
 
 
@@ -66,7 +67,13 @@ def test_full_ai_approves_green_and_is_idempotent(tmp_path: Path, monkeypatch) -
     assert report.second_sign is not None
     assert report.first_sign.signature != report.second_sign.signature
     assert len(report.ai_reviews) == 2
-    assert {item.format for item in report.artifacts} == {"json", "md", "html"}
+    assert {item.format for item in report.artifacts} == {
+        "json",
+        "md",
+        "html",
+        "conclusion-json",
+        "conclusion-html",
+    }
     assert service.verify_audit()["valid"] is True
 
 

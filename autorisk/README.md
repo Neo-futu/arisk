@@ -34,20 +34,20 @@ python run.py
 - Health：`http://127.0.0.1:8100/health`
 - 開發 API Key：`autorisk-dev-key`
 
-## 可視化加倉評估
+## 可視化風控審核
 
 服務啟動後訪問：`http://127.0.0.1:8100/demo`
 
-頁面輸入基金名稱、評估日期和請求加倉金額後，會展示：
+頁面輸入觸發來源、基金信息和核心風險指標後，會展示：
 
-- 加倉前後資產、持倉與流動性快照
-- 今年以來收益、最大回撤、年化波動率和 1 日 95% VaR
-- 槓桿率、加倉後集中度與流動性規則判定
+- 槓桿率、集中度、VaR、流動性等核心指標
+- 規則引擎命中結果與風險等級判定
 - AI Risk Officer 與 AI MIC 兩級覆核
 - ALLOW、ALLOW_WITH_WARNING 或 BLOCK 最終決策
-- JSON、Markdown、HTML 報告和完整性驗證
+- 類似電子處方的 AI 風控結論單，明確顯示「准予執行／附條件准予執行／禁止執行」
+- 結論 JSON/HTML 下載、下游 `OK` 回執與完整性驗證
 
-演示頁使用由基金名稱和日期確定性生成的 NAV 與持倉快照，便於離線重現。生產接入時應將 `app/core/scenario.py` 的演示數據適配器替換為真實基金會計、持倉、行情及風險數據 API。
+演示頁直接調用通用 `POST /api/v1/risk-evals/assess` 接口。生產接入時可由上游系統持續提交不同請求，並透過 `config/rules.json` 或規則重載接口持續迭代風控規則。
 
 ## AI 雙級覆核演示
 
@@ -77,12 +77,16 @@ docker compose up --build
 
 - PRE_TRADE / POST_TRADE / EOD / PERIODIC / EVENT 觸發
 - JSON 配置化合同、監管與內控規則
+- 任意數值型擴展風險指標；新增規則指標無需修改 Python schema
+- 規則配置運行時熱重載
 - 冪等評估請求
 - FULL_AI 與 HYBRID 雙簽模式
 - 可選 OpenAI-compatible LLM 評語
 - HMAC-SHA256 兩級簽章
 - append-only SHA-256 審計鏈
-- JSON / Markdown / HTML 報告工件
+- JSON / Markdown / HTML 完整報告工件
+- 可機器解析、可列印的結論單 JSON / HTML 工件
+- 綁定報告哈希與最終決策的幂等執行回執
 - 報告、簽章、工件、審計鏈完整性驗證
 - API Key 認證與可選簽名 webhook
 - 第三方 Python SDK
@@ -92,6 +96,10 @@ docker compose up --build
 - `POST /api/v1/risk-evals/assess`
 - `GET /api/v1/risk-evals/reports`
 - `GET /api/v1/risk-evals/reports/{report_id}`
+- `GET /api/v1/risk-evals/reports/{report_id}/conclusion`
+- `GET /api/v1/risk-evals/reports/{report_id}/conclusion/download?format=json|html`
+- `POST /api/v1/risk-evals/reports/{report_id}/feedback`
+- `GET /api/v1/risk-evals/reports/{report_id}/feedback`
 - `GET /api/v1/risk-evals/reports/{report_id}/verify`
 - `POST /api/v1/risk-evals/reports/{report_id}/sign/first`
 - `POST /api/v1/risk-evals/reports/{report_id}/sign/second`

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
 
 
 def utc_now() -> datetime:
@@ -59,6 +59,24 @@ class ExecutionDecision(str, Enum):
     PENDING = "PENDING"
 
 
+class ConclusionCode(str, Enum):
+    APPROVED = "APPROVED"
+    APPROVED_WITH_CONDITIONS = "APPROVED_WITH_CONDITIONS"
+    NOT_APPROVED = "NOT_APPROVED"
+
+
+class DirectiveAction(str, Enum):
+    PROCEED = "PROCEED"
+    PROCEED_WITH_CONTROLS = "PROCEED_WITH_CONTROLS"
+    DO_NOT_PROCEED = "DO_NOT_PROCEED"
+
+
+class FeedbackStatus(str, Enum):
+    OK = "OK"
+    REJECTED = "REJECTED"
+    FAILED = "FAILED"
+
+
 class SignerRole(str, Enum):
     RISK_OFFICER = "RISK_OFFICER"
     MIC = "MIC"
@@ -73,6 +91,8 @@ class RuleDirection(str, Enum):
 
 
 class RiskIndicators(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     leverage_ratio: float = Field(default=0.0, ge=0)
     single_stock_concentration: float = Field(default=0.0, ge=0)
     var_95_1d: float = Field(default=0.0, ge=0)
@@ -83,6 +103,15 @@ class RiskIndicators(BaseModel):
     daily_liquid_pct: float | None = Field(default=None, ge=0)
     weekly_liquid_pct: float | None = Field(default=None, ge=0)
     nav_hkd: float | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def validate_additional_metrics(self) -> "RiskIndicators":
+        for key, value in (self.model_extra or {}).items():
+            if value is None:
+                continue
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValueError(f"Additional risk indicator '{key}' must be numeric or null")
+        return self
 
 
 class RuleDefinition(BaseModel):
@@ -206,6 +235,90 @@ class RejectRequest(BaseModel):
 class RiskEvalListResponse(BaseModel):
     count: int
     reports: list[RiskEvalReport]
+
+
+class ConclusionDirective(BaseModel):
+    conclusion_code: ConclusionCode
+    action: DirectiveAction
+    headline: str
+    summary: str
+    instructions: list[str] = Field(default_factory=list)
+    restrictions: list[str] = Field(default_factory=list)
+
+
+class ConclusionVerification(BaseModel):
+    report_content_hash: str
+    certificate_hash: str = ""
+    verify_url: str
+
+
+class ConclusionFeedbackContract(BaseModel):
+    endpoint: str
+    method: Literal["POST"] = "POST"
+    required_fields: list[str]
+    accepted_statuses: list[FeedbackStatus]
+
+
+class AssessmentConclusion(BaseModel):
+    schema_version: str = "1.0"
+    document_type: Literal["AUTORISK_AI_RISK_CONCLUSION"] = "AUTORISK_AI_RISK_CONCLUSION"
+    certificate_id: str
+    report_id: str
+    request_id: str
+    issued_at: datetime
+    valid_until: datetime
+    validity_note: str
+    fund_code: str
+    fund_name: str
+    trigger_source: TriggerSource
+    rule_version: str
+    workflow_mode: WorkflowMode
+    report_status: ReportStatus
+    severity: Severity
+    execution_decision: ExecutionDecision
+    directive: ConclusionDirective
+    risk_indicators: RiskIndicators
+    rule_violations: list[RuleViolation] = Field(default_factory=list)
+    ai_reviews: list[AIReviewResult] = Field(default_factory=list)
+    approvals: list[SignRecord] = Field(default_factory=list)
+    verification: ConclusionVerification
+    feedback: ConclusionFeedbackContract
+
+
+class ExecutionFeedbackRequest(BaseModel):
+    idempotency_key: str = Field(
+        min_length=1,
+        max_length=160,
+        pattern=r"^[A-Za-z0-9._:-]+$",
+    )
+    status: FeedbackStatus = FeedbackStatus.OK
+    actor_id: str = Field(min_length=1, max_length=160)
+    observed_report_hash: str = Field(min_length=64, max_length=64)
+    observed_decision: ExecutionDecision
+    processed_at: datetime | None = None
+    message: str = Field(default="", max_length=1000)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ExecutionFeedbackReceipt(BaseModel):
+    schema_version: str = "1.0"
+    receipt_type: Literal["AUTORISK_FEEDBACK_RECEIPT"] = "AUTORISK_FEEDBACK_RECEIPT"
+    receipt_id: str
+    certificate_id: str
+    report_id: str
+    request_id: str
+    idempotency_key: str
+    status: FeedbackStatus
+    accepted: bool = True
+    actor_id: str
+    observed_report_hash: str
+    observed_decision: ExecutionDecision
+    processed_at: datetime | None = None
+    received_at: datetime = Field(default_factory=utc_now)
+    message: str = "OK"
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    feedback_hash: str
+    receipt_hash: str = ""
 
 
 class AuditEvent(BaseModel):

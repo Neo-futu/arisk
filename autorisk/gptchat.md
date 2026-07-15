@@ -33,6 +33,7 @@ AutoRisk 不是讓 LLM 憑空生成風控決策，而是採用：
 - PRE_TRADE、POST_TRADE、EOD、PERIODIC、EVENT 五類觸發
 - 結構化交易、持倉、風險指標及市場快照輸入
 - JSON 配置化規則引擎
+- 任意數值型擴展指標與規則熱重載，新增規則指標無需修改 Python schema
 - GREEN、YELLOW、RED 三級風險評估
 - 標準化風控評估報告
 - AI Risk Officer 第一級獨立覆核
@@ -40,7 +41,9 @@ AutoRisk 不是讓 LLM 憑空生成風控決策，而是採用：
 - HMAC-SHA256 數字雙簽
 - FULL_AI 與 HYBRID 兩種工作流
 - `request_id` 冪等控制，避免重複生成報告
-- JSON、Markdown、HTML 三種報告工件
+- JSON、Markdown、HTML 完整報告及 JSON、HTML 結論單共五種工件
+- 類似電子處方的明確風控結論：准予執行、附條件准予執行或禁止執行
+- 綁定報告哈希及最終決策的幂等下游 `OK` 回執
 - 報告、簽章、工件完整性驗證
 - append-only SHA-256 審計哈希鏈
 - `X-API-Key` 接口認證
@@ -79,9 +82,11 @@ flowchart LR
     H -->|GREEN| I[ALLOW]
     H -->|YELLOW| J[ALLOW_WITH_WARNING]
     H -->|RED / 分歧| K[BLOCK]
-    I --> L[報告工件 + 雙簽 + 審計鏈]
+    I --> L[完整報告 + AI 風控結論單]
     J --> L
     K --> L
+    L --> M[OMS / 人工處置台]
+    M -->|OK JSON 回執| N[回執哈希 + 審計鏈]
 ```
 
 ## 5. 目錄與模塊
@@ -95,12 +100,13 @@ autorisk/
 │   ├── core/ai_review.py   # 兩級 AI 覆核及可選 LLM 適配
 │   ├── core/workflow.py    # FULL_AI / HYBRID 狀態機
 │   ├── core/scenario.py    # 加倉場景數據適配與風險計算
+│   ├── core/conclusion.py  # AI 風控結論單與處置指令
 │   ├── core/crypto.py      # SHA-256 及 HMAC 簽章
 │   ├── core/artifacts.py   # JSON / Markdown / HTML 工件
 │   ├── static/             # FastAPI 內置可視化演示頁
 │   ├── schemas.py          # Pydantic 領域模型
 │   ├── service.py          # 完整業務流程編排
-│   ├── store.py            # 報告快照存儲
+│   ├── store.py            # 報告快照與獨立回執存儲
 │   ├── audit.py            # append-only 審計哈希鏈
 │   ├── security.py         # API Key 認證
 │   ├── config.py           # 環境變量配置
@@ -188,8 +194,10 @@ autorisk/
 - `{report_id}.json`
 - `{report_id}.md`
 - `{report_id}.html`
+- `{report_id}.conclusion.json`
+- `{report_id}.conclusion.html`
 
-HTML 可直接在瀏覽器打開，或使用瀏覽器列印功能輸出 PDF。
+完整報告保留全部指標、規則命中和覆核詳情；結論單以類似電子處方的格式突出最終處置指令、有效期、限制、雙簽及驗證哈希。HTML 可直接在瀏覽器打開，或使用瀏覽器列印功能輸出 PDF。
 
 ## 6. 工作流狀態
 
@@ -254,28 +262,28 @@ docker compose up --build
 
 ## 9. 建立風控評估
 
-### 9.1 可視化加倉評估
+### 9.1 可視化風控審核
 
 服務啟動後訪問 `http://127.0.0.1:8100/demo`，可在網頁輸入：
 
-- 基金名稱
-- 評估日期
-- 請求加倉金額
+- 觸發來源
+- 基金代碼與基金名稱
+- 核心風險指標（槓桿率、集中度、VaR、流動性）
+- 可選的擬議交易與附加元數據（JSON）
 
 FastAPI 後端會完成以下流程：
 
-1. 根據基金和評估日期載入演示 NAV、持倉及流動性快照；
-2. 計算今年以來收益、最大回撤、年化波動率及 1 日 95% VaR；
-3. 根據加倉金額計算加倉後槓桿率、集中度和流動性；
-4. 執行合同、監管及公司內控規則；
-5. 生成結構化風控評估報告；
-6. 執行 AI Risk Officer 與 AI MIC 兩級獨立覆核；
-7. 返回 `ALLOW`、`ALLOW_WITH_WARNING` 或 `BLOCK`；
-8. 生成雙簽、JSON/Markdown/HTML 工件及審計證據。
+1. 驗證業務請求並標準化風險指標；
+2. 執行合同、監管及公司內控規則；
+3. 生成結構化風控評估報告；
+4. 執行 AI Risk Officer 與 AI MIC 兩級獨立覆核；
+5. 返回 `ALLOW`、`ALLOW_WITH_WARNING` 或 `BLOCK`；
+6. 生成雙簽、完整報告、AI 風控結論單及審計證據；
+7. 接收下游綁定報告哈希與最終決策的 `OK` JSON 回執。
 
-網頁調用 `POST /api/v1/risk-evals/demo/assess`，響應分為 `calculation` 和 `report`：前者展示風險計算過程，後者是正式 AutoRisk 評估報告。
+網頁調用 `POST /api/v1/risk-evals/assess`，響應為正式 AutoRisk 評估報告，適合持續接收不同業務請求並反覆執行 AI 風控審核。
 
-當前演示適配器位於 `app/core/scenario.py`，使用基金名稱和日期生成可重現的離線演示數據。生產環境應替換為真實 NAV、基金持倉、行情和風險數據 API，並保持同一結構化評估接口。
+`POST /api/v1/risk-evals/demo/assess` 仍可作為離線加倉場景示例接口使用；生產環境應優先使用通用 `assess` 接口，並由上游系統提供真實 NAV、持倉、行情與風險數據。
 
 ### 9.2 PowerShell 示例
 
@@ -328,6 +336,16 @@ Invoke-RestMethod -Method Post `
 }
 ```
 
+### 9.4 AI 風控結論單與 OK 回執
+
+最終報告可通過 `GET /reports/{report_id}/conclusion` 取得明確處置結論：
+
+- `APPROVED / PROCEED`：准予執行；
+- `APPROVED_WITH_CONDITIONS / PROCEED_WITH_CONTROLS`：附條件准予執行；
+- `NOT_APPROVED / DO_NOT_PROCEED`：禁止執行。
+
+下游完成放行、控制措施或阻斷後，調用 `POST /reports/{report_id}/feedback` 回傳 `OK`。回執必須提供本次看到的 `observed_report_hash` 和 `observed_decision`；任一不一致均返回 `409`，避免對錯報告或錯結論確認。相同冪等鍵與相同內容可安全重試。
+
 ## 10. API 接口
 
 所有業務接口都需要 Header：
@@ -339,9 +357,14 @@ X-API-Key: autorisk-dev-key
 | 方法 | 接口 | 功能 |
 |---|---|---|
 | POST | `/api/v1/risk-evals/assess` | 建立並執行風控評估 |
-| POST | `/api/v1/risk-evals/demo/assess` | 計算加倉場景並執行完整風控評估 |
+| POST | `/api/v1/risk-evals/demo/assess` | 離線示例：計算加倉場景並執行完整風控評估 |
 | GET | `/api/v1/risk-evals/reports` | 查詢報告列表 |
 | GET | `/api/v1/risk-evals/reports/{report_id}` | 查詢報告詳情 |
+| GET | `/api/v1/risk-evals/reports/{report_id}/conclusion` | 查詢 AI 風控結論單 |
+| GET | `/api/v1/risk-evals/reports/{report_id}/conclusion/download` | 下載結論單 JSON 或 HTML |
+| POST | `/api/v1/risk-evals/reports/{report_id}/feedback` | 提交下游處置回執 |
+| GET | `/api/v1/risk-evals/reports/{report_id}/feedback` | 查詢回執列表 |
+| GET | `/api/v1/risk-evals/reports/{report_id}/feedback/{idempotency_key}/download` | 下載回執 JSON |
 | GET | `/api/v1/risk-evals/reports/{report_id}/verify` | 驗證報告完整性 |
 | POST | `/api/v1/risk-evals/reports/{report_id}/sign/first` | HYBRID 人工初審 |
 | POST | `/api/v1/risk-evals/reports/{report_id}/sign/second` | HYBRID 人工終審 |
@@ -479,11 +502,13 @@ python -m pytest tests -q
 目前驗證結果：
 
 - Python 完整編譯通過
-- 自動測試 `11/11` 通過
+- 自動測試 `13/13` 通過
 - VS Code 診斷無錯誤
 - 端到端 RED 場景成功返回 `BLOCKED` / `BLOCK`
 - AI 覆核 2 級
-- 報告工件 3 個
+- 報告及結論單工件 5 個
+- AI 風控結論單哈希有效
+- `OK` 回執幂等、錯哈希拒絕及獨立存儲驗證通過
 - 兩份數字簽章有效
 - 報告內容哈希有效
 - 工件哈希全部有效

@@ -34,6 +34,40 @@ class AutoRiskClient:
         response.raise_for_status()
         return response.json()
 
+    def get_conclusion(self, report_id: str) -> dict[str, Any]:
+        response = self._client.get(f"/api/v1/risk-evals/reports/{report_id}/conclusion")
+        response.raise_for_status()
+        return response.json()
+
+    def download_conclusion(self, report_id: str, output_format: str = "json") -> bytes:
+        if output_format not in {"json", "html"}:
+            raise ValueError("output_format must be 'json' or 'html'")
+        response = self._client.get(
+            f"/api/v1/risk-evals/reports/{report_id}/conclusion/download",
+            params={"format": output_format},
+        )
+        response.raise_for_status()
+        return response.content
+
+    def submit_feedback(
+        self,
+        report_id: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        response = self._client.post(
+            f"/api/v1/risk-evals/reports/{report_id}/feedback",
+            json=payload,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def get_feedback(self, report_id: str, idempotency_key: str) -> dict[str, Any]:
+        response = self._client.get(
+            f"/api/v1/risk-evals/reports/{report_id}/feedback/{idempotency_key}"
+        )
+        response.raise_for_status()
+        return response.json()
+
     def list_reports(self, **params: Any) -> dict[str, Any]:
         response = self._client.get("/api/v1/risk-evals/reports", params=params)
         response.raise_for_status()

@@ -26,6 +26,11 @@ class Settings:
         self.audit_path = Path(
             os.getenv("AUTORISK_AUDIT_PATH", str(root / "data" / "audit_events.jsonl"))
         )
+        self.feedback_path = Path(
+            os.getenv("AUTORISK_FEEDBACK_PATH", str(root / "data" / "feedback_receipts.json"))
+        )
+        if not self.feedback_path.is_absolute():
+            self.feedback_path = root / self.feedback_path
         self.artifact_dir = Path(
             os.getenv("AUTORISK_ARTIFACT_DIR", str(root / "data" / "reports"))
         )
@@ -67,6 +72,10 @@ class Settings:
             "first": os.getenv("AUTORISK_FIRST_SIGNER", "ai-risk-officer"),
             "second": os.getenv("AUTORISK_SECOND_SIGNER", "ai-mic"),
         }
+        self.conclusion_validity_minutes = max(
+            1,
+            int(os.getenv("AUTORISK_CONCLUSION_VALIDITY_MINUTES", "60")),
+        )
 
 
 settings = Settings()

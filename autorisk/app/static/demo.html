@@ -21,8 +21,8 @@
     <section class="hero">
       <div>
         <p class="eyebrow">PRE-TRADE RISK ASSESSMENT</p>
-        <h1>加倉風險評估<br><em>全流程可視化</em></h1>
-        <p class="hero-copy">從加倉請求、風險計算和規則判定，到 AI Risk Officer 與 AI MIC 雙級覆核、報告生成和執行決策。</p>
+        <h1>智能風控審核<br><em>全流程可視化</em></h1>
+        <p class="hero-copy">從業務請求、規則判定，到 AI Risk Officer 與 AI MIC 雙級覆核、報告生成和執行決策。</p>
       </div>
       <div class="hero-stat">
         <span>工作流</span><strong id="workflowMode">—</strong>
@@ -34,29 +34,57 @@
       <aside class="request-panel card">
         <div class="section-heading">
           <span class="step-number">01</span>
-          <div><h2>提交加倉請求</h2><p>輸入業務條件，系統自動補全演示市場數據</p></div>
+          <div><h2>提交風控審核請求</h2><p>輸入核心指標並提交通用審核請求</p></div>
         </div>
         <form id="assessmentForm">
+          <label>請求 ID（可選）
+            <input id="requestId" name="requestId" placeholder="留空自動生成">
+          </label>
+          <label>觸發來源
+            <select id="triggerSource" name="triggerSource" required>
+              <option value="PRE_TRADE" selected>PRE_TRADE</option>
+              <option value="POST_TRADE">POST_TRADE</option>
+              <option value="EOD">EOD</option>
+              <option value="PERIODIC">PERIODIC</option>
+              <option value="EVENT">EVENT</option>
+            </select>
+          </label>
+          <label>基金代碼
+            <input id="fundCode" name="fundCode" value="990001.HK" maxlength="60" required>
+          </label>
           <label>基金名稱
             <input id="fundName" name="fundName" value="平衡增長一號基金" maxlength="120" required>
           </label>
-          <label>評估日期
+          <label>槓桿率（leverage_ratio）
+            <input id="leverageRatio" name="leverageRatio" type="number" value="1.10" min="0" max="10" step="0.01" required>
+          </label>
+          <label>單一標的集中度（single_stock_concentration）
+            <input id="singleConcentration" name="singleConcentration" type="number" value="0.09" min="0" max="1" step="0.0001" required>
+          </label>
+          <label>1 日 95% VaR（var_95_1d）
+            <input id="var95" name="var95" type="number" value="0.018" min="0" max="1" step="0.0001" required>
+          </label>
+          <label>流動性比例（liquidity_ratio）
+            <input id="liquidityRatio" name="liquidityRatio" type="number" value="0.25" min="0" max="1" step="0.0001" required>
+          </label>
+          <label>擴展風險指標（JSON，可選）
+            <textarea id="additionalIndicators" name="additionalIndicators" rows="3" placeholder='{"duration_years":2.1,"counterparty_exposure":0.08}'></textarea>
+          </label>
+          <label>評估日期（market_snapshot.evaluation_date）
             <input id="evaluationDate" name="evaluationDate" type="date" required>
           </label>
-          <label>請求加倉金額（HKD）
-            <div class="money-input"><span>HK$</span><input id="addAmount" name="addAmount" type="number" value="10000000" min="100000" max="10000000000" step="100000" required></div>
+          <label>擬議交易（JSON，可選）
+            <textarea id="proposedTrade" name="proposedTrade" rows="4" placeholder='{"symbol":"700.HK","side":"BUY","notional_hkd":10000000}'></textarea>
+          </label>
+          <label>附加元數據（JSON，可選）
+            <textarea id="metadata" name="metadata" rows="3" placeholder='{"channel":"demo-ui"}'></textarea>
           </label>
           <label>API Key
             <input id="apiKey" name="apiKey" type="password" value="autorisk-dev-key" autocomplete="off" required>
           </label>
-          <div class="quick-amounts">
-            <button type="button" data-amount="5000000">500 萬</button>
-            <button type="button" data-amount="10000000">1,000 萬</button>
-            <button type="button" data-amount="30000000">3,000 萬</button>
-            <button type="button" data-amount="60000000">6,000 萬</button>
-          </div>
           <button class="primary" id="submitButton" type="submit"><span>開始智能風控評估</span><b>→</b></button>
-          <p class="form-note">演示數據根據基金名稱與日期確定性生成。生產環境應接入真實 NAV、持倉和市場數據 API。</p>
+          <button class="secondary" id="reloadRulesButton" type="button">重新載入規則配置</button>
+          <p class="form-note">此頁面直接調用通用評估接口。你可以持續調整規則配置，並對不同業務請求反覆執行 AI 風控審核。</p>
         </form>
       </aside>
 
@@ -68,7 +96,7 @@
         </div>
 
         <div id="loadingState" class="loading-state card hidden">
-          <div class="section-heading"><span class="step-number">AI</span><div><h2>正在執行智能風控</h2><p id="loadingMessage">接收並驗證加倉請求</p></div></div>
+          <div class="section-heading"><span class="step-number">AI</span><div><h2>正在執行智能風控</h2><p id="loadingMessage">接收並驗證風控請求</p></div></div>
           <div class="progress-track"><span id="progressBar"></span></div>
           <div class="pipeline" id="pipeline"></div>
         </div>
@@ -88,13 +116,8 @@
 
           <section class="metrics-grid" id="metricsGrid"></section>
 
-          <section class="chart-card card">
-            <div class="section-heading compact"><span class="step-number">02</span><div><h2>今年以來淨值與回撤</h2><p id="chartSubtitle">演示 NAV 時序</p></div></div>
-            <div class="chart-wrap"><svg id="navChart" viewBox="0 0 900 260" preserveAspectRatio="none" role="img" aria-label="基金淨值走勢圖"></svg></div>
-          </section>
-
           <section class="rules-card card">
-            <div class="section-heading compact"><span class="step-number">03</span><div><h2>規則引擎判定</h2><p id="ruleVersion">—</p></div></div>
+            <div class="section-heading compact"><span class="step-number">02</span><div><h2>規則引擎判定</h2><p id="ruleVersion">—</p></div></div>
             <div id="violations"></div>
           </section>
 
@@ -103,8 +126,46 @@
             <article class="review-card card" id="secondReview"></article>
           </section>
 
+          <section class="conclusion-card card" id="conclusionCard">
+            <div class="section-heading compact"><span class="step-number">05</span><div><h2>AI 風控審核結論單</h2><p>類似電子處方的明確執行指令，可供人員閱讀及系統解析</p></div></div>
+            <div class="conclusion-sheet" id="conclusionSheet">
+              <div class="conclusion-topline">
+                <div><small>AUTORISK · AI RISK DECISION CERTIFICATE</small><strong id="certificateId">—</strong></div>
+                <span id="conclusionCode">—</span>
+              </div>
+              <div class="conclusion-order">
+                <span>最終處置指令</span>
+                <h2 id="conclusionHeadline">—</h2>
+                <p id="conclusionSummary">—</p>
+              </div>
+              <div class="conclusion-meta" id="conclusionMeta"></div>
+              <div class="conclusion-columns">
+                <div><h3>執行要求</h3><ol id="conclusionInstructions"></ol></div>
+                <div><h3>限制與風險命中</h3><ul id="conclusionRestrictions"></ul></div>
+              </div>
+              <div class="conclusion-hash"><span>結論單 SHA-256</span><code id="certificateHash">—</code></div>
+            </div>
+            <div class="actions conclusion-actions">
+              <button type="button" id="downloadConclusionJson">下載結論 JSON</button>
+              <button type="button" id="downloadConclusionHtml">下載／列印結論單</button>
+            </div>
+            <div class="feedback-box">
+              <div><h3>下游處置回執</h3><p>回傳時自動綁定本報告哈希與最終決策，成功後返回可下載的 OK JSON 回執。</p></div>
+              <div class="feedback-fields">
+                <label>回執冪等鍵<input id="feedbackKey" maxlength="160"></label>
+                <label>處理方<input id="feedbackActor" value="demo-ui" maxlength="160"></label>
+                <label class="feedback-message">處理說明<textarea id="feedbackMessage" rows="2" maxlength="1000"></textarea></label>
+              </div>
+              <div class="actions">
+                <button class="feedback-ok" type="button" id="submitFeedback">回傳 OK</button>
+                <button class="hidden" type="button" id="downloadFeedback">下載回執 JSON</button>
+              </div>
+              <pre id="feedbackReceipt" class="verify-result hidden"></pre>
+            </div>
+          </section>
+
           <section class="report-card card">
-            <div class="section-heading compact"><span class="step-number">06</span><div><h2>評估報告與審計證據</h2><p>結構化結論、雙簽和可驗證工件</p></div></div>
+            <div class="section-heading compact"><span class="step-number">06</span><div><h2>完整評估報告與審計證據</h2><p>結構化詳情、雙簽和可驗證工件</p></div></div>
             <div class="report-summary" id="reportSummary"></div>
             <div class="evidence-grid" id="evidenceGrid"></div>
             <div class="actions">

@@ -2,6 +2,7 @@ __pycache__/
 .pytest_cache/
 .env
 data/audit_events.jsonl
+data/feedback_receipts.json
 data/risk_reports.json
 data/reports/*
 !data/reports/.gitkeep

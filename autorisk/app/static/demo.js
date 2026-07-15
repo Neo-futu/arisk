@@ -2,11 +2,12 @@ const $ = (selector) => document.querySelector(selector);
 const apiRoot = "/api/v1/risk-evals";
 let currentReport = null;
 let currentApiKey = "";
+let currentConclusion = null;
+let currentFeedbackReceipt = null;
 
 const pipelineSteps = [
-  "接收並驗證加倉請求",
-  "載入 NAV、持倉與市場快照",
-  "計算 YTD 收益、回撤與 VaR",
+  "接收並驗證風控請求",
+  "標準化風險指標輸入",
   "執行合同、監管及內控規則",
   "生成結構化風控評估報告",
   "AI Risk Officer 第一級覆核",
@@ -89,43 +90,21 @@ function finishPipeline(timer) {
 }
 
 function renderMetrics(calculation) {
-  const metrics = calculation.metrics;
-  const portfolio = calculation.portfolio;
+  const metrics = calculation;
   const items = [
-    ["基金資產淨值", formatMoney(metrics.nav_hkd), "演示估值快照"],
-    ["請求加倉金額", formatMoney(currentReport.proposed_trade.amount_hkd), "PRE_TRADE"],
+    ["槓桿率", (metrics.leverage_ratio ?? 0).toFixed(4), "LEVERAGE RATIO"],
+    ["單一標的集中度", formatPercent(metrics.single_stock_concentration), "CONCENTRATION"],
+    ["1 日 95% VaR", formatPercent(metrics.var_95_1d), "PARAMETRIC VAR"],
+    ["流動性比例", formatPercent(metrics.liquidity_ratio), "LIQUIDITY"],
     ["今年以來收益", formatPercent(metrics.ytd_return), "YTD RETURN"],
     ["年內最大回撤", formatPercent(metrics.max_drawdown), "MAX DRAWDOWN"],
-    ["1 日 95% VaR", formatPercent(metrics.var_95_1d), "PARAMETRIC VAR"],
-    ["年化波動率", formatPercent(metrics.annualized_volatility), "252 TRADING DAYS"],
-    ["加倉後集中度", formatPercent(metrics.single_stock_concentration), "POST-TRADE"],
-    ["加倉後流動性", formatPercent(metrics.liquidity_ratio), `可用 ${formatMoney(portfolio.available_liquidity_after_hkd)}`],
+    ["年化波動率", formatPercent(metrics.annualized_volatility), "ANNUALIZED VOL"],
+    ["每日可變現比例", formatPercent(metrics.daily_liquid_pct), "DAILY LIQUID"],
+    ["每週可變現比例", formatPercent(metrics.weekly_liquid_pct), "WEEKLY LIQUID"],
   ];
   $("#metricsGrid").innerHTML = items.map(([label, value, note]) =>
     `<article class="metric"><span>${label}</span><strong>${value}</strong><small>${note}</small></article>`
   ).join("");
-}
-
-function renderChart(history) {
-  const svg = $("#navChart");
-  const width = 900;
-  const height = 260;
-  const padding = { left: 52, right: 20, top: 24, bottom: 35 };
-  const values = history.map((point) => point.nav);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
-  const x = (index) => padding.left + index / Math.max(1, history.length - 1) * (width - padding.left - padding.right);
-  const y = (value) => padding.top + (max - value) / range * (height - padding.top - padding.bottom);
-  const points = history.map((point, index) => `${x(index).toFixed(1)},${y(point.nav).toFixed(1)}`).join(" ");
-  const area = `${padding.left},${height - padding.bottom} ${points} ${width - padding.right},${height - padding.bottom}`;
-  const grid = [0, 0.5, 1].map((ratio) => {
-    const gy = padding.top + ratio * (height - padding.top - padding.bottom);
-    const label = max - ratio * range;
-    return `<line class="chart-grid" x1="${padding.left}" y1="${gy}" x2="${width - padding.right}" y2="${gy}"/><text class="chart-label" x="4" y="${gy + 4}">${label.toFixed(2)}</text>`;
-  }).join("");
-  svg.innerHTML = `<defs><linearGradient id="areaGradient" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#0d7b5f" stop-opacity=".24"/><stop offset="1" stop-color="#0d7b5f" stop-opacity="0"/></linearGradient></defs>${grid}<polygon class="chart-area" points="${area}"/><polyline class="chart-line" points="${points}"/><text class="chart-label" x="${padding.left}" y="250">${history[0].date}</text><text class="chart-label" x="${width - 90}" y="250">${history.at(-1).date}</text>`;
-  $("#chartSubtitle").textContent = `${history.length} 個交易日 · ${history[0].date} 至 ${history.at(-1).date}`;
 }
 
 function renderRules(report) {
@@ -140,12 +119,16 @@ function renderRules(report) {
 }
 
 function renderReview(review, index) {
+  if (!review) {
+    return `<div class="review-head"><span class="review-index">0${index + 3} · ${index === 0 ? "FIRST REVIEW" : "FINAL REVIEW"}</span><span class="review-result">PENDING</span></div><h3>${index === 0 ? "AI Risk Officer" : "AI MIC"}</h3><p class="review-reason">等待當前工作流完成此級覆核。</p>`;
+  }
   const reject = review.recommendation === "REJECT";
-  return `<div class="review-head"><span class="review-index">0${index + 4} · ${index === 0 ? "FIRST REVIEW" : "FINAL REVIEW"}</span><span class="review-result ${reject ? "reject" : ""}">${review.recommendation}</span></div><h3>${index === 0 ? "AI Risk Officer" : "AI MIC"}</h3><div class="provider">${escapeHtml(review.reviewer_id)} · ${escapeHtml(review.provider)}</div><p class="review-reason">${escapeHtml(review.reasoning)}</p><div class="confidence"><span>審核信心度</span><strong>${(review.confidence * 100).toFixed(0)}%</strong></div><div class="confidence-track"><span style="width:${review.confidence * 100}%"></span></div>`;
+  return `<div class="review-head"><span class="review-index">0${index + 3} · ${index === 0 ? "FIRST REVIEW" : "FINAL REVIEW"}</span><span class="review-result ${reject ? "reject" : ""}">${review.recommendation}</span></div><h3>${index === 0 ? "AI Risk Officer" : "AI MIC"}</h3><div class="provider">${escapeHtml(review.reviewer_id)} · ${escapeHtml(review.provider)}</div><p class="review-reason">${escapeHtml(review.reasoning)}</p><div class="confidence"><span>審核信心度</span><strong>${(review.confidence * 100).toFixed(0)}%</strong></div><div class="confidence-track"><span style="width:${review.confidence * 100}%"></span></div>`;
 }
 
 function renderReport(report) {
-  $("#reportSummary").innerHTML = `<strong>${escapeHtml(report.fund_name)}</strong> 於 ${escapeHtml(report.market_snapshot.evaluation_date)} 提交 ${formatMoney(report.proposed_trade.amount_hkd)} 加倉請求。${escapeHtml(report.auto_commentary)}<br><strong>最終結論：</strong>${escapeHtml(report.final_commentary)}`;
+  const evaluationDate = report.market_snapshot?.evaluation_date || "未提供評估日期";
+  $("#reportSummary").innerHTML = `<strong>${escapeHtml(report.fund_name || report.fund_code)}</strong> 於 ${escapeHtml(evaluationDate)} 提交 ${escapeHtml(report.trigger_source)} 風控請求。${escapeHtml(report.auto_commentary)}<br><strong>最終結論：</strong>${escapeHtml(report.final_commentary)}`;
   $("#evidenceGrid").innerHTML = [
     ["內容哈希", `${report.content_hash.slice(0, 12)}…`],
     ["第一級簽章", report.first_sign ? "已簽署" : "待簽署"],
@@ -154,8 +137,43 @@ function renderReport(report) {
   ].map(([label, value]) => `<div class="evidence"><span>${label}</span><strong>${value}</strong></div>`).join("");
 }
 
-function renderResult(payload) {
-  const { calculation, report } = payload;
+function renderConclusion(conclusion) {
+  currentConclusion = conclusion;
+  const directive = conclusion.directive;
+  $("#conclusionSheet").dataset.action = directive.action;
+  $("#certificateId").textContent = conclusion.certificate_id;
+  $("#conclusionCode").textContent = directive.conclusion_code;
+  $("#conclusionHeadline").textContent = directive.headline;
+  $("#conclusionSummary").textContent = directive.summary;
+  $("#certificateHash").textContent = conclusion.verification.certificate_hash;
+  const meta = [
+    ["基金", `${conclusion.fund_code} / ${conclusion.fund_name}`],
+    ["請求編號", conclusion.request_id],
+    ["風險等級", conclusion.severity],
+    ["執行決策", conclusion.execution_decision],
+    ["簽發時間", new Date(conclusion.issued_at).toLocaleString("zh-HK")],
+    ["有效至", new Date(conclusion.valid_until).toLocaleString("zh-HK")],
+  ];
+  $("#conclusionMeta").innerHTML = meta.map(([label, value]) => `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("");
+  $("#conclusionInstructions").innerHTML = directive.instructions.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+  $("#conclusionRestrictions").innerHTML = (directive.restrictions.length ? directive.restrictions : ["無額外限制"]).map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+  $("#feedbackKey").value = `UI-${Date.now()}`;
+  $("#feedbackMessage").value = conclusion.execution_decision === "BLOCK" ? "已確認並執行阻斷" : "已接收並按風控結論處理";
+  $("#feedbackReceipt").classList.add("hidden");
+  $("#downloadFeedback").classList.add("hidden");
+  currentFeedbackReceipt = null;
+}
+
+async function loadConclusion(reportId) {
+  const response = await fetch(`${apiRoot}/reports/${reportId}/conclusion`, {
+    headers: { "X-API-Key": currentApiKey },
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  renderConclusion(await response.json());
+}
+
+async function renderResult(payload) {
+  const report = payload.report || payload;
   currentReport = report;
   const severity = report.severity.toLowerCase();
   $("#decisionCard").className = `decision-card card ${severity}`;
@@ -164,12 +182,12 @@ function renderResult(payload) {
   $("#finalCommentary").textContent = report.final_commentary;
   $("#reportId").textContent = report.report_id;
   $("#reportStatus").textContent = report.status;
-  renderMetrics(calculation);
-  renderChart(calculation.nav_history);
+  renderMetrics(report.risk_indicators || {});
   renderRules(report);
   $("#firstReview").innerHTML = renderReview(report.ai_reviews[0], 0);
   $("#secondReview").innerHTML = renderReview(report.ai_reviews[1], 1);
   renderReport(report);
+  await loadConclusion(report.report_id);
   $("#verifyResult").classList.add("hidden");
   $("#loadingState").classList.add("hidden");
   $("#resultState").classList.remove("hidden");
@@ -185,6 +203,20 @@ async function parseError(response) {
   }
 }
 
+function parseOptionalJson(text, fieldName) {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) return {};
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("必須是 JSON 對象");
+    }
+    return parsed;
+  } catch (error) {
+    throw new Error(`${fieldName} 格式錯誤：${error.message}`);
+  }
+}
+
 $("#assessmentForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   currentApiKey = $("#apiKey").value.trim();
@@ -192,20 +224,45 @@ $("#assessmentForm").addEventListener("submit", async (event) => {
   const button = $("#submitButton");
   button.disabled = true;
   try {
-    const response = await fetch(`${apiRoot}/demo/assess`, {
+    const requestId = $("#requestId").value.trim() || `DEMO-${Date.now()}`;
+    const marketSnapshot = {
+      evaluation_date: $("#evaluationDate").value,
+      source: "demo-ui",
+    };
+    const proposedTrade = parseOptionalJson($("#proposedTrade").value, "擬議交易");
+    const metadata = parseOptionalJson($("#metadata").value, "附加元數據");
+    const additionalIndicators = parseOptionalJson($("#additionalIndicators").value, "擴展風險指標");
+    Object.entries(additionalIndicators).forEach(([key, value]) => {
+      if (value !== null && (typeof value !== "number" || !Number.isFinite(value))) {
+        throw new Error(`擴展風險指標 ${key} 必須是數值或 null`);
+      }
+    });
+
+    const response = await fetch(`${apiRoot}/assess`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-API-Key": currentApiKey },
       body: JSON.stringify({
+        request_id: requestId,
+        trigger_source: $("#triggerSource").value,
+        fund_code: $("#fundCode").value.trim(),
         fund_name: $("#fundName").value.trim(),
-        evaluation_date: $("#evaluationDate").value,
-        add_amount_hkd: Number($("#addAmount").value),
+        indicators: {
+          ...additionalIndicators,
+          leverage_ratio: Number($("#leverageRatio").value),
+          single_stock_concentration: Number($("#singleConcentration").value),
+          var_95_1d: Number($("#var95").value),
+          liquidity_ratio: Number($("#liquidityRatio").value),
+        },
+        market_snapshot: marketSnapshot,
+        proposed_trade: proposedTrade,
+        metadata,
       }),
     });
     if (!response.ok) throw new Error(await parseError(response));
     const payload = await response.json();
     finishPipeline(timer);
     await new Promise((resolve) => setTimeout(resolve, 350));
-    renderResult(payload);
+    await renderResult(payload);
     toast("智能風控評估已完成");
   } catch (error) {
     clearInterval(timer);
@@ -214,6 +271,110 @@ $("#assessmentForm").addEventListener("submit", async (event) => {
     toast(`評估失敗：${error.message}`, "error");
   } finally {
     button.disabled = false;
+  }
+});
+
+$("#reloadRulesButton").addEventListener("click", async () => {
+  currentApiKey = $("#apiKey").value.trim();
+  const button = $("#reloadRulesButton");
+  button.disabled = true;
+  try {
+    const response = await fetch(`${apiRoot}/rules/reload`, {
+      method: "POST",
+      headers: { "X-API-Key": currentApiKey },
+    });
+    if (!response.ok) throw new Error(await parseError(response));
+    const payload = await response.json();
+    toast(`規則已重載：版本 ${payload.version}，共 ${payload.count} 條`);
+  } catch (error) {
+    toast(`規則重載失敗：${error.message}`, "error");
+  } finally {
+    button.disabled = false;
+  }
+});
+
+async function downloadProtected(url, filename) {
+  const response = await fetch(url, { headers: { "X-API-Key": currentApiKey } });
+  if (!response.ok) throw new Error(await parseError(response));
+  const blob = await response.blob();
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+$("#downloadConclusionJson").addEventListener("click", async () => {
+  if (!currentConclusion) return;
+  try {
+    await downloadProtected(
+      `${apiRoot}/reports/${currentConclusion.report_id}/conclusion/download?format=json`,
+      `${currentConclusion.certificate_id}.json`,
+    );
+  } catch (error) {
+    toast(`下載失敗：${error.message}`, "error");
+  }
+});
+
+$("#downloadConclusionHtml").addEventListener("click", async () => {
+  if (!currentConclusion) return;
+  try {
+    await downloadProtected(
+      `${apiRoot}/reports/${currentConclusion.report_id}/conclusion/download?format=html`,
+      `${currentConclusion.certificate_id}.html`,
+    );
+  } catch (error) {
+    toast(`下載失敗：${error.message}`, "error");
+  }
+});
+
+$("#submitFeedback").addEventListener("click", async () => {
+  if (!currentReport || !currentConclusion) return;
+  const idempotencyKey = $("#feedbackKey").value.trim();
+  const actorId = $("#feedbackActor").value.trim();
+  if (!idempotencyKey || !actorId) {
+    return toast("回執冪等鍵和處理方不能留空", "error");
+  }
+  const button = $("#submitFeedback");
+  button.disabled = true;
+  try {
+    const response = await fetch(`${apiRoot}/reports/${currentReport.report_id}/feedback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-Key": currentApiKey },
+      body: JSON.stringify({
+        idempotency_key: idempotencyKey,
+        status: "OK",
+        actor_id: actorId,
+        observed_report_hash: currentReport.content_hash,
+        observed_decision: currentReport.execution_decision,
+        processed_at: new Date().toISOString(),
+        message: $("#feedbackMessage").value.trim(),
+        metadata: { source: "autorisk-demo-ui" },
+      }),
+    });
+    if (!response.ok) throw new Error(await parseError(response));
+    currentFeedbackReceipt = await response.json();
+    $("#feedbackReceipt").textContent = JSON.stringify(currentFeedbackReceipt, null, 2);
+    $("#feedbackReceipt").classList.remove("hidden");
+    $("#downloadFeedback").classList.remove("hidden");
+    toast("OK 回執已接收並寫入審計鏈");
+  } catch (error) {
+    toast(`回執提交失敗：${error.message}`, "error");
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$("#downloadFeedback").addEventListener("click", async () => {
+  if (!currentFeedbackReceipt) return;
+  try {
+    const key = encodeURIComponent(currentFeedbackReceipt.idempotency_key);
+    await downloadProtected(
+      `${apiRoot}/reports/${currentFeedbackReceipt.report_id}/feedback/${key}/download`,
+      `${currentFeedbackReceipt.receipt_id}.json`,
+    );
+  } catch (error) {
+    toast(`回執下載失敗：${error.message}`, "error");
   }
 });
 
@@ -253,10 +414,6 @@ document.querySelectorAll("[data-format]").forEach((button) => button.addEventLi
   } catch (error) {
     toast(`下載失敗：${error.message}`, "error");
   }
-}));
-
-document.querySelectorAll("[data-amount]").forEach((button) => button.addEventListener("click", () => {
-  $("#addAmount").value = button.dataset.amount;
 }));
 
 $("#evaluationDate").value = new Date().toISOString().slice(0, 10);
