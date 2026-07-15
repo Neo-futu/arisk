@@ -1,6 +1,8 @@
-# ARISK Integrated Architecture
+# ARISK — Agent for Risk & Investment Analysis System
 
-本文檔以 `full-stack-fastapi-template` 的前後端分離工程方式為參考，定義 FSI-RISK-PLATFORM 的整合後結構。目標是同時保留分層能力平台的獨立可運行性，又提供單一、清晰、產品化的 Web 入口。
+**阿雷斯 · 智能風控和投資分析系統**
+
+本文檔以 `full-stack-fastapi-template` 的前後端分離工程方式為參考，定義 ARISK 的整合後結構。目標是同時保留分層能力平台的獨立可運行性，又提供單一、清晰、產品化的 Web 入口。
 
 ## 1. 設計原則
 
