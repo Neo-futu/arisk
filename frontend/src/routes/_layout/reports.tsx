@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import {
   AlertTriangle,
@@ -86,6 +86,27 @@ const TYPE_COLOR: Record<string, string> = {
   pdf: "text-red-600",
 }
 
+const REPORT_FILTERS_STORAGE_KEY = "fsi.reports.filters.v1"
+
+function getInitialReportFilters() {
+  if (typeof window === "undefined") {
+    return { fundId: FUNDS[0].id, asOfDate: lastTradeDate() }
+  }
+  try {
+    const raw = window.localStorage.getItem(REPORT_FILTERS_STORAGE_KEY)
+    if (!raw) return { fundId: FUNDS[0].id, asOfDate: lastTradeDate() }
+    const parsed = JSON.parse(raw) as Partial<{ fundId: string; asOfDate: string }>
+    const hasFund = !!parsed.fundId && FUNDS.some((f) => f.id === parsed.fundId)
+    const hasDate = typeof parsed.asOfDate === "string" && parsed.asOfDate.length > 0
+    return {
+      fundId: hasFund ? parsed.fundId! : FUNDS[0].id,
+      asOfDate: hasDate ? parsed.asOfDate! : lastTradeDate(),
+    }
+  } catch {
+    return { fundId: FUNDS[0].id, asOfDate: lastTradeDate() }
+  }
+}
+
 function StatusBadge({ status }: { status: ReportTask["status"] }) {
   const map = {
     queued:    { label: "排隊中", cls: "bg-muted text-muted-foreground" },
@@ -149,6 +170,7 @@ function ReportCard({
   const [downloading, setDownloading] = useState(false)  // kept for TS compat
   const [confirmOpen, setConfirmOpen] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const queryClient = useQueryClient()
   const Icon = TYPE_ICON[def.type] ?? FileText
 
   const stopPoll = () => {
@@ -161,10 +183,15 @@ function ReportCard({
       try {
         const res = await fsiApi.getReportTask(taskId)
         setTask(res.data)
-        if (res.data.status === "completed" || res.data.status === "failed") stopPoll()
+        if (res.data.status === "completed" || res.data.status === "failed") {
+          stopPoll()
+          queryClient.invalidateQueries({
+            queryKey: ["report-result", def.id, fundId, asOfDate],
+          })
+        }
       } catch { stopPoll() }
     }, 1500)
-  }, [])
+  }, [queryClient, def.id, fundId, asOfDate])
 
   useEffect(() => () => stopPoll(), [])
 
@@ -172,8 +199,13 @@ function ReportCard({
   const { data: existingResult } = useQuery({
     queryKey: ["report-result", def.id, fundId, asOfDate],
     queryFn: () => fsiApi.getReportResult(def.id, fundId, asOfDate).then(r => r.data),
-    staleTime: 30_000,
-    enabled: !task,          // 已有任務狀態時不重複查
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchInterval: (query) => {
+      const data = query.state.data
+      return data?.found ? false : 2000
+    },
   })
 
   useEffect(() => {
@@ -234,6 +266,11 @@ function ReportCard({
   }
 
   const isRunning = task?.status === "queued" || task?.status === "running"
+  const completedFiles = existingResult?.found
+    ? existingResult.output_files
+    : task?.status === "completed"
+      ? (task.output_files ?? (task.output_file ? [task.output_file] : []))
+      : []
 
   return (
     <>
@@ -293,7 +330,7 @@ function ReportCard({
               {isRunning ? "生成中..." : task?.status === "completed" ? "重新生成" : "生成報表"}
             </Button>
 
-            {task?.status === "completed" && (task.output_files ?? (task.output_file ? [task.output_file] : [])).map(filename => {
+            {completedFiles.map(filename => {
               const ext = filename.split(".").pop()?.toUpperCase() ?? ""
               const extColor = ext === "XLSX" ? "text-green-700" : ext === "DOCX" ? "text-blue-700" : "text-red-700"
               return (
@@ -330,8 +367,15 @@ function ReportCard({
 
 // ── 主頁面 ────────────────────────────────────────────────────────
 function ReportsPage() {
-  const [fundId, setFundId] = useState(FUNDS[0].id)
-  const [asOfDate, setAsOfDate] = useState(lastTradeDate)
+  const [fundId, setFundId] = useState(() => getInitialReportFilters().fundId)
+  const [asOfDate, setAsOfDate] = useState(() => getInitialReportFilters().asOfDate)
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      REPORT_FILTERS_STORAGE_KEY,
+      JSON.stringify({ fundId, asOfDate }),
+    )
+  }, [fundId, asOfDate])
 
   const daily   = REPORT_DEFS.filter((r) => r.frequency === "daily")
   const monthly = REPORT_DEFS.filter((r) => r.frequency === "monthly")

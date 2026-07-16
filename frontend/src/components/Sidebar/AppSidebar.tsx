@@ -27,7 +27,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import useAuth from "@/hooks/useAuth"
-import { Link as RouterLink, useRouterState } from "@tanstack/react-router"
+import { useNavigate, useRouterState } from "@tanstack/react-router"
 import { User } from "./User"
 
 type NavItem = {
@@ -60,6 +60,7 @@ function NavSection({
   items: NavItem[]
 }) {
   const { isMobile, setOpenMobile } = useSidebar()
+  const navigate = useNavigate()
   const router = useRouterState()
   const currentPath = router.location.pathname
 
@@ -73,15 +74,13 @@ function NavSection({
               <SidebarMenuButton
                 tooltip={item.title}
                 isActive={currentPath === item.path}
-                asChild
+                onClick={() => {
+                  navigate({ to: item.path })
+                  if (isMobile) setOpenMobile(false)
+                }}
               >
-                <RouterLink
-                  to={item.path}
-                  onClick={() => isMobile && setOpenMobile(false)}
-                >
-                  <item.icon className="h-4 w-4" />
-                  <span>{item.title}</span>
-                </RouterLink>
+                <item.icon className="h-4 w-4" />
+                <span>{item.title}</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))}
