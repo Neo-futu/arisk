@@ -88,11 +88,17 @@ FSI 風控業績平台六層架構的**第二層**，是平台的**計算核心*
 | `GET /positions/*` | 持倉查詢：按組合/資產類別/日期查詢當日持倉 |
 | `GET /risk/*` | 風控指標：WAM/WAL/流動性/集中度/VaR/暴露明細 |
 | `GET /performance/*` | 業績歸因：收益貢獻/行業歸因/個券損益 |
+| `GET /investment/overview/*` | 投資風險分析：組合業績/資產配置/前十大個股/行業配置 |
+| `GET /investment/risk-indicators/*` | 確定性指標：區間收益/波動率/最大回撤/股票換手率/Beta |
+| `GET /investment/attribution/*` | 績效歸因：資產貢獻/Brinson/超配/個股損益/日均重倉 |
 | `POST /review/*` | 審核工作流：創建/認領/批准/拒絕審核請求 |
 | `GET /op-logs/*` | 操作日誌查詢 |
 | `GET /health` | 健康檢查 |
 
 認證：`X-API-Key` Header，對應 `PROCESSING_API_KEY` 環境變量。
+
+> 投資風險分析的所有固定公式和 SQL 計算均在 `2_processing/tools/performance/`
+> 實現；`backend/` 只負責 JWT/用戶 API Key 認證與反向代理，`frontend/` 只展示結果。
 
 ---
 

@@ -223,7 +223,7 @@ function Dashboard() {
   const [fundId, setFundId] = useState(DEMO_FUNDS[0].id)
   const [asOfDate, setAsOfDate] = useState(lastTradeDate)
 
-  const { data, isLoading, isError, refetch, isFetching } = useQuery({
+  const { data, isError, refetch, isFetching } = useQuery({
     queryKey: ["exposure", fundId, asOfDate],
     queryFn: () => fsiApi.getExposure(fundId, asOfDate).then((r) => r.data),
     staleTime: 0,      // 每次切換日期/基金都重新請求

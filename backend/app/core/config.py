@@ -30,6 +30,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
     API_V1_STR: str = "/api/v1"
+    BACKEND_PUBLIC_URL: str = "http://localhost:8000"
     SECRET_KEY: str = secrets.token_urlsafe(32)
     # 60 minutes * 24 hours * 8 days = 8 days
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8
@@ -97,6 +98,10 @@ class Settings(BaseSettings):
     PROCESSING_API_URL: str = "http://localhost:8001"
     PROCESSING_API_KEY: str = "internal_key_change_me"
     ENTRY_API_URL: str = "http://localhost:8010"
+
+    # ── Notification channels ────────────────────────────────
+    FEISHU_WEBHOOK_URL: str | None = None
+    WECOM_WEBHOOK_URL: str | None = None
 
     def _check_default_secret(self, var_name: str, value: str | None) -> None:
         if value == "changethis":

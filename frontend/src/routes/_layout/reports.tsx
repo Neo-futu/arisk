@@ -167,7 +167,6 @@ function ReportCard({
   asOfDate: string
 }) {
   const [task, setTask] = useState<ReportTask | null>(null)
-  const [downloading, setDownloading] = useState(false)  // kept for TS compat
   const [confirmOpen, setConfirmOpen] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const queryClient = useQueryClient()

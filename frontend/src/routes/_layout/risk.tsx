@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
-import { createFileRoute } from "@tanstack/react-router"
+import { createFileRoute, redirect } from "@tanstack/react-router"
 import { useState } from "react"
 
 import { FUNDS, FsiToolbar, lastTradeDate } from "@/components/FsiToolbar"
@@ -24,7 +24,10 @@ import { fsiApi, type VarCompareResult } from "@/fsiClient"
 
 export const Route = createFileRoute("/_layout/risk")({
   component: RiskPage,
-  head: () => ({ meta: [{ title: "風控分析 — ARISK" }] }),
+  beforeLoad: () => {
+    throw redirect({ to: "/investment-risk/indicators" })
+  },
+  head: () => ({ meta: [{ title: "投資風險分析 — ARISK" }] }),
 })
 
 const METHOD_LABELS: Record<string, string> = {

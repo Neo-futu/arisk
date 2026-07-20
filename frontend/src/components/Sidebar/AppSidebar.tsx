@@ -1,9 +1,12 @@
 import {
   BarChart3,
+  Bell,
   BookOpen,
   CalendarClock,
+  ChevronDown,
   FileText,
   Home,
+  KeyRound,
   List,
   MessageSquare,
   Settings,
@@ -24,6 +27,9 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar"
 import useAuth from "@/hooks/useAuth"
@@ -34,11 +40,21 @@ type NavItem = {
   icon: React.ComponentType<{ className?: string }>
   title: string
   path: string
+  children?: Array<{ title: string; path: string }>
 }
 
 const fsiItems: NavItem[] = [
   { icon: Home, title: "儀表板", path: "/" },
-  { icon: BarChart3, title: "風控分析", path: "/risk" },
+  {
+    icon: BarChart3,
+    title: "投資風險分析",
+    path: "/investment-risk",
+    children: [
+      { title: "組合概況", path: "/investment-risk/overview" },
+      { title: "風險指標", path: "/investment-risk/indicators" },
+      { title: "績效歸因", path: "/investment-risk/attribution" },
+    ],
+  },
   { icon: List, title: "持倉明細", path: "/positions" },
   { icon: Shield, title: "合規核查", path: "/compliance" },
   { icon: FileText,     title: "報表中心", path: "/reports" },
@@ -49,6 +65,8 @@ const fsiItems: NavItem[] = [
 
 const adminItems: NavItem[] = [
   { icon: Users, title: "用戶管理", path: "/admin" },
+  { icon: KeyRound, title: "API Key 管理", path: "/api-keys" },
+  { icon: Bell, title: "通知中心", path: "/notifications" },
   { icon: Settings, title: "設置", path: "/settings" },
 ]
 
@@ -69,21 +87,44 @@ function NavSection({
       <SidebarGroupLabel>{label}</SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu>
-          {items.map((item) => (
-            <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton
-                tooltip={item.title}
-                isActive={currentPath === item.path}
-                onClick={() => {
-                  navigate({ to: item.path })
-                  if (isMobile) setOpenMobile(false)
-                }}
-              >
-                <item.icon className="h-4 w-4" />
-                <span>{item.title}</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
+          {items.map((item) => {
+            const isParentActive = item.children
+              ? currentPath.startsWith(`${item.path}/`)
+              : currentPath === item.path
+            return (
+              <SidebarMenuItem key={item.title}>
+                <SidebarMenuButton
+                  tooltip={item.title}
+                  isActive={isParentActive}
+                  onClick={() => {
+                    navigate({ to: item.children?.[0]?.path ?? item.path })
+                    if (isMobile) setOpenMobile(false)
+                  }}
+                >
+                  <item.icon className="h-4 w-4" />
+                  <span>{item.title}</span>
+                  {item.children && <ChevronDown className="ml-auto h-3.5 w-3.5" />}
+                </SidebarMenuButton>
+                {item.children && (
+                  <SidebarMenuSub>
+                    {item.children.map((child) => (
+                      <SidebarMenuSubItem key={child.path}>
+                        <SidebarMenuSubButton
+                          isActive={currentPath === child.path}
+                          onClick={() => {
+                            navigate({ to: child.path })
+                            if (isMobile) setOpenMobile(false)
+                          }}
+                        >
+                          <span>{child.title}</span>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    ))}
+                  </SidebarMenuSub>
+                )}
+              </SidebarMenuItem>
+            )
+          })}
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>
@@ -95,7 +136,7 @@ export function AppSidebar() {
 
   const visibleAdminItems = currentUser?.is_superuser
     ? adminItems
-    : adminItems.filter((i) => i.path === "/settings")
+    : adminItems.filter((i) => i.path !== "/admin")
 
   return (
     <Sidebar collapsible="icon">

@@ -4,13 +4,13 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from datetime import date
 
-from fastapi import Depends, FastAPI, HTTPException, Security
-from fastapi.security import APIKeyHeader
+from fastapi import Depends, FastAPI
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .deps import get_db, verify_api_key
-from .routers import op_logs, positions, reports, review, risk, schedules
+from .routers import investment, op_logs, positions, reports, review, risk, schedules
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -28,6 +28,7 @@ app = FastAPI(
 
 app.include_router(positions.router, prefix="/positions", tags=["持倉"])
 app.include_router(risk.router,      prefix="/risk",      tags=["風控"])
+app.include_router(investment.router, prefix="/investment", tags=["投資風險分析"])
 app.include_router(reports.router,   prefix="/reports",   tags=["報表生成"])
 app.include_router(schedules.router, prefix="/schedules", tags=["定時報表"])
 app.include_router(review.router,    prefix="/review",    tags=["人工審核"])

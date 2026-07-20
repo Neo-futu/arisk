@@ -7,7 +7,6 @@ from pydantic import EmailStr
 from sqlalchemy import DateTime
 from sqlmodel import Field, SQLModel
 
-
 IAM_SCHEMA  = "iam"     # 用戶身份認證 + 用戶個人配置
 CHAT_SCHEMA = "chatdb"  # AI 對話數據 + 知識庫（獨立於業務數據）
 
@@ -237,6 +236,44 @@ class TokenPayload(SQLModel):
 class NewPassword(SQLModel):
     token: str
     new_password: str = Field(min_length=8, max_length=128)
+
+
+# ── User API Key ────────────────────────────────────────────────
+
+class UserApiKey(SQLModel, table=True):
+    """供腳本/本地客戶端以 X-API-Key 訪問 Backend API 的用戶密鑰。"""
+    __tablename__ = "user_api_key"
+    __table_args__ = {"schema": IAM_SCHEMA}
+
+    id:           uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id:      uuid.UUID = Field(foreign_key=f"{IAM_SCHEMA}.user.id", index=True, ondelete="CASCADE")
+    name:         str       = Field(max_length=100)
+    key_prefix:   str       = Field(max_length=16)
+    key_hash:     str       = Field(max_length=64, unique=True, index=True)
+    last_four:    str       = Field(max_length=4)
+    is_active:    bool      = Field(default=True)
+    created_at:   datetime  = Field(default_factory=get_datetime_utc)
+    expires_at:   datetime | None = Field(default=None, sa_type=DateTime(timezone=True))  # type: ignore
+    last_used_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))  # type: ignore
+
+
+class UserApiKeyCreate(SQLModel):
+    name: str = Field(min_length=1, max_length=100)
+    expires_days: int | None = Field(default=None, ge=1, le=3650)
+
+
+class UserApiKeyPublic(SQLModel):
+    id:           uuid.UUID
+    name:         str
+    masked_key:   str
+    is_active:    bool
+    created_at:   datetime
+    expires_at:   datetime | None
+    last_used_at: datetime | None
+
+
+class UserApiKeyCreated(UserApiKeyPublic):
+    key: str
 
 
 # ── Chat Session & Message ─────────────────────────────────────────

@@ -59,6 +59,172 @@ export interface VarCompareResult {
   max_var_pct_nav: number
 }
 
+export interface PortfolioOverviewResult {
+  fund_id: string
+  as_of_date: string
+  portfolio: {
+    fund_id: string
+    port_name: string
+    portfolio_type?: string | null
+    base_currency?: string | null
+    inception_date?: string | null
+    data_date?: string | null
+    net_asset?: number | null
+    shares_outstanding?: number | null
+    unit_nav?: number | null
+    acc_unit_nav?: number | null
+    day_return?: number | null
+  }
+  performance: Array<{
+    period: string
+    start_date: string
+    end_date: string
+    return_pct: number
+  }>
+  asset_allocation: Array<{
+    asset_class: string
+    market_value_base: number
+    weight_pct: number
+  }>
+  top_stocks: Array<{
+    security_code: string
+    security_name: string
+    market_id: string
+    sector: string
+    currency: string
+    market_value_base: number
+    weight_pct: number
+    unrealized_pnl: number | null
+  }>
+  stock_sectors: Array<{
+    sector: string
+    market_value_base: number
+    weight_pct: number
+    position_count: number
+  }>
+}
+
+export interface RiskIndicatorsResult {
+  fund_id: string
+  period_start: string
+  period_end: string
+  interval_return_pct: number | null
+  annualized_volatility_pct: number | null
+  max_drawdown_pct: number | null
+  max_drawdown_start: string | null
+  max_drawdown_end: string | null
+  sample_size: number
+  equity_turnover: {
+    buy_amount: number
+    sell_amount: number
+    average_equity_balance: number
+    period_turnover_pct: number | null
+    annualized_turnover_pct: number | null
+    method: string
+  }
+  equity_beta: {
+    value: number | null
+    benchmark_id: string | null
+    sample_size: number
+    constituents: Array<{
+      security_code: string
+      security_name: string
+      weight_pct: number
+      beta: number
+      sample_size: number
+    }>
+  }
+}
+
+export interface PerformanceAttributionResult {
+  fund_id: string
+  period_start: string
+  period_end: string
+  benchmark_id: string | null
+  summary: {
+    fund_return_pct: number
+    benchmark_return_pct: number
+    active_return_pct: number
+    allocation_effect_pct: number
+    selection_effect_pct: number
+    interaction_effect_pct: number
+  }
+  asset_contribution: Array<{
+    asset_class: string
+    mtm_delta: number
+    interest_income: number
+    realized_gain: number
+    fx_pnl: number
+    fee_expense: number
+    net_pnl: number
+    contribution_pct: number | null
+  }>
+  sector_attribution: Array<{
+    sector: string
+    fund_weight_pct: number
+    benchmark_weight_pct: number
+    overweight_pct: number
+    fund_return_pct: number
+    benchmark_return_pct: number
+    allocation_effect_pct: number
+    selection_effect_pct: number
+    interaction_effect_pct: number
+  }>
+  top_winners: SecurityPnl[]
+  top_losers: SecurityPnl[]
+  average_top_holdings: Array<{
+    security_code: string
+    security_name: string
+    sector: string
+    average_weight_pct: number
+    holding_days: number
+    net_pnl: number
+  }>
+}
+
+export interface SecurityPnl {
+  security_code: string | null
+  security_name: string
+  sector: string
+  net_pnl: number
+  contribution_pct: number | null
+}
+
+export interface UserApiKey {
+  id: string
+  name: string
+  masked_key: string
+  is_active: boolean
+  created_at: string
+  expires_at: string | null
+  last_used_at: string | null
+}
+
+export interface CreatedUserApiKey extends UserApiKey {
+  key: string
+}
+
+export interface LocalApiConfig {
+  name: string
+  api_base_url: string
+  header_name: string
+  key_prefix: string
+  processing_api: {
+    url: string
+    header_name: string
+    secret_source: string
+    browser_exposed: boolean
+  }
+  note: string
+}
+
+export type NotificationChannel = "email" | "feishu" | "wecom"
+
+export type NotificationChannels = Record<NotificationChannel, {
+  configured: boolean
+  description: string
+}>
+
 export interface Position {
   asset_id: string
   asset_name: string
@@ -215,6 +381,30 @@ export interface ChatMessageRecord {
 // ── API 調用 ──────────────────────────────────────────────────────
 
 export const fsiApi = {
+  /** 投資風險分析：組合概況 */
+  getPortfolioOverview(fundId: string, asOfDate: string) {
+    return axios.get<PortfolioOverviewResult>(
+      `${BASE}/api/v1/fsi/investment/overview/${fundId}`,
+      { params: { as_of_date: asOfDate }, headers: authHeaders() },
+    )
+  },
+
+  /** 投資風險分析：確定性風險指標 */
+  getRiskIndicators(fundId: string, start: string, end: string) {
+    return axios.get<RiskIndicatorsResult>(
+      `${BASE}/api/v1/fsi/investment/risk-indicators/${fundId}`,
+      { params: { start, end }, headers: authHeaders() },
+    )
+  },
+
+  /** 投資風險分析：績效歸因 */
+  getPerformanceAttribution(fundId: string, start: string, end: string) {
+    return axios.get<PerformanceAttributionResult>(
+      `${BASE}/api/v1/fsi/investment/attribution/${fundId}`,
+      { params: { start, end }, headers: authHeaders() },
+    )
+  },
+
   /** 暴露分析 + SFC 合規狀態 */
   getExposure(fundId: string, asOfDate: string) {
     return axios.get<ExposureResult>(
@@ -475,6 +665,39 @@ export const fsiApi = {
     return axios.post<ChatMessageRecord[]>(
       `${BASE}/api/v1/chat/sessions/${sessionId}/messages`,
       { messages },
+      { headers: authHeaders() },
+    )
+  },
+
+  // ── 用戶 API Key 管理 ──────────────────────────────────────────
+  listApiKeys() {
+    return axios.get<UserApiKey[]>(`${BASE}/api/v1/api-keys/`, { headers: authHeaders() })
+  },
+
+  getLocalApiConfig() {
+    return axios.get<LocalApiConfig>(`${BASE}/api/v1/api-keys/local-config`, { headers: authHeaders() })
+  },
+
+  createApiKey(data: { name: string; expires_days?: number | null }) {
+    return axios.post<CreatedUserApiKey>(`${BASE}/api/v1/api-keys/`, data, { headers: authHeaders() })
+  },
+
+  revokeApiKey(id: string) {
+    return axios.delete<UserApiKey>(`${BASE}/api/v1/api-keys/${id}`, { headers: authHeaders() })
+  },
+
+  // ── 獨立通知接口（可供其他頁面的發送按鈕複用） ────────────────
+  getNotificationChannels() {
+    return axios.get<NotificationChannels>(`${BASE}/api/v1/notifications/channels`, { headers: authHeaders() })
+  },
+
+  sendNotification(
+    channel: NotificationChannel,
+    data: { title: string; content: string; recipient?: string },
+  ) {
+    return axios.post<{ channel: NotificationChannel; status: "sent"; message: string }>(
+      `${BASE}/api/v1/notifications/${channel}`,
+      data,
       { headers: authHeaders() },
     )
   },

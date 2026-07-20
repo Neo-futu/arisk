@@ -20,11 +20,16 @@ import { Route as LayoutSchedulesRouteImport } from './routes/_layout/schedules'
 import { Route as LayoutRiskRouteImport } from './routes/_layout/risk'
 import { Route as LayoutReportsRouteImport } from './routes/_layout/reports'
 import { Route as LayoutPositionsRouteImport } from './routes/_layout/positions'
+import { Route as LayoutNotificationsRouteImport } from './routes/_layout/notifications'
 import { Route as LayoutItemsRouteImport } from './routes/_layout/items'
 import { Route as LayoutExpertRouteImport } from './routes/_layout/expert'
 import { Route as LayoutComplianceRouteImport } from './routes/_layout/compliance'
 import { Route as LayoutChatRouteImport } from './routes/_layout/chat'
+import { Route as LayoutApiKeysRouteImport } from './routes/_layout/api-keys'
 import { Route as LayoutAdminRouteImport } from './routes/_layout/admin'
+import { Route as LayoutInvestmentRiskOverviewRouteImport } from './routes/_layout/investment-risk.overview'
+import { Route as LayoutInvestmentRiskIndicatorsRouteImport } from './routes/_layout/investment-risk.indicators'
+import { Route as LayoutInvestmentRiskAttributionRouteImport } from './routes/_layout/investment-risk.attribution'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -80,6 +85,11 @@ const LayoutPositionsRoute = LayoutPositionsRouteImport.update({
   path: '/positions',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutNotificationsRoute = LayoutNotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const LayoutItemsRoute = LayoutItemsRouteImport.update({
   id: '/items',
   path: '/items',
@@ -100,11 +110,34 @@ const LayoutChatRoute = LayoutChatRouteImport.update({
   path: '/chat',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutApiKeysRoute = LayoutApiKeysRouteImport.update({
+  id: '/api-keys',
+  path: '/api-keys',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const LayoutAdminRoute = LayoutAdminRouteImport.update({
   id: '/admin',
   path: '/admin',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutInvestmentRiskOverviewRoute =
+  LayoutInvestmentRiskOverviewRouteImport.update({
+    id: '/investment-risk/overview',
+    path: '/investment-risk/overview',
+    getParentRoute: () => LayoutRoute,
+  } as any)
+const LayoutInvestmentRiskIndicatorsRoute =
+  LayoutInvestmentRiskIndicatorsRouteImport.update({
+    id: '/investment-risk/indicators',
+    path: '/investment-risk/indicators',
+    getParentRoute: () => LayoutRoute,
+  } as any)
+const LayoutInvestmentRiskAttributionRoute =
+  LayoutInvestmentRiskAttributionRouteImport.update({
+    id: '/investment-risk/attribution',
+    path: '/investment-risk/attribution',
+    getParentRoute: () => LayoutRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof LayoutIndexRoute
@@ -113,15 +146,20 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/admin': typeof LayoutAdminRoute
+  '/api-keys': typeof LayoutApiKeysRoute
   '/chat': typeof LayoutChatRoute
   '/compliance': typeof LayoutComplianceRoute
   '/expert': typeof LayoutExpertRoute
   '/items': typeof LayoutItemsRoute
+  '/notifications': typeof LayoutNotificationsRoute
   '/positions': typeof LayoutPositionsRoute
   '/reports': typeof LayoutReportsRoute
   '/risk': typeof LayoutRiskRoute
   '/schedules': typeof LayoutSchedulesRoute
   '/settings': typeof LayoutSettingsRoute
+  '/investment-risk/attribution': typeof LayoutInvestmentRiskAttributionRoute
+  '/investment-risk/indicators': typeof LayoutInvestmentRiskIndicatorsRoute
+  '/investment-risk/overview': typeof LayoutInvestmentRiskOverviewRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -129,16 +167,21 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/admin': typeof LayoutAdminRoute
+  '/api-keys': typeof LayoutApiKeysRoute
   '/chat': typeof LayoutChatRoute
   '/compliance': typeof LayoutComplianceRoute
   '/expert': typeof LayoutExpertRoute
   '/items': typeof LayoutItemsRoute
+  '/notifications': typeof LayoutNotificationsRoute
   '/positions': typeof LayoutPositionsRoute
   '/reports': typeof LayoutReportsRoute
   '/risk': typeof LayoutRiskRoute
   '/schedules': typeof LayoutSchedulesRoute
   '/settings': typeof LayoutSettingsRoute
   '/': typeof LayoutIndexRoute
+  '/investment-risk/attribution': typeof LayoutInvestmentRiskAttributionRoute
+  '/investment-risk/indicators': typeof LayoutInvestmentRiskIndicatorsRoute
+  '/investment-risk/overview': typeof LayoutInvestmentRiskOverviewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -148,16 +191,21 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/_layout/admin': typeof LayoutAdminRoute
+  '/_layout/api-keys': typeof LayoutApiKeysRoute
   '/_layout/chat': typeof LayoutChatRoute
   '/_layout/compliance': typeof LayoutComplianceRoute
   '/_layout/expert': typeof LayoutExpertRoute
   '/_layout/items': typeof LayoutItemsRoute
+  '/_layout/notifications': typeof LayoutNotificationsRoute
   '/_layout/positions': typeof LayoutPositionsRoute
   '/_layout/reports': typeof LayoutReportsRoute
   '/_layout/risk': typeof LayoutRiskRoute
   '/_layout/schedules': typeof LayoutSchedulesRoute
   '/_layout/settings': typeof LayoutSettingsRoute
   '/_layout/': typeof LayoutIndexRoute
+  '/_layout/investment-risk/attribution': typeof LayoutInvestmentRiskAttributionRoute
+  '/_layout/investment-risk/indicators': typeof LayoutInvestmentRiskIndicatorsRoute
+  '/_layout/investment-risk/overview': typeof LayoutInvestmentRiskOverviewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -168,15 +216,20 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/admin'
+    | '/api-keys'
     | '/chat'
     | '/compliance'
     | '/expert'
     | '/items'
+    | '/notifications'
     | '/positions'
     | '/reports'
     | '/risk'
     | '/schedules'
     | '/settings'
+    | '/investment-risk/attribution'
+    | '/investment-risk/indicators'
+    | '/investment-risk/overview'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -184,16 +237,21 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/admin'
+    | '/api-keys'
     | '/chat'
     | '/compliance'
     | '/expert'
     | '/items'
+    | '/notifications'
     | '/positions'
     | '/reports'
     | '/risk'
     | '/schedules'
     | '/settings'
     | '/'
+    | '/investment-risk/attribution'
+    | '/investment-risk/indicators'
+    | '/investment-risk/overview'
   id:
     | '__root__'
     | '/_layout'
@@ -202,16 +260,21 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/_layout/admin'
+    | '/_layout/api-keys'
     | '/_layout/chat'
     | '/_layout/compliance'
     | '/_layout/expert'
     | '/_layout/items'
+    | '/_layout/notifications'
     | '/_layout/positions'
     | '/_layout/reports'
     | '/_layout/risk'
     | '/_layout/schedules'
     | '/_layout/settings'
     | '/_layout/'
+    | '/_layout/investment-risk/attribution'
+    | '/_layout/investment-risk/indicators'
+    | '/_layout/investment-risk/overview'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -301,6 +364,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutPositionsRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/notifications': {
+      id: '/_layout/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof LayoutNotificationsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/items': {
       id: '/_layout/items'
       path: '/items'
@@ -329,6 +399,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutChatRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/api-keys': {
+      id: '/_layout/api-keys'
+      path: '/api-keys'
+      fullPath: '/api-keys'
+      preLoaderRoute: typeof LayoutApiKeysRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/admin': {
       id: '/_layout/admin'
       path: '/admin'
@@ -336,35 +413,66 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutAdminRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/investment-risk/overview': {
+      id: '/_layout/investment-risk/overview'
+      path: '/investment-risk/overview'
+      fullPath: '/investment-risk/overview'
+      preLoaderRoute: typeof LayoutInvestmentRiskOverviewRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/investment-risk/indicators': {
+      id: '/_layout/investment-risk/indicators'
+      path: '/investment-risk/indicators'
+      fullPath: '/investment-risk/indicators'
+      preLoaderRoute: typeof LayoutInvestmentRiskIndicatorsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/investment-risk/attribution': {
+      id: '/_layout/investment-risk/attribution'
+      path: '/investment-risk/attribution'
+      fullPath: '/investment-risk/attribution'
+      preLoaderRoute: typeof LayoutInvestmentRiskAttributionRouteImport
+      parentRoute: typeof LayoutRoute
+    }
   }
 }
 
 interface LayoutRouteChildren {
   LayoutAdminRoute: typeof LayoutAdminRoute
+  LayoutApiKeysRoute: typeof LayoutApiKeysRoute
   LayoutChatRoute: typeof LayoutChatRoute
   LayoutComplianceRoute: typeof LayoutComplianceRoute
   LayoutExpertRoute: typeof LayoutExpertRoute
   LayoutItemsRoute: typeof LayoutItemsRoute
+  LayoutNotificationsRoute: typeof LayoutNotificationsRoute
   LayoutPositionsRoute: typeof LayoutPositionsRoute
   LayoutReportsRoute: typeof LayoutReportsRoute
   LayoutRiskRoute: typeof LayoutRiskRoute
   LayoutSchedulesRoute: typeof LayoutSchedulesRoute
   LayoutSettingsRoute: typeof LayoutSettingsRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
+  LayoutInvestmentRiskAttributionRoute: typeof LayoutInvestmentRiskAttributionRoute
+  LayoutInvestmentRiskIndicatorsRoute: typeof LayoutInvestmentRiskIndicatorsRoute
+  LayoutInvestmentRiskOverviewRoute: typeof LayoutInvestmentRiskOverviewRoute
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutAdminRoute: LayoutAdminRoute,
+  LayoutApiKeysRoute: LayoutApiKeysRoute,
   LayoutChatRoute: LayoutChatRoute,
   LayoutComplianceRoute: LayoutComplianceRoute,
   LayoutExpertRoute: LayoutExpertRoute,
   LayoutItemsRoute: LayoutItemsRoute,
+  LayoutNotificationsRoute: LayoutNotificationsRoute,
   LayoutPositionsRoute: LayoutPositionsRoute,
   LayoutReportsRoute: LayoutReportsRoute,
   LayoutRiskRoute: LayoutRiskRoute,
   LayoutSchedulesRoute: LayoutSchedulesRoute,
   LayoutSettingsRoute: LayoutSettingsRoute,
   LayoutIndexRoute: LayoutIndexRoute,
+  LayoutInvestmentRiskAttributionRoute: LayoutInvestmentRiskAttributionRoute,
+  LayoutInvestmentRiskIndicatorsRoute: LayoutInvestmentRiskIndicatorsRoute,
+  LayoutInvestmentRiskOverviewRoute: LayoutInvestmentRiskOverviewRoute,
 }
 
 const LayoutRouteWithChildren =
