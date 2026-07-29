@@ -1,68 +1,91 @@
 -- atomic_stock_net_trade_to_nav_ratio.sql
--- 淨交易佔淨值比例 (%) (Net Trade Amount to Average NAV Ratio, %)
--- 計算公式：
--- 股票淨交易金額 (Net Trade Amount) = 區間股票總買入金額 (Buy Amount) - 區間股票總賣出金額 (Sell Amount)
--- 淨交易佔淨值比例 (%) = (區間單個股票淨買入/賣出金額 / 區間日均基金淨資產 Avg NAV) * 100%
+-- 原子指標：淨交易佔淨值比例 (%) (Net Trade Amount to Average NAV Ratio, %)
+-- 說明：
+-- 1. 淨值來源：fsi.balance_portfolio_nav (port_id, evaluate_date, net_asset)
+-- 2. 交易來源：fsi.trade_order (port_id, trade_date, security_code, bs_flag, trade_amount)
+-- 3. 計算公式：
+--    - 股票淨交易金額 (Net Trade Amount) = 區間總買入金額 (Buy Amount) - 區間總賣出金額 (Sell Amount)
+--    - 淨交易佔淨值比例 (%) = (區間股票淨交易金額 / 區間日均基金淨資產 Avg NAV) * 100%
 
-WITH period_config AS (
-    -- 1. 設定統計區間與參數
+WITH nav_summary AS (
+    -- 1. 計算統計期間內的日均基金淨資產 (Avg NAV)
     SELECT
-        :fid AS fund_id,
-        :security_code AS security_code,
-        CAST(:start_date AS DATE) AS start_date,
-        CAST(:end_date AS DATE) AS end_date
+        port_id AS fund_id,
+        AVG(COALESCE(net_asset, 0.0)) AS avg_nav
+    FROM fsi.balance_portfolio_nav
+    WHERE port_id = :fid
+      AND evaluate_date BETWEEN CAST(:start_date AS DATE) AND CAST(:end_date AS DATE)
+    GROUP BY port_id
 ),
-nav_summary AS (
-    -- 2. 計算統計期間內的日均基金淨資產 (Avg NAV)
+base_trades AS (
+    -- 2. 預處理交易紀錄，標準化標的代碼與買賣金額
     SELECT
-        fund_id,
-        AVG(COALESCE(net_asset_value_hkd, 0.0)) AS avg_net_asset_value_hkd
-    FROM fsi.fund_nav
-    WHERE fund_id = :fid
-      AND nav_date BETWEEN :start_date AND :end_date
-    GROUP BY fund_id
+        port_id AS fund_id,
+        COALESCE(security_code, wind_code, ticker, 'UNKNOWN') AS security_code,
+        COALESCE(security_name, 'UNNAMED') AS security_name,
+        UPPER(COALESCE(bs_flag, trade_direction, '')) AS norm_bs_flag,
+        ABS(COALESCE(trade_amount, deal_amount, business_balance, 0.0)) AS norm_trade_amount
+    FROM fsi.trade_order
+    WHERE port_id = :fid
+      AND trade_date BETWEEN CAST(:start_date AS DATE) AND CAST(:end_date AS DATE)
+      AND (:security_code IS NULL OR security_code = :security_code)
 ),
 trade_summary AS (
-    -- 3. 彙整指定股票在統計期間內的總買入金額、總賣出金額與淨交易金額
+    -- 3. 彙整交易金額
     SELECT
         fund_id,
         security_code,
-        SUM(CASE WHEN LOWER(transaction_type) IN ('buy', 'p', 'subscription') THEN ABS(COALESCE(amount_hkd, 0.0)) ELSE 0.0 END) AS total_buy_amount_hkd,
-        SUM(CASE WHEN LOWER(transaction_type) IN ('sell', 's', 'redemption') THEN ABS(COALESCE(amount_hkd, 0.0)) ELSE 0.0 END) AS total_sell_amount_hkd
-    FROM fsi.transactions
-    WHERE fund_id = :fid
-      AND security_code = :security_code
-      AND trade_date BETWEEN :start_date AND :end_date
+        MAX(security_name) AS security_name,
+        
+        -- 買入總金額
+        SUM(
+            CASE 
+                WHEN norm_bs_flag IN ('B', 'BUY', '1') THEN norm_trade_amount
+                ELSE 0.0 
+            END
+        ) AS total_buy_amount,
+        
+        -- 賣出總金額
+        SUM(
+            CASE 
+                WHEN norm_bs_flag IN ('S', 'SELL', '2') THEN norm_trade_amount
+                ELSE 0.0 
+            END
+        ) AS total_sell_amount
+    FROM base_trades
     GROUP BY fund_id, security_code
 ),
 calculated_ratios AS (
-    -- 4. 整合日均 NAV 與交易金額計算淨交易金額與占比
+    -- 4. 整合日均 NAV 與交易金額，計算淨交易金額與占比
     SELECT
-        cfg.fund_id,
-        cfg.security_code,
-        cfg.start_date,
-        cfg.end_date,
-        COALESCE(n.avg_net_asset_value_hkd, 0.0) AS avg_net_asset_value_hkd,
-        COALESCE(t.total_buy_amount_hkd, 0.0) AS total_buy_amount_hkd,
-        COALESCE(t.total_sell_amount_hkd, 0.0) AS total_sell_amount_hkd,
-        (COALESCE(t.total_buy_amount_hkd, 0.0) - COALESCE(t.total_sell_amount_hkd, 0.0)) AS net_trade_amount_hkd
-    FROM period_config cfg
-    LEFT JOIN nav_summary n ON cfg.fund_id = n.fund_id
-    LEFT JOIN trade_summary t ON cfg.fund_id = t.fund_id AND cfg.security_code = t.security_code
+        t.fund_id,
+        t.security_code,
+        t.security_name,
+        CAST(:start_date AS DATE) AS start_date,
+        CAST(:end_date AS DATE) AS end_date,
+        COALESCE(n.avg_nav, 0.0) AS avg_nav,
+        t.total_buy_amount,
+        t.total_sell_amount,
+        (t.total_buy_amount - t.total_sell_amount) AS net_trade_amount
+    FROM trade_summary t
+    LEFT JOIN nav_summary n ON t.fund_id = n.fund_id
 )
 SELECT
     fund_id,
     security_code,
+    security_name,
     start_date,
     end_date,
-    ROUND(avg_net_asset_value_hkd, 2) AS avg_net_asset_value_hkd,
-    ROUND(total_buy_amount_hkd, 2) AS total_buy_amount_hkd,
-    ROUND(total_sell_amount_hkd, 2) AS total_sell_amount_hkd,
-    ROUND(net_trade_amount_hkd, 2) AS net_trade_amount_hkd,
+    ROUND(avg_nav, 2) AS avg_nav,
+    ROUND(total_buy_amount, 2) AS total_buy_amount,
+    ROUND(total_sell_amount, 2) AS total_sell_amount,
+    ROUND(net_trade_amount, 2) AS net_trade_amount,
     
-    -- 淨交易佔淨值比例 (%)
-    ROUND(
-        (net_trade_amount_hkd / NULLIF(avg_net_asset_value_hkd, 0.0)) * 100.0,
-        4
-    ) AS net_trade_to_nav_ratio_pct
-FROM calculated_ratios;
+    -- 淨交易佔淨值比例 (%) = (淨交易金額 / 日均 NAV) * 100
+    CASE
+        WHEN avg_nav IS NULL OR avg_nav <= 0.0 THEN NULL
+        ELSE ROUND((net_trade_amount / avg_nav) * 100.0, 6)
+    END AS net_trade_to_nav_ratio_pct
+
+FROM calculated_ratios
+ORDER BY ABS(net_trade_amount) DESC;

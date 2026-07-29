@@ -14,26 +14,48 @@ WITH period_config AS (
         (CAST(:end_date AS DATE) - CAST(:start_date AS DATE) + 1) AS days_in_period
 ),
 trade_summary AS (
-    -- 2. 彙整統計期間內的買入與賣出交易總金額 (HKD)
+    -- 2. 從股票與債券交易明細表彙整買入與賣出總金額 (HKD)
     SELECT
-        fund_id,
-        SUM(CASE WHEN LOWER(transaction_type) IN ('buy', 'subscription', 'p') THEN ABS(COALESCE(amount_hkd, 0.0)) ELSE 0.0 END) AS total_purchases_hkd,
-        SUM(CASE WHEN LOWER(transaction_type) IN ('sell', 'redemption', 's') THEN ABS(COALESCE(amount_hkd, 0.0)) ELSE 0.0 END) AS total_sales_hkd
-    FROM fsi.transactions
-    WHERE fund_id = :fid
-      AND trade_date BETWEEN :start_date AND :end_date
-    GROUP BY fund_id
+        port_id AS fund_id,
+        SUM(
+            CASE 
+                WHEN UPPER(COALESCE(direction, buy_sell, '')) IN ('BUY', 'B', 'P', 'PURCHASE') 
+                THEN ABS(COALESCE(transact_amount, settlement_amount, amount, 0.0)) 
+                ELSE 0.0 
+            END
+        ) AS total_purchases_hkd,
+        SUM(
+            CASE 
+                WHEN UPPER(COALESCE(direction, buy_sell, '')) IN ('SELL', 'S', 'REDEMPTION') 
+                THEN ABS(COALESCE(transact_amount, settlement_amount, amount, 0.0)) 
+                ELSE 0.0 
+            END
+        ) AS total_sales_hkd
+    FROM (
+        -- 讀取股票交易表
+        SELECT port_id, trade_date, direction, buy_sell, transact_amount, settlement_amount, amount 
+        FROM fsi.transact_stock 
+        WHERE port_id = :fid AND trade_date BETWEEN :start_date AND :end_date
+        
+        UNION ALL
+        
+        -- 讀取債券交易表
+        SELECT port_id, trade_date, direction, buy_sell, transact_amount, settlement_amount, amount 
+        FROM fsi.transact_bond 
+        WHERE port_id = :fid AND trade_date BETWEEN :start_date AND :end_date
+    ) sub_trades
+    GROUP BY port_id
 ),
 nav_summary AS (
     -- 3. 計算統計期間內的每日平均基金淨值 (Avg NAV)
     SELECT
-        fund_id,
-        AVG(COALESCE(net_asset_value_hkd, 0.0)) AS avg_net_asset_value_hkd,
-        COUNT(DISTINCT nav_date) AS nav_days_count
-    FROM fsi.fund_nav
-    WHERE fund_id = :fid
-      AND nav_date BETWEEN :start_date AND :end_date
-    GROUP BY fund_id
+        port_id AS fund_id,
+        AVG(COALESCE(net_asset, 0.0)) AS avg_net_asset_value_hkd,
+        COUNT(DISTINCT evaluate_date) AS nav_days_count
+    FROM fsi.balance_portfolio_nav
+    WHERE port_id = :fid
+      AND evaluate_date BETWEEN :start_date AND :end_date
+    GROUP BY port_id
 ),
 turnover_calculated AS (
     -- 4. 整合並計算單邊換手金額

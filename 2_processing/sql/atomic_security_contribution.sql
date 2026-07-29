@@ -1,73 +1,143 @@
 -- atomic_security_contribution.sql
 -- 個股/個券每日收益累計與區間貢獻分析 (Atomic Security Contribution with Carino Linking)
--- 採用 Carino 多期連鎖調整法，將每日 (w_i * r_i) 歸因幾何累加，確保區間單券貢獻度相加嚴格等於組合總超額/總收益。
+-- 說明：
+-- 1. 淨值來源：fsi.balance_portfolio_nav (port_id, evaluate_date, net_asset)
+-- 2. 持倉來源：fsi.balance_stock, fsi.balance_bond, fsi.balance_fund, fsi.balance_repo 等
+-- 3. 採用 Carino 多期連鎖調整法，確保各單券在區間內的 cumulative_contrib_pct 嚴格相加等於組合區間總收益率 R_P。
 
-WITH daily_pos AS (
+WITH daily_nav AS (
+    -- 1. 取得每日組合淨資產 (NAV)
     SELECT
-        as_of_date,
-        fund_id,
-        COALESCE(security_code, instrument_id, 'UNKNOWN') AS security_code,
-        COALESCE(security_name, 'UNNAMED') AS security_name,
-        COALESCE(market_value_hkd, 0.0) AS mv_i,
-        COALESCE(pnl_hkd, 0.0) AS pnl_i
-    FROM fsi.positions
-    WHERE fund_id = :fid
-      AND as_of_date BETWEEN :start_date AND :end_date
+        port_id AS fund_id,
+        evaluate_date AS as_of_date,
+        COALESCE(net_asset, 0.0) AS nav_t
+    FROM fsi.balance_portfolio_nav
+    WHERE port_id = :fid
+      AND evaluate_date BETWEEN :start_date AND :end_date
 ),
-daily_portfolio AS (
+daily_pos_union AS (
+    -- 2. 彙整多資產持倉與每日 PnL
+    -- 股票持倉
     SELECT
-        as_of_date,
-        fund_id,
-        SUM(mv_i) AS total_mv,
-        SUM(pnl_i) AS total_pnl
-    FROM daily_pos
-    GROUP BY as_of_date, fund_id
+        port_id AS fund_id,
+        evaluate_date AS as_of_date,
+        COALESCE(security_code, wind_code, ticker, 'UNKNOWN') AS security_code,
+        COALESCE(security_name, 'UNNAMED') AS security_name,
+        COALESCE(market_value, 0.0) AS mv_i,
+        COALESCE(holding_pnl, daily_pnl, pnl, 0.0) AS pnl_i
+    FROM fsi.balance_stock
+    WHERE port_id = :fid
+      AND evaluate_date BETWEEN :start_date AND :end_date
+
+    UNION ALL
+
+    -- 債券持倉
+    SELECT
+        port_id AS fund_id,
+        evaluate_date AS as_of_date,
+        COALESCE(security_code, wind_code, bond_code, 'UNKNOWN') AS security_code,
+        COALESCE(security_name, 'UNNAMED') AS security_name,
+        COALESCE(market_value, 0.0) AS mv_i,
+        COALESCE(holding_pnl, daily_pnl, pnl, 0.0) AS pnl_i
+    FROM fsi.balance_bond
+    WHERE port_id = :fid
+      AND evaluate_date BETWEEN :start_date AND :end_date
+
+    UNION ALL
+
+    -- 基金持倉
+    SELECT
+        port_id AS fund_id,
+        evaluate_date AS as_of_date,
+        COALESCE(security_code, fund_code, 'UNKNOWN') AS security_code,
+        COALESCE(security_name, 'UNNAMED') AS security_name,
+        COALESCE(market_value, 0.0) AS mv_i,
+        COALESCE(holding_pnl, daily_pnl, pnl, 0.0) AS pnl_i
+    FROM fsi.balance_fund
+    WHERE port_id = :fid
+      AND evaluate_date BETWEEN :start_date AND :end_date
+
+    UNION ALL
+
+    -- 逆回購 / 其他貨幣持倉
+    SELECT
+        port_id AS fund_id,
+        evaluate_date AS as_of_date,
+        COALESCE(security_code, repo_code, 'REVERSE_REPO') AS security_code,
+        COALESCE(security_name, 'Reverse Repo') AS security_name,
+        COALESCE(market_value, amount, 0.0) AS mv_i,
+        COALESCE(holding_pnl, daily_pnl, interest_income, 0.0) AS pnl_i
+    FROM fsi.balance_repo
+    WHERE port_id = :fid
+      AND evaluate_date BETWEEN :start_date AND :end_date
+),
+daily_portfolio_pnl AS (
+    -- 3. 算當日組合總持倉 PnL 與總收益率 R_{P,t}
+    SELECT
+        p.fund_id,
+        p.as_of_date,
+        n.nav_t,
+        SUM(p.pnl_i) AS total_pnl_t,
+        -- 當日組合收益率 R_{P,t} = Total PnL_t / NAV_t
+        CASE 
+            WHEN n.nav_t > 0.0 THEN SUM(p.pnl_i) / n.nav_t 
+            ELSE 0.0 
+        END AS r_p
+    FROM daily_pos_union p
+    JOIN daily_nav n 
+      ON p.fund_id = n.fund_id 
+     AND p.as_of_date = n.as_of_date
+    GROUP BY p.fund_id, p.as_of_date, n.nav_t
 ),
 daily_security_contrib AS (
+    -- 4. 計算個券當日權重 w_{i,t} 與當日收益貢獻度 c_{i,t}
     SELECT
-        p.as_of_date,
         p.fund_id,
+        p.as_of_date,
         p.security_code,
         p.security_name,
         p.mv_i,
         p.pnl_i,
-        f.total_mv,
-        -- 日權重 w_{i,t}
-        CASE WHEN f.total_mv > 0 THEN p.mv_i / f.total_mv ELSE 0.0 END AS w_i,
-        -- 日收益率 r_{i,t}
-        CASE WHEN p.mv_i > 0 THEN p.pnl_i / p.mv_i ELSE 0.0 END AS r_i,
-        -- 日貢獻度 c_{i,t} = w_{i,t} * r_{i,t} = pnl_{i,t} / total_mv_{t}
-        CASE WHEN f.total_mv > 0 THEN p.pnl_i / f.total_mv ELSE 0.0 END AS c_i,
-        -- 日組合總收益率 R_{P,t}
-        CASE WHEN f.total_mv > 0 THEN f.total_pnl / f.total_mv ELSE 0.0 END AS r_p
-    FROM daily_pos p
-    JOIN daily_portfolio f ON p.as_of_date = f.as_of_date AND p.fund_id = f.fund_id
+        dp.nav_t,
+        dp.r_p,
+        -- 當日持倉權重 w_{i,t} = MV_{i,t} / NAV_t
+        CASE WHEN dp.nav_t > 0.0 THEN p.mv_i / dp.nav_t ELSE 0.0 END AS w_i,
+        -- 當日貢獻度 c_{i,t} = PnL_{i,t} / NAV_t
+        CASE WHEN dp.nav_t > 0.0 THEN p.pnl_i / dp.nav_t ELSE 0.0 END AS c_i
+    FROM daily_pos_union p
+    JOIN daily_portfolio_pnl dp 
+      ON p.fund_id = dp.fund_id 
+     AND p.as_of_date = dp.as_of_date
 ),
 portfolio_summary AS (
+    -- 5. 計算區間累積組合總收益率 R_P = \prod (1 + R_{P,t}) - 1
     SELECT
         fund_id,
-        -- 區間累積組合收益率 R_P = \prod (1 + R_{P,t}) - 1
         EXP(SUM(LN(1.0 + r_p))) - 1.0 AS cumulative_r_p
     FROM (
-        SELECT DISTINCT as_of_date, fund_id, r_p FROM daily_security_contrib
+        SELECT DISTINCT fund_id, as_of_date, r_p 
+        FROM daily_portfolio_pnl
     ) t
     GROUP BY fund_id
 ),
 carino_factors AS (
+    -- 6. 計算 Carino 多期連鎖因子 k_t
     SELECT
-        c.as_of_date,
-        c.fund_id,
-        c.r_p,
-        s.cumulative_r_p,
-        -- Carino 多期連鎖因子 k_t 計算
+        dp.fund_id,
+        dp.as_of_date,
+        dp.r_p,
+        ps.cumulative_r_p,
+        -- Carino 因子 k_t 計算：
+        -- k_t = [LN(1 + R_{P,t}) / R_{P,t}] / [LN(1 + R_P) / R_P]
+        -- 當 R_{P,t} -> 0 或 R_P -> 0 時，極限值趨近於 1.0
         CASE 
-            WHEN c.r_p = 0.0 OR s.cumulative_r_p = 0.0 THEN 1.0
-            ELSE (LN(1.0 + c.r_p) / c.r_p) / (LN(1.0 + s.cumulative_r_p) / s.cumulative_r_p)
+            WHEN ABS(dp.r_p) < 1e-12 AND ABS(ps.cumulative_r_p) < 1e-12 THEN 1.0
+            WHEN ABS(dp.r_p) < 1e-12 THEN 1.0 / (LN(1.0 + ps.cumulative_r_p) / NULLIF(ps.cumulative_r_p, 0.0))
+            WHEN ABS(ps.cumulative_r_p) < 1e-12 THEN (LN(1.0 + dp.r_p) / dp.r_p) / 1.0
+            ELSE (LN(1.0 + dp.r_p) / dp.r_p) / (LN(1.0 + ps.cumulative_r_p) / ps.cumulative_r_p)
         END AS k_t
-    FROM (
-        SELECT DISTINCT as_of_date, fund_id, r_p FROM daily_security_contrib
-    ) c
-    JOIN portfolio_summary s ON c.fund_id = s.fund_id
+    FROM daily_portfolio_pnl dp
+    JOIN portfolio_summary ps ON dp.fund_id = ps.fund_id
 )
 SELECT
     d.fund_id,
@@ -79,12 +149,15 @@ SELECT
     -- 區間平均持倉權重 (%)
     ROUND(AVG(d.w_i) * 100.0, 6) AS avg_weight_pct,
     
-    -- 未經連鎖調整的每日 (w * r) 簡單算術累加 (%)
+    -- 未經連鎖調整的每日簡單算術累加貢獻度 (%)
     ROUND(SUM(d.c_i) * 100.0, 6) AS simple_sum_contrib_pct,
     
     -- 經 Carino 多期幾何連鎖調整後的真實區間收益貢獻度 (%)
     ROUND(SUM(d.c_i * k.k_t) * 100.0, 6) AS cumulative_contrib_pct
+
 FROM daily_security_contrib d
-JOIN carino_factors k ON d.as_of_date = k.as_of_date AND d.fund_id = k.fund_id
+JOIN carino_factors k 
+  ON d.fund_id = k.fund_id 
+ AND d.as_of_date = k.as_of_date
 GROUP BY d.fund_id, d.security_code, d.security_name
 ORDER BY cumulative_contrib_pct DESC NULLS LAST;

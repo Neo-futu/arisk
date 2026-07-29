@@ -3,16 +3,20 @@
 
 WITH position_summary AS (
     SELECT
-        fund_id,
-        as_of_date,
+        port_id AS fund_id,
+        evaluate_date AS as_of_date,
         COALESCE(issuer_id, issuer_name, 'UNKNOWN_ISSUER') AS issuer_id,
         COALESCE(issuer_name, 'UNKNOWN_ISSUER') AS issuer_name,
-        SUM(market_value_hkd) AS issuer_mv_hkd,
-        SUM(SUM(market_value_hkd)) OVER (PARTITION BY fund_id, as_of_date) AS total_nav
-    FROM fsi.positions
-    WHERE fund_id = :fid
-      AND as_of_date = :as_of_date
-    GROUP BY fund_id, as_of_date, COALESCE(issuer_id, issuer_name, 'UNKNOWN_ISSUER'), COALESCE(issuer_name, 'UNKNOWN_ISSUER')
+        SUM(COALESCE(market_value_base, market_value, 0.0)) AS issuer_mv_hkd,
+        SUM(SUM(COALESCE(market_value_base, market_value, 0.0))) OVER (PARTITION BY port_id, evaluate_date) AS total_nav
+    FROM fsi.balance_bond
+    WHERE port_id = :fid
+      AND evaluate_date = :end_date
+    GROUP BY 
+        port_id, 
+        evaluate_date, 
+        COALESCE(issuer_id, issuer_name, 'UNKNOWN_ISSUER'), 
+        COALESCE(issuer_name, 'UNKNOWN_ISSUER')
 )
 SELECT
     fund_id,
@@ -21,7 +25,7 @@ SELECT
     issuer_name,
     issuer_mv_hkd,
     total_nav,
-    -- 發行人集中度 (%) = (單一發行人總市值 / 基金淨資產 NAV) * 100
+    -- 發行人集中度 (%) = (單一發行人總市值 / 總持倉市值 NAV) * 100
     CASE
         WHEN total_nav IS NULL OR total_nav = 0 THEN NULL
         ELSE ROUND((issuer_mv_hkd / total_nav) * 100.0, 6)
