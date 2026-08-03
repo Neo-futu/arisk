@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..deps import get_db, verify_api_key
-from ...tools.risk.exposure_engine import compute_exposure
+from ...tools.risk.exposure_engine import compute_exposure, find_latest_exposure_date
 from ...tools.risk.var_calculator import (
     compute_distribution_var,
     compute_historical_var,
@@ -14,6 +14,21 @@ from ...tools.risk.var_calculator import (
 )
 
 router = APIRouter(dependencies=[Depends(verify_api_key)])
+
+
+@router.get("/exposure-latest-date/{fund_id}")
+async def get_exposure_latest_date(
+    fund_id: str,
+    as_of_date: Annotated[date, Query(description="參考日期 YYYY-MM-DD")],
+    db: AsyncSession = Depends(get_db),
+):
+    """返回基金在參考日期之前（含當天）的最新可用暴露數據日期。"""
+    effective_date = await find_latest_exposure_date(fund_id=fund_id, as_of_date=as_of_date, db=db)
+    return {
+        "fund_id": fund_id,
+        "requested_as_of_date": as_of_date,
+        "effective_date": effective_date,
+    }
 
 
 @router.get("/exposure/{fund_id}")

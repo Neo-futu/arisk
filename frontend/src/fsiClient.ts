@@ -37,6 +37,12 @@ export interface ExposureResult {
   top_issuers: Array<{ issuer: string; mv_hkd: number; pct: number }>
 }
 
+export interface ExposureLatestDateResult {
+  fund_id: string
+  requested_as_of_date: string
+  effective_date: string | null
+}
+
 export interface VarResult {
   fund_id: string
   as_of_date: string
@@ -104,6 +110,19 @@ export interface PortfolioOverviewResult {
   }>
 }
 
+export interface PortfolioOverviewTimeseriesResult {
+  fund_id: string
+  period_start: string
+  period_end: string
+  points: Array<{
+    date: string
+    nav: number
+    net_asset: number | null
+    daily_return_pct: number | null
+    cumulative_return_pct: number | null
+  }>
+}
+
 export interface RiskIndicatorsResult {
   fund_id: string
   period_start: string
@@ -134,6 +153,21 @@ export interface RiskIndicatorsResult {
       sample_size: number
     }>
   }
+}
+
+export interface RiskIndicatorTimeseriesResult {
+  fund_id: string
+  period_start: string
+  period_end: string
+  points: Array<{
+    date: string
+    nav: number
+    daily_return_pct: number | null
+    cumulative_return_pct: number | null
+    rolling_volatility_pct: number | null
+    drawdown_pct: number | null
+    rolling_var_95_pct: number | null
+  }>
 }
 
 export interface PerformanceAttributionResult {
@@ -182,12 +216,182 @@ export interface PerformanceAttributionResult {
   }>
 }
 
+export interface PerformanceAttributionTimeseriesResult {
+  fund_id: string
+  period_start: string
+  period_end: string
+  benchmark_id: string | null
+  cumulative_points: Array<{
+    date: string
+    fund_cumulative_return_pct: number
+    benchmark_cumulative_return_pct: number
+    active_cumulative_return_pct: number
+  }>
+  pnl_points: Array<{
+    date: string
+    net_pnl: number
+    contribution_pct: number | null
+  }>
+}
+
 export interface SecurityPnl {
   security_code: string | null
   security_name: string
   sector: string
   net_pnl: number
   contribution_pct: number | null
+}
+
+export interface RatesCreditResult {
+  fund_id: string
+  as_of_date: string
+  net_asset: number
+  total_bond_market_value: number
+  bond_exposure_pct_nav: number | null
+  weighted_duration_years: number | null
+  portfolio_dv01: number
+  portfolio_cs01: number
+  krd_buckets: Array<{
+    bucket: string
+    duration_weighted_mv: number
+    weight_pct_bond: number
+  }>
+  issuer_concentration: {
+    hhi: number
+    top_issuers: Array<{
+      issuer: string
+      market_value: number
+      weight_pct: number
+    }>
+  }
+  rating_distribution: Array<{
+    rating: string
+    market_value: number
+    weight_pct: number
+  }>
+  bond_count: number
+}
+
+export interface LiquidityStressResult {
+  fund_id: string
+  as_of_date: string
+  net_asset: number
+  redemption_pct: number
+  rate_shock_bps: number
+  liquidity_ladder: Array<{
+    asset_class: string
+    market_value: number
+    ttl_days: number
+    cumulative_market_value: number
+    cumulative_pct_nav: number | null
+  }>
+  ttl_snapshot: {
+    ttl_10pct_days: number | null
+    ttl_25pct_days: number | null
+    ttl_50pct_days: number | null
+  }
+  stress_summary: {
+    redemption_amount: number
+    liquid_within_7d: number
+    liquidity_coverage_ratio: number | null
+    stressed_bond_loss: number
+    redemption_impact_cost: number
+    projected_stressed_nav: number | null
+  }
+  historical_stress: {
+    worst_1d_return_pct: number | null
+    worst_5d_cumulative_return_pct: number | null
+    sample_size: number
+  }
+  breach_flags: string[]
+}
+
+export interface PretradeRiskResult {
+  fund_id: string
+  as_of_date: string
+  trade: {
+    trade_amount: number
+    trade_side: string
+    asset_class: string
+    duration_years: number
+    issuer_name: string
+  }
+  current: {
+    net_asset: number
+    bond_market_value: number
+    duration_years: number
+    issuer_pct_nav: number | null
+    portfolio_dv01: number
+  }
+  projected: {
+    bond_market_value: number
+    duration_years: number
+    issuer_pct_nav: number | null
+    portfolio_dv01: number
+    tracking_error_proxy_pct: number | null
+  }
+  limits: {
+    duration_years: number
+    issuer_pct_nav: number
+    tracking_error_proxy_pct: number
+  }
+  breach_flags: string[]
+  decision: "ALLOW" | "ALLOW_WITH_WARNING" | "BLOCK"
+}
+
+export interface MacroDynamicsResult {
+  fund_id: string
+  period_start: string
+  period_end: string
+  fund_regime: {
+    annualized_volatility_pct: number | null
+    regime: string
+    sample_size: number
+  }
+  macro_indicators: Array<{
+    index_code: string
+    period_return_pct: number | null
+    annualized_volatility_pct: number | null
+    sample_size: number
+  }>
+  cross_asset_correlations: Array<{
+    left: string
+    right: string
+    correlation: number
+  }>
+  fund_vs_market_correlations: Array<{
+    index_code: string
+    correlation: number
+  }>
+}
+
+export interface FactorBehaviorResult {
+  fund_id: string
+  period_start: string
+  period_end: string
+  style_exposure: {
+    momentum_exposure: number | null
+    low_volatility_exposure: number | null
+    size_exposure: number | null
+    coverage_weight: number
+  }
+  sector_concentration: {
+    hhi: number
+    weights: Array<{ sector: string; weight_pct: number }>
+  }
+  trading_behavior: {
+    turnover_pct: number | null
+    crowding_top: Array<{
+      security_code: string
+      security_name: string
+      sector: string
+      weight_pct: number
+      avg_daily_volume: number
+      position_quantity: number
+      crowding_ratio: number | null
+    }>
+  }
+  warnings: string[]
 }
 
 export interface UserApiKey {
@@ -389,10 +593,26 @@ export const fsiApi = {
     )
   },
 
+  /** 投資風險分析：組合概況時序圖表 */
+  getPortfolioOverviewTimeseries(fundId: string, start: string, end: string) {
+    return axios.get<PortfolioOverviewTimeseriesResult>(
+      `${BASE}/api/v1/fsi/investment/overview-timeseries/${fundId}`,
+      { params: { start, end }, headers: authHeaders() },
+    )
+  },
+
   /** 投資風險分析：確定性風險指標 */
   getRiskIndicators(fundId: string, start: string, end: string) {
     return axios.get<RiskIndicatorsResult>(
       `${BASE}/api/v1/fsi/investment/risk-indicators/${fundId}`,
+      { params: { start, end }, headers: authHeaders() },
+    )
+  },
+
+  /** 投資風險分析：風險指標時序圖表 */
+  getRiskIndicatorTimeseries(fundId: string, start: string, end: string) {
+    return axios.get<RiskIndicatorTimeseriesResult>(
+      `${BASE}/api/v1/fsi/investment/risk-indicators-timeseries/${fundId}`,
       { params: { start, end }, headers: authHeaders() },
     )
   },
@@ -405,10 +625,97 @@ export const fsiApi = {
     )
   },
 
+  /** 投資風險分析：績效歸因時序圖表 */
+  getPerformanceAttributionTimeseries(fundId: string, start: string, end: string) {
+    return axios.get<PerformanceAttributionTimeseriesResult>(
+      `${BASE}/api/v1/fsi/investment/attribution-timeseries/${fundId}`,
+      { params: { start, end }, headers: authHeaders() },
+    )
+  },
+
+  /** 投資風險分析：利率與信用敏感度 */
+  getRatesCredit(fundId: string, asOfDate: string) {
+    return axios.get<RatesCreditResult>(
+      `${BASE}/api/v1/fsi/investment/rates-credit/${fundId}`,
+      { params: { as_of_date: asOfDate }, headers: authHeaders() },
+    )
+  },
+
+  /** 投資風險分析：流動性與壓力測試 */
+  getLiquidityStress(
+    fundId: string,
+    asOfDate: string,
+    options?: { redemptionPct?: number; rateShockBps?: number },
+  ) {
+    return axios.get<LiquidityStressResult>(
+      `${BASE}/api/v1/fsi/investment/liquidity-stress/${fundId}`,
+      {
+        params: {
+          as_of_date: asOfDate,
+          redemption_pct: options?.redemptionPct ?? 20,
+          rate_shock_bps: options?.rateShockBps ?? 50,
+        },
+        headers: authHeaders(),
+      },
+    )
+  },
+
+  /** 投資風險分析：風險預算與前置試算 */
+  getPretradeCheck(
+    fundId: string,
+    asOfDate: string,
+    options: {
+      tradeAmount: number
+      tradeSide: "BUY" | "SELL"
+      assetClass: string
+      durationYears: number
+      issuerName: string
+    },
+  ) {
+    return axios.get<PretradeRiskResult>(
+      `${BASE}/api/v1/fsi/investment/pretrade-check/${fundId}`,
+      {
+        params: {
+          as_of_date: asOfDate,
+          trade_amount: options.tradeAmount,
+          trade_side: options.tradeSide,
+          asset_class: options.assetClass,
+          duration_years: options.durationYears,
+          issuer_name: options.issuerName,
+        },
+        headers: authHeaders(),
+      },
+    )
+  },
+
+  /** 投資風險分析：宏觀與市場動態 */
+  getMacroDynamics(fundId: string, start: string, end: string) {
+    return axios.get<MacroDynamicsResult>(
+      `${BASE}/api/v1/fsi/investment/macro-dynamics/${fundId}`,
+      { params: { start, end }, headers: authHeaders() },
+    )
+  },
+
+  /** 投資風險分析：基本面、因子與行為風險 */
+  getFactorBehavior(fundId: string, start: string, end: string) {
+    return axios.get<FactorBehaviorResult>(
+      `${BASE}/api/v1/fsi/investment/factor-behavior/${fundId}`,
+      { params: { start, end }, headers: authHeaders() },
+    )
+  },
+
   /** 暴露分析 + SFC 合規狀態 */
   getExposure(fundId: string, asOfDate: string) {
     return axios.get<ExposureResult>(
       `${BASE}/api/v1/fsi/risk/exposure/${fundId}`,
+      { params: { as_of_date: asOfDate }, headers: authHeaders() },
+    )
+  },
+
+  /** 查詢基金在參考日期之前（含當天）的最新可用暴露數據日期 */
+  getExposureLatestDate(fundId: string, asOfDate: string) {
+    return axios.get<ExposureLatestDateResult>(
+      `${BASE}/api/v1/fsi/risk/exposure-latest-date/${fundId}`,
       { params: { as_of_date: asOfDate }, headers: authHeaders() },
     )
   },

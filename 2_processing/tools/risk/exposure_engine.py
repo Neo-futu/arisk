@@ -223,6 +223,30 @@ async def compute_exposure(
     return result
 
 
+async def find_latest_exposure_date(
+    fund_id: str,
+    db: AsyncSession,
+    as_of_date: date,
+) -> date | None:
+    """Find the latest date with NAV data for the target fund up to as_of_date."""
+    row = (await db.execute(
+        text(
+            """
+            SELECT evaluate_date
+            FROM fsi.balance_portfolio_nav
+            WHERE port_id = :fid
+              AND class_id IS NULL
+              AND net_asset > 0
+              AND evaluate_date <= :dt
+            ORDER BY evaluate_date DESC
+            LIMIT 1
+            """
+        ),
+        {"fid": fund_id, "dt": as_of_date},
+    )).fetchone()
+    return row.evaluate_date if row else None
+
+
 def _check_mmf_compliance(result: ExposureResult, nav: float) -> dict[str, bool]:
     flags: dict[str, bool] = {}
     flags["WAM_BREACH"]           = result.wam_days > MMF_WAM_LIMIT_DAYS

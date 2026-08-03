@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import { AlertTriangle, CheckCircle2, RefreshCw, TrendingDown, Waves } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
+import { FUNDS, lastTradeDate } from "@/components/FsiToolbar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -24,16 +25,42 @@ export const Route = createFileRoute("/_layout/")({
   }),
 })
 
-const DEMO_FUNDS = [
-  { id: "BHMMF001", name: "博匯港元貨幣市場基金 I" },
-  { id: "BHMMF002", name: "博匯港元貨幣市場基金 II" },
-]
+const LATEST_EXPOSURE_DATE_CACHE_TTL_MS = 60_000
 
-function lastTradeDate(): string {
-  const d = new Date()
-  d.setDate(d.getDate() - 1)
-  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1)
-  return d.toISOString().split("T")[0]
+type LatestExposureDateCacheEntry = {
+  effectiveDate: string
+  expiresAt: number
+}
+
+const latestExposureDateCache = new Map<string, LatestExposureDateCacheEntry>()
+
+async function resolveLatestExposureDate(fundId: string, requestedDate: string) {
+  const now = Date.now()
+  const cached = latestExposureDateCache.get(fundId)
+
+  // Reuse short-lived per-fund cache when requested date is not earlier than cached effective date.
+  if (cached && cached.expiresAt > now && requestedDate >= cached.effectiveDate) {
+    return {
+      effectiveDate: cached.effectiveDate,
+      fallbackUsed: cached.effectiveDate !== requestedDate,
+    }
+  }
+
+  const response = await fsiApi.getExposureLatestDate(fundId, requestedDate)
+  const latestDate = response.data.effective_date
+
+  if (latestDate) {
+    latestExposureDateCache.set(fundId, {
+      effectiveDate: latestDate,
+      expiresAt: now + LATEST_EXPOSURE_DATE_CACHE_TTL_MS,
+    })
+  }
+
+  const effectiveDate = latestDate ?? requestedDate
+  return {
+    effectiveDate,
+    fallbackUsed: effectiveDate !== requestedDate,
+  }
 }
 
 function MetricCard({
@@ -220,16 +247,38 @@ function ExposureDashboard({ data }: { data: ExposureResult }) {
 
 function Dashboard() {
   const { user } = useAuth()
-  const [fundId, setFundId] = useState(DEMO_FUNDS[0].id)
+  const [fundId, setFundId] = useState(FUNDS[0].id)
   const [asOfDate, setAsOfDate] = useState(lastTradeDate)
 
-  const { data, isError, refetch, isFetching } = useQuery({
-    queryKey: ["exposure", fundId, asOfDate],
-    queryFn: () => fsiApi.getExposure(fundId, asOfDate).then((r) => r.data),
-    staleTime: 0,      // 每次切換日期/基金都重新請求
-    gcTime: 0,         // 不緩存舊結果
+  const latestDateQuery = useQuery({
+    queryKey: ["exposure-latest-date", fundId, asOfDate],
+    queryFn: () => resolveLatestExposureDate(fundId, asOfDate),
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    retry: 0,
+  })
+
+  const effectiveDate = latestDateQuery.data?.effectiveDate ?? asOfDate
+
+  const exposureQuery = useQuery({
+    queryKey: ["exposure", fundId, effectiveDate],
+    queryFn: () => fsiApi.getExposure(fundId, effectiveDate).then((r) => r.data),
+    enabled: !latestDateQuery.isFetching && !latestDateQuery.isError,
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
     retry: 1,
   })
+
+  const exposureData = exposureQuery.data
+  const fallbackUsed = latestDateQuery.data?.fallbackUsed ?? false
+  const isFetching = latestDateQuery.isFetching || exposureQuery.isFetching
+  const isError = latestDateQuery.isError || exposureQuery.isError
+
+  useEffect(() => {
+    if (latestDateQuery.data?.effectiveDate && latestDateQuery.data.effectiveDate !== asOfDate) {
+      setAsOfDate(latestDateQuery.data.effectiveDate)
+    }
+  }, [latestDateQuery.data?.effectiveDate, asOfDate])
 
   return (
     <div className="space-y-6">
@@ -237,7 +286,7 @@ function Dashboard() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">風控儀表板</h1>
           <p className="text-muted-foreground text-sm">
-            歡迎，{user?.full_name || user?.email} · 估值日期：{asOfDate}
+            歡迎，{user?.full_name || user?.email} · 實際數據日：{effectiveDate}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -246,7 +295,7 @@ function Dashboard() {
               <SelectValue placeholder="選擇基金" />
             </SelectTrigger>
             <SelectContent>
-              {DEMO_FUNDS.map((f) => (
+              {FUNDS.map((f) => (
                 <SelectItem key={f.id} value={f.id}>
                   {f.name}
                 </SelectItem>
@@ -254,10 +303,15 @@ function Dashboard() {
             </SelectContent>
           </Select>
           <DatePicker value={asOfDate} onChange={setAsOfDate} />
+          {fallbackUsed ? <Badge variant="secondary">已自動回退到最近有數據日</Badge> : null}
           <Button
             variant="outline"
             size="icon"
-            onClick={() => refetch()}
+            onClick={() => {
+              latestExposureDateCache.delete(fundId)
+              void latestDateQuery.refetch()
+              void exposureQuery.refetch()
+            }}
             disabled={isFetching}
             title="重新加載"
           >
@@ -272,11 +326,11 @@ function Dashboard() {
       {isError && (
         <Card className="border-destructive">
           <CardContent className="pt-4 text-sm text-destructive">
-            API 請求失敗。請確認 Processing API（port 8001）和 Backend（port 8000）均已啟動。
+            API 請求失敗或該基金在參考日期之前無可用數據。請確認 Processing API（port 8001）和 Backend（port 8000）均已啟動。
           </CardContent>
         </Card>
       )}
-      {data && data.total_nav_hkd === 0 && !isFetching && (
+      {exposureData && exposureData.total_nav_hkd === 0 && !isFetching && (
         <Card className="border-yellow-500/50">
           <CardContent className="pt-4 text-sm text-yellow-600">
             查無數據：基金 <b>{fundId}</b> 在 <b>{asOfDate}</b> 無 NAV 記錄。
@@ -284,7 +338,7 @@ function Dashboard() {
           </CardContent>
         </Card>
       )}
-      {data && data.total_nav_hkd > 0 && <ExposureDashboard data={data} />}
+      {exposureData && exposureData.total_nav_hkd > 0 && <ExposureDashboard data={exposureData} />}
     </div>
   )
 }

@@ -106,6 +106,9 @@ python scripts/dev.py --profile web --with-mcp
 
 # 只加 MCP Gateway（AI 調用先走統一入口）
 python scripts/dev.py --profile web --with-mcp-gateway
+
+# 另外啟動 AutoRisk 模塊（端口 8100）
+python scripts/dev.py --profile web --with-autorisk
 ```
 
 ```powershell
@@ -117,6 +120,37 @@ python scripts/dev.py --profile web --with-mcp-gateway
 ./scripts/dev.ps1 -Only entry
 ./scripts/dev.ps1 -Parts processing,backend,frontend -DryRun
 ```
+
+### 3.3.1 AutoRisk 模塊啟動（前端 /autorisk 入口需要）
+
+平台前端頁面中的「自動風控」入口會調用 AutoRisk 的演示與後端服務（預設端口 8100）。
+dev.py 已原生支持 autorisk 模組，可直接納入統一調度管理。
+
+1. 包含 AutoRisk 的完整啟動
+
+# 啟動基礎服務 + AutoRisk 模組
+```
+python scripts/dev.py --parts processing entry backend frontend autorisk
+```
+
+2. 單獨啟動 AutoRisk 服務
+若基礎服務已在運行，僅需補啟動或調試 AutoRisk 模組：
+```Bash
+python scripts/dev.py --parts autorisk
+```
+提示：可執行 python scripts/dev.py --list-parts 查看所有可用的模組列表，或加上 --dry-run 參數預覽啟動計劃。
+
+3. 服務驗證與存取點
+啟動成功後，可透過以下位址進行驗證：
+
+前端整合入口：http://localhost:5173/autorisk
+
+AutoRisk 演示頁：http://localhost:8100/demo
+
+AutoRisk API 文檔：http://localhost:8100/docs
+
+排查：若前端點擊演示頁無響應，請先確認 dev.py 輸出日誌中 autorisk 服務是否正常起飛，或檢查本地 8100 端口是否被其他程序佔用。
+
 
 ### 3.4 AI 命令與 MCP 使用建議
 
@@ -303,7 +337,7 @@ python scripts/dev.py --profile web --with-mcp
 python scripts/dev.py --profile full
 
 # C. 顯式 parts 啟動（最清楚）
-python scripts/dev.py --parts processing entry backend frontend mcp-gateway internal-mcp wind-mcp
+python scripts/dev.py --parts processing entry backend frontend  autorisk mcp-gateway internal-mcp wind-mcp
 ```
 
 ```powershell

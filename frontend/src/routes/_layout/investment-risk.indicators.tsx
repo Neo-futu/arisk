@@ -1,11 +1,14 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { useState } from "react"
+import { Download, Search } from "lucide-react"
+import { useMemo, useState } from "react"
 
 import { DatePicker } from "@/components/DatePicker"
 import { FUNDS, FsiToolbar, lastTradeDate } from "@/components/FsiToolbar"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import {
   Table,
   TableBody,
@@ -15,6 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { fsiApi } from "@/fsiClient"
+import { exportCsv, HorizontalBarList, TrendLineChart } from "@/modules/investment-risk/dashboard-kit"
 
 export const Route = createFileRoute("/_layout/investment-risk/indicators")({
   component: RiskIndicatorsPage,
@@ -45,10 +49,17 @@ function RiskIndicatorsPage() {
   const [fundId, setFundId] = useState(FUNDS[0].id)
   const [startDate, setStartDate] = useState(defaultStartDate)
   const [endDate, setEndDate] = useState(lastTradeDate)
+  const [constituentQuery, setConstituentQuery] = useState("")
 
   const indicators = useQuery({
     queryKey: ["investment-risk-indicators", fundId, startDate, endDate],
     queryFn: () => fsiApi.getRiskIndicators(fundId, startDate, endDate).then((response) => response.data),
+    enabled: startDate <= endDate,
+    retry: 1,
+  })
+  const indicatorSeries = useQuery({
+    queryKey: ["investment-risk-indicator-timeseries", fundId, startDate, endDate],
+    queryFn: () => fsiApi.getRiskIndicatorTimeseries(fundId, startDate, endDate).then((response) => response.data),
     enabled: startDate <= endDate,
     retry: 1,
   })
@@ -57,8 +68,24 @@ function RiskIndicatorsPage() {
     queryFn: () => fsiApi.getVarCompare(fundId, endDate).then((response) => response.data),
     retry: 1,
   })
-  const isFetching = indicators.isFetching || varCompare.isFetching
-  const isError = indicators.isError || varCompare.isError
+  const isFetching = indicators.isFetching || varCompare.isFetching || indicatorSeries.isFetching
+  const isError = indicators.isError || varCompare.isError || indicatorSeries.isError
+  const filteredConstituents = useMemo(() => {
+    const rows = indicators.data?.equity_beta.constituents ?? []
+    return rows.filter((row) => {
+      const keyword = `${row.security_code} ${row.security_name}`.toLowerCase()
+      return keyword.includes(constituentQuery.toLowerCase())
+    })
+  }, [indicators.data?.equity_beta.constituents, constituentQuery])
+
+  function exportConstituents() {
+    if (!indicators.data) return
+    exportCsv(
+      `investment-risk-indicators-beta-${fundId}-${endDate}.csv`,
+      ["代碼", "名稱", "權重", "Beta", "樣本數"],
+      filteredConstituents.map((row) => [row.security_code, row.security_name, row.weight_pct, row.beta, row.sample_size]),
+    )
+  }
 
   const startPicker = (
     <div className="flex items-center gap-2">
@@ -113,6 +140,62 @@ function RiskIndicatorsPage() {
             <MetricCard label="股票 Beta" value={indicators.data.equity_beta.value == null ? "—" : indicators.data.equity_beta.value.toFixed(3)} detail={`基準 ${indicators.data.equity_beta.benchmark_id ?? "未配置"}`} />
           </div>
 
+          <div className="grid gap-6 xl:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">核心風險輪廓</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <HorizontalBarList
+                  items={[
+                    { label: "區間收益", value: Math.abs(indicators.data.interval_return_pct ?? 0) },
+                    { label: "年化波動", value: indicators.data.annualized_volatility_pct ?? 0 },
+                    { label: "最大回撤", value: Math.abs(indicators.data.max_drawdown_pct ?? 0) },
+                    { label: "換手率", value: indicators.data.equity_turnover.annualized_turnover_pct ?? 0 },
+                    { label: "VaR上限", value: varCompare.data?.max_var_pct_nav ?? 0 },
+                  ]}
+                  formatter={(value) => percent(value, 3)}
+                />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">滾動波動率時序</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <TrendLineChart
+                  values={(indicatorSeries.data?.points ?? []).map((row) => row.rolling_volatility_pct ?? 0)}
+                  labels={(indicatorSeries.data?.points ?? []).map((row) => String(row.date).slice(5))}
+                  lineColor="#dc2626"
+                  pointColor="#fb7185"
+                />
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">回撤與滾動 VaR 時序摘要</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader><TableRow><TableHead>日期</TableHead><TableHead className="text-right">日收益</TableHead><TableHead className="text-right">回撤</TableHead><TableHead className="text-right">滾動 VaR 95%</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {(indicatorSeries.data?.points ?? []).slice(-10).map((row) => (
+                    <TableRow key={row.date}>
+                      <TableCell>{row.date}</TableCell>
+                      <TableCell className="text-right font-mono">{percent(row.daily_return_pct, 3)}</TableCell>
+                      <TableCell className="text-right font-mono">{percent(row.drawdown_pct, 3)}</TableCell>
+                      <TableCell className="text-right font-mono">{percent(row.rolling_var_95_pct, 3)}</TableCell>
+                    </TableRow>
+                  ))}
+                  {!(indicatorSeries.data?.points ?? []).length && <EmptyRow columns={4} />}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle className="text-base">股票交易換手率明細</CardTitle>
@@ -128,12 +211,31 @@ function RiskIndicatorsPage() {
           </Card>
 
           <Card>
-            <CardHeader><CardTitle className="text-base">個股 Beta 貢獻（前十大權重）</CardTitle></CardHeader>
+            <CardHeader>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <CardTitle className="text-base">個股 Beta 貢獻（前十大權重）</CardTitle>
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-2 rounded-md border px-3 py-2">
+                    <Search className="h-4 w-4 text-muted-foreground" />
+                    <Input
+                      className="h-8 w-56 border-0 p-0 shadow-none focus-visible:ring-0"
+                      placeholder="搜尋個股代碼或名稱"
+                      value={constituentQuery}
+                      onChange={(event) => setConstituentQuery(event.target.value)}
+                    />
+                  </div>
+                  <Button variant="outline" size="sm" onClick={exportConstituents}>
+                    <Download className="mr-2 h-4 w-4" />
+                    匯出
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader><TableRow><TableHead>代碼</TableHead><TableHead>名稱</TableHead><TableHead className="text-right">權重</TableHead><TableHead className="text-right">Beta</TableHead><TableHead className="text-right">樣本數</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {indicators.data.equity_beta.constituents.map((row) => (
+                  {filteredConstituents.map((row) => (
                     <TableRow key={row.security_code}>
                       <TableCell className="font-mono">{row.security_code}</TableCell>
                       <TableCell>{row.security_name}</TableCell>
@@ -142,7 +244,7 @@ function RiskIndicatorsPage() {
                       <TableCell className="text-right">{row.sample_size}</TableCell>
                     </TableRow>
                   ))}
-                  {!indicators.data.equity_beta.constituents.length && <EmptyRow columns={5} />}
+                  {!filteredConstituents.length && <EmptyRow columns={5} />}
                 </TableBody>
               </Table>
             </CardContent>

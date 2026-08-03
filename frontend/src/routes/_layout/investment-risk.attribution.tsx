@@ -1,11 +1,14 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { useState } from "react"
+import { Download, Search } from "lucide-react"
+import { useMemo, useState } from "react"
 
 import { DatePicker } from "@/components/DatePicker"
 import { FUNDS, FsiToolbar, lastTradeDate } from "@/components/FsiToolbar"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import {
   Table,
   TableBody,
@@ -15,6 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { fsiApi, type SecurityPnl } from "@/fsiClient"
+import { exportCsv, TrendLineChart } from "@/modules/investment-risk/dashboard-kit"
 
 export const Route = createFileRoute("/_layout/investment-risk/attribution")({
   component: PerformanceAttributionPage,
@@ -58,12 +62,43 @@ function PerformanceAttributionPage() {
   const [fundId, setFundId] = useState(FUNDS[0].id)
   const [startDate, setStartDate] = useState(defaultStartDate)
   const [endDate, setEndDate] = useState(lastTradeDate)
+  const [securityQuery, setSecurityQuery] = useState("")
   const { data, isFetching, isError, refetch } = useQuery({
     queryKey: ["performance-attribution", fundId, startDate, endDate],
     queryFn: () => fsiApi.getPerformanceAttribution(fundId, startDate, endDate).then((response) => response.data),
     enabled: startDate <= endDate,
     retry: 1,
   })
+  const attributionSeries = useQuery({
+    queryKey: ["performance-attribution-timeseries", fundId, startDate, endDate],
+    queryFn: () => fsiApi.getPerformanceAttributionTimeseries(fundId, startDate, endDate).then((response) => response.data),
+    enabled: startDate <= endDate,
+    retry: 1,
+  })
+
+  const filteredTopHoldings = useMemo(() => {
+    if (!data) return []
+    return data.average_top_holdings.filter((row) => {
+      const keyword = `${row.security_code} ${row.security_name} ${row.sector}`.toLowerCase()
+      return keyword.includes(securityQuery.toLowerCase())
+    })
+  }, [data, securityQuery])
+
+  function exportTopHoldings() {
+    if (!data) return
+    exportCsv(
+      `investment-risk-attribution-holdings-${fundId}-${endDate}.csv`,
+      ["代碼", "名稱", "行業", "日均權重", "持倉日數", "區間損益"],
+      filteredTopHoldings.map((row) => [
+        row.security_code,
+        row.security_name,
+        row.sector,
+        row.average_weight_pct,
+        row.holding_days,
+        row.net_pnl,
+      ]),
+    )
+  }
 
   const startPicker = (
     <div className="flex items-center gap-2">
@@ -96,8 +131,8 @@ function PerformanceAttributionPage() {
       />
 
       {startDate > endDate && <p className="text-sm text-destructive">開始日期不得晚於結束日期。</p>}
-      {isFetching && <p className="text-muted-foreground animate-pulse text-sm">執行績效歸因中...</p>}
-      {isError && (
+      {(isFetching || attributionSeries.isFetching) && <p className="text-muted-foreground animate-pulse text-sm">執行績效歸因中...</p>}
+      {(isError || attributionSeries.isError) && (
         <Card className="border-destructive">
           <CardContent className="pt-4 text-sm text-destructive">
             無法載入績效歸因，請確認持倉、行情、損益及基準數據可用。
@@ -114,6 +149,36 @@ function PerformanceAttributionPage() {
             <MetricCard label="配置效應" value={percent(data.summary.allocation_effect_pct)} />
             <MetricCard label="選股效應" value={percent(data.summary.selection_effect_pct)} />
             <MetricCard label="交互效應" value={percent(data.summary.interaction_effect_pct)} />
+          </div>
+
+          <div className="grid gap-6 xl:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">超額收益累積時序</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <TrendLineChart
+                  values={(attributionSeries.data?.cumulative_points ?? []).map((row) => row.active_cumulative_return_pct)}
+                  labels={(attributionSeries.data?.cumulative_points ?? []).map((row) => String(row.date).slice(5))}
+                  lineColor="#0f766e"
+                  pointColor="#2dd4bf"
+                />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">日度損益貢獻時序</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <TrendLineChart
+                  values={(attributionSeries.data?.pnl_points ?? []).map((row) => row.contribution_pct ?? 0)}
+                  labels={(attributionSeries.data?.pnl_points ?? []).map((row) => String(row.date).slice(5))}
+                  lineColor="#7c2d12"
+                  pointColor="#fb923c"
+                />
+              </CardContent>
+            </Card>
           </div>
 
           <Card>
@@ -168,12 +233,31 @@ function PerformanceAttributionPage() {
           </div>
 
           <Card>
-            <CardHeader><CardTitle className="text-base">日均十大重倉股</CardTitle></CardHeader>
+            <CardHeader>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <CardTitle className="text-base">日均十大重倉股</CardTitle>
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-2 rounded-md border px-3 py-2">
+                    <Search className="h-4 w-4 text-muted-foreground" />
+                    <Input
+                      className="h-8 w-56 border-0 p-0 shadow-none focus-visible:ring-0"
+                      placeholder="搜尋個股代碼、名稱或行業"
+                      value={securityQuery}
+                      onChange={(event) => setSecurityQuery(event.target.value)}
+                    />
+                  </div>
+                  <Button variant="outline" size="sm" onClick={exportTopHoldings}>
+                    <Download className="mr-2 h-4 w-4" />
+                    匯出
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader><TableRow><TableHead>代碼</TableHead><TableHead>名稱</TableHead><TableHead>行業</TableHead><TableHead className="text-right">日均權重</TableHead><TableHead className="text-right">持倉日數</TableHead><TableHead className="text-right">區間損益</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {data.average_top_holdings.map((row) => (
+                  {filteredTopHoldings.map((row) => (
                     <TableRow key={row.security_code}>
                       <TableCell className="font-mono">{row.security_code}</TableCell>
                       <TableCell className="font-medium">{row.security_name}</TableCell>
@@ -183,7 +267,7 @@ function PerformanceAttributionPage() {
                       <TableCell className="text-right font-mono">{money(row.net_pnl)}</TableCell>
                     </TableRow>
                   ))}
-                  {!data.average_top_holdings.length && <EmptyRow columns={6} />}
+                  {!filteredTopHoldings.length && <EmptyRow columns={6} />}
                 </TableBody>
               </Table>
             </CardContent>

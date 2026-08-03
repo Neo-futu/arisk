@@ -37,6 +37,17 @@ async def get_exposure(
     return await _proxy(client, f"/risk/exposure/{fund_id}", {"as_of_date": str(as_of_date)})
 
 
+@router.get("/exposure-latest-date/{fund_id}", summary="基金最新可用暴露數據日期")
+async def get_exposure_latest_date(
+    fund_id: str,
+    as_of_date: Annotated[date, Query(description="參考日期 YYYY-MM-DD")],
+    _user: CurrentUser,
+    client: ProcessingClient,
+) -> Any:
+    """返回基金在參考日期之前（含當天）的最新可用暴露數據日期。"""
+    return await _proxy(client, f"/risk/exposure-latest-date/{fund_id}", {"as_of_date": str(as_of_date)})
+
+
 @router.get("/var/{fund_id}", summary="VaR 計算")
 async def get_var(
     fund_id: str,

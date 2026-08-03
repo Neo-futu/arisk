@@ -37,6 +37,7 @@ COLORS = {
     "entry":      "\033[34m",   # 藍
     "backend":    "\033[32m",   # 綠
     "frontend":   "\033[35m",   # 紫
+    "autorisk":   "\033[33m",   # 黃
     "mcp-gateway": "\033[92m",  # 亮綠
     "internal-mcp": "\033[96m", # 亮青
     "wind-mcp":   "\033[95m",   # 亮紫
@@ -134,6 +135,15 @@ def build_processes() -> dict[str, dict]:
             "env_defaults": {},
             "ready_msg": "ready in",
             "url": "http://localhost:5173",
+            "kind": "service",
+        },
+        "autorisk": {
+            "cmd": [sys.executable, "run.py"],
+            "cwd": ROOT / "autorisk",
+            "env_extra": {"PYTHONPATH": str(ROOT)},
+            "env_defaults": {},
+            "ready_msg": "Application startup complete",
+            "url": "http://localhost:8100/docs",
             "kind": "service",
         },
         "mcp-gateway": {
@@ -240,6 +250,7 @@ def parse_args():
     p.add_argument("--no-processing", action="store_true", help="不啟動 processing")
     p.add_argument("--with-mcp", action="store_true", help="附帶啟動 MCP 全套（gateway + internal + wind）")
     p.add_argument("--with-mcp-gateway", action="store_true", help="附帶啟動 MCP Gateway（8002）")
+    p.add_argument("--with-autorisk", action="store_true", help="附帶啟動 AutoRisk 模塊（8100）")
     p.add_argument("--with-internal-mcp", action="store_true", help="附帶啟動 internal MCP")
     p.add_argument("--with-wind-mcp", action="store_true", help="附帶啟動 Wind MCP")
     p.add_argument(
@@ -293,6 +304,8 @@ def main() -> None:
         if args.with_mcp or args.with_mcp_gateway:
             if "mcp-gateway" not in targets:
                 targets.append("mcp-gateway")
+        if args.with_autorisk and "autorisk" not in targets:
+            targets.append("autorisk")
         if args.with_mcp:
             if "internal-mcp" not in targets:
                 targets.append("internal-mcp")
@@ -347,6 +360,8 @@ def main() -> None:
     print("  backend    : 8000")
     print("  6_entry    : 8010")
     print("  processing : 8001")
+    if "autorisk" in targets:
+        print("  autorisk   : 8100")
     if "mcp-gateway" in targets:
         print("  mcp-gateway: 8002")
 

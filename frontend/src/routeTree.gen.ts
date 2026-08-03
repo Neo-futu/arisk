@@ -22,13 +22,21 @@ import { Route as LayoutReportsRouteImport } from './routes/_layout/reports'
 import { Route as LayoutPositionsRouteImport } from './routes/_layout/positions'
 import { Route as LayoutNotificationsRouteImport } from './routes/_layout/notifications'
 import { Route as LayoutItemsRouteImport } from './routes/_layout/items'
+import { Route as LayoutInvestmentRiskRouteImport } from './routes/_layout/investment-risk'
 import { Route as LayoutExpertRouteImport } from './routes/_layout/expert'
 import { Route as LayoutComplianceRouteImport } from './routes/_layout/compliance'
 import { Route as LayoutChatRouteImport } from './routes/_layout/chat'
+import { Route as LayoutAutoriskRouteImport } from './routes/_layout/autorisk'
 import { Route as LayoutApiKeysRouteImport } from './routes/_layout/api-keys'
 import { Route as LayoutAdminRouteImport } from './routes/_layout/admin'
+import { Route as LayoutInvestmentRiskIndexRouteImport } from './routes/_layout/investment-risk.index'
+import { Route as LayoutInvestmentRiskRatesCreditRouteImport } from './routes/_layout/investment-risk.rates-credit'
+import { Route as LayoutInvestmentRiskPretradeBudgetRouteImport } from './routes/_layout/investment-risk.pretrade-budget'
 import { Route as LayoutInvestmentRiskOverviewRouteImport } from './routes/_layout/investment-risk.overview'
+import { Route as LayoutInvestmentRiskMacroDynamicsRouteImport } from './routes/_layout/investment-risk.macro-dynamics'
+import { Route as LayoutInvestmentRiskLiquidityStressRouteImport } from './routes/_layout/investment-risk.liquidity-stress'
 import { Route as LayoutInvestmentRiskIndicatorsRouteImport } from './routes/_layout/investment-risk.indicators'
+import { Route as LayoutInvestmentRiskFactorBehaviorRouteImport } from './routes/_layout/investment-risk.factor-behavior'
 import { Route as LayoutInvestmentRiskAttributionRouteImport } from './routes/_layout/investment-risk.attribution'
 
 const SignupRoute = SignupRouteImport.update({
@@ -95,6 +103,11 @@ const LayoutItemsRoute = LayoutItemsRouteImport.update({
   path: '/items',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutInvestmentRiskRoute = LayoutInvestmentRiskRouteImport.update({
+  id: '/investment-risk',
+  path: '/investment-risk',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const LayoutExpertRoute = LayoutExpertRouteImport.update({
   id: '/expert',
   path: '/expert',
@@ -110,6 +123,11 @@ const LayoutChatRoute = LayoutChatRouteImport.update({
   path: '/chat',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutAutoriskRoute = LayoutAutoriskRouteImport.update({
+  id: '/autorisk',
+  path: '/autorisk',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const LayoutApiKeysRoute = LayoutApiKeysRouteImport.update({
   id: '/api-keys',
   path: '/api-keys',
@@ -120,23 +138,59 @@ const LayoutAdminRoute = LayoutAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutInvestmentRiskIndexRoute =
+  LayoutInvestmentRiskIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => LayoutInvestmentRiskRoute,
+  } as any)
+const LayoutInvestmentRiskRatesCreditRoute =
+  LayoutInvestmentRiskRatesCreditRouteImport.update({
+    id: '/rates-credit',
+    path: '/rates-credit',
+    getParentRoute: () => LayoutInvestmentRiskRoute,
+  } as any)
+const LayoutInvestmentRiskPretradeBudgetRoute =
+  LayoutInvestmentRiskPretradeBudgetRouteImport.update({
+    id: '/pretrade-budget',
+    path: '/pretrade-budget',
+    getParentRoute: () => LayoutInvestmentRiskRoute,
+  } as any)
 const LayoutInvestmentRiskOverviewRoute =
   LayoutInvestmentRiskOverviewRouteImport.update({
-    id: '/investment-risk/overview',
-    path: '/investment-risk/overview',
-    getParentRoute: () => LayoutRoute,
+    id: '/overview',
+    path: '/overview',
+    getParentRoute: () => LayoutInvestmentRiskRoute,
+  } as any)
+const LayoutInvestmentRiskMacroDynamicsRoute =
+  LayoutInvestmentRiskMacroDynamicsRouteImport.update({
+    id: '/macro-dynamics',
+    path: '/macro-dynamics',
+    getParentRoute: () => LayoutInvestmentRiskRoute,
+  } as any)
+const LayoutInvestmentRiskLiquidityStressRoute =
+  LayoutInvestmentRiskLiquidityStressRouteImport.update({
+    id: '/liquidity-stress',
+    path: '/liquidity-stress',
+    getParentRoute: () => LayoutInvestmentRiskRoute,
   } as any)
 const LayoutInvestmentRiskIndicatorsRoute =
   LayoutInvestmentRiskIndicatorsRouteImport.update({
-    id: '/investment-risk/indicators',
-    path: '/investment-risk/indicators',
-    getParentRoute: () => LayoutRoute,
+    id: '/indicators',
+    path: '/indicators',
+    getParentRoute: () => LayoutInvestmentRiskRoute,
+  } as any)
+const LayoutInvestmentRiskFactorBehaviorRoute =
+  LayoutInvestmentRiskFactorBehaviorRouteImport.update({
+    id: '/factor-behavior',
+    path: '/factor-behavior',
+    getParentRoute: () => LayoutInvestmentRiskRoute,
   } as any)
 const LayoutInvestmentRiskAttributionRoute =
   LayoutInvestmentRiskAttributionRouteImport.update({
-    id: '/investment-risk/attribution',
-    path: '/investment-risk/attribution',
-    getParentRoute: () => LayoutRoute,
+    id: '/attribution',
+    path: '/attribution',
+    getParentRoute: () => LayoutInvestmentRiskRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -147,9 +201,11 @@ export interface FileRoutesByFullPath {
   '/signup': typeof SignupRoute
   '/admin': typeof LayoutAdminRoute
   '/api-keys': typeof LayoutApiKeysRoute
+  '/autorisk': typeof LayoutAutoriskRoute
   '/chat': typeof LayoutChatRoute
   '/compliance': typeof LayoutComplianceRoute
   '/expert': typeof LayoutExpertRoute
+  '/investment-risk': typeof LayoutInvestmentRiskRouteWithChildren
   '/items': typeof LayoutItemsRoute
   '/notifications': typeof LayoutNotificationsRoute
   '/positions': typeof LayoutPositionsRoute
@@ -158,8 +214,14 @@ export interface FileRoutesByFullPath {
   '/schedules': typeof LayoutSchedulesRoute
   '/settings': typeof LayoutSettingsRoute
   '/investment-risk/attribution': typeof LayoutInvestmentRiskAttributionRoute
+  '/investment-risk/factor-behavior': typeof LayoutInvestmentRiskFactorBehaviorRoute
   '/investment-risk/indicators': typeof LayoutInvestmentRiskIndicatorsRoute
+  '/investment-risk/liquidity-stress': typeof LayoutInvestmentRiskLiquidityStressRoute
+  '/investment-risk/macro-dynamics': typeof LayoutInvestmentRiskMacroDynamicsRoute
   '/investment-risk/overview': typeof LayoutInvestmentRiskOverviewRoute
+  '/investment-risk/pretrade-budget': typeof LayoutInvestmentRiskPretradeBudgetRoute
+  '/investment-risk/rates-credit': typeof LayoutInvestmentRiskRatesCreditRoute
+  '/investment-risk/': typeof LayoutInvestmentRiskIndexRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -168,6 +230,7 @@ export interface FileRoutesByTo {
   '/signup': typeof SignupRoute
   '/admin': typeof LayoutAdminRoute
   '/api-keys': typeof LayoutApiKeysRoute
+  '/autorisk': typeof LayoutAutoriskRoute
   '/chat': typeof LayoutChatRoute
   '/compliance': typeof LayoutComplianceRoute
   '/expert': typeof LayoutExpertRoute
@@ -180,8 +243,14 @@ export interface FileRoutesByTo {
   '/settings': typeof LayoutSettingsRoute
   '/': typeof LayoutIndexRoute
   '/investment-risk/attribution': typeof LayoutInvestmentRiskAttributionRoute
+  '/investment-risk/factor-behavior': typeof LayoutInvestmentRiskFactorBehaviorRoute
   '/investment-risk/indicators': typeof LayoutInvestmentRiskIndicatorsRoute
+  '/investment-risk/liquidity-stress': typeof LayoutInvestmentRiskLiquidityStressRoute
+  '/investment-risk/macro-dynamics': typeof LayoutInvestmentRiskMacroDynamicsRoute
   '/investment-risk/overview': typeof LayoutInvestmentRiskOverviewRoute
+  '/investment-risk/pretrade-budget': typeof LayoutInvestmentRiskPretradeBudgetRoute
+  '/investment-risk/rates-credit': typeof LayoutInvestmentRiskRatesCreditRoute
+  '/investment-risk': typeof LayoutInvestmentRiskIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -192,9 +261,11 @@ export interface FileRoutesById {
   '/signup': typeof SignupRoute
   '/_layout/admin': typeof LayoutAdminRoute
   '/_layout/api-keys': typeof LayoutApiKeysRoute
+  '/_layout/autorisk': typeof LayoutAutoriskRoute
   '/_layout/chat': typeof LayoutChatRoute
   '/_layout/compliance': typeof LayoutComplianceRoute
   '/_layout/expert': typeof LayoutExpertRoute
+  '/_layout/investment-risk': typeof LayoutInvestmentRiskRouteWithChildren
   '/_layout/items': typeof LayoutItemsRoute
   '/_layout/notifications': typeof LayoutNotificationsRoute
   '/_layout/positions': typeof LayoutPositionsRoute
@@ -204,8 +275,14 @@ export interface FileRoutesById {
   '/_layout/settings': typeof LayoutSettingsRoute
   '/_layout/': typeof LayoutIndexRoute
   '/_layout/investment-risk/attribution': typeof LayoutInvestmentRiskAttributionRoute
+  '/_layout/investment-risk/factor-behavior': typeof LayoutInvestmentRiskFactorBehaviorRoute
   '/_layout/investment-risk/indicators': typeof LayoutInvestmentRiskIndicatorsRoute
+  '/_layout/investment-risk/liquidity-stress': typeof LayoutInvestmentRiskLiquidityStressRoute
+  '/_layout/investment-risk/macro-dynamics': typeof LayoutInvestmentRiskMacroDynamicsRoute
   '/_layout/investment-risk/overview': typeof LayoutInvestmentRiskOverviewRoute
+  '/_layout/investment-risk/pretrade-budget': typeof LayoutInvestmentRiskPretradeBudgetRoute
+  '/_layout/investment-risk/rates-credit': typeof LayoutInvestmentRiskRatesCreditRoute
+  '/_layout/investment-risk/': typeof LayoutInvestmentRiskIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -217,9 +294,11 @@ export interface FileRouteTypes {
     | '/signup'
     | '/admin'
     | '/api-keys'
+    | '/autorisk'
     | '/chat'
     | '/compliance'
     | '/expert'
+    | '/investment-risk'
     | '/items'
     | '/notifications'
     | '/positions'
@@ -228,8 +307,14 @@ export interface FileRouteTypes {
     | '/schedules'
     | '/settings'
     | '/investment-risk/attribution'
+    | '/investment-risk/factor-behavior'
     | '/investment-risk/indicators'
+    | '/investment-risk/liquidity-stress'
+    | '/investment-risk/macro-dynamics'
     | '/investment-risk/overview'
+    | '/investment-risk/pretrade-budget'
+    | '/investment-risk/rates-credit'
+    | '/investment-risk/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -238,6 +323,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/admin'
     | '/api-keys'
+    | '/autorisk'
     | '/chat'
     | '/compliance'
     | '/expert'
@@ -250,8 +336,14 @@ export interface FileRouteTypes {
     | '/settings'
     | '/'
     | '/investment-risk/attribution'
+    | '/investment-risk/factor-behavior'
     | '/investment-risk/indicators'
+    | '/investment-risk/liquidity-stress'
+    | '/investment-risk/macro-dynamics'
     | '/investment-risk/overview'
+    | '/investment-risk/pretrade-budget'
+    | '/investment-risk/rates-credit'
+    | '/investment-risk'
   id:
     | '__root__'
     | '/_layout'
@@ -261,9 +353,11 @@ export interface FileRouteTypes {
     | '/signup'
     | '/_layout/admin'
     | '/_layout/api-keys'
+    | '/_layout/autorisk'
     | '/_layout/chat'
     | '/_layout/compliance'
     | '/_layout/expert'
+    | '/_layout/investment-risk'
     | '/_layout/items'
     | '/_layout/notifications'
     | '/_layout/positions'
@@ -273,8 +367,14 @@ export interface FileRouteTypes {
     | '/_layout/settings'
     | '/_layout/'
     | '/_layout/investment-risk/attribution'
+    | '/_layout/investment-risk/factor-behavior'
     | '/_layout/investment-risk/indicators'
+    | '/_layout/investment-risk/liquidity-stress'
+    | '/_layout/investment-risk/macro-dynamics'
     | '/_layout/investment-risk/overview'
+    | '/_layout/investment-risk/pretrade-budget'
+    | '/_layout/investment-risk/rates-credit'
+    | '/_layout/investment-risk/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -378,6 +478,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutItemsRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/investment-risk': {
+      id: '/_layout/investment-risk'
+      path: '/investment-risk'
+      fullPath: '/investment-risk'
+      preLoaderRoute: typeof LayoutInvestmentRiskRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/expert': {
       id: '/_layout/expert'
       path: '/expert'
@@ -399,6 +506,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutChatRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/autorisk': {
+      id: '/_layout/autorisk'
+      path: '/autorisk'
+      fullPath: '/autorisk'
+      preLoaderRoute: typeof LayoutAutoriskRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/api-keys': {
       id: '/_layout/api-keys'
       path: '/api-keys'
@@ -413,36 +527,111 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutAdminRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/investment-risk/': {
+      id: '/_layout/investment-risk/'
+      path: '/'
+      fullPath: '/investment-risk/'
+      preLoaderRoute: typeof LayoutInvestmentRiskIndexRouteImport
+      parentRoute: typeof LayoutInvestmentRiskRoute
+    }
+    '/_layout/investment-risk/rates-credit': {
+      id: '/_layout/investment-risk/rates-credit'
+      path: '/rates-credit'
+      fullPath: '/investment-risk/rates-credit'
+      preLoaderRoute: typeof LayoutInvestmentRiskRatesCreditRouteImport
+      parentRoute: typeof LayoutInvestmentRiskRoute
+    }
+    '/_layout/investment-risk/pretrade-budget': {
+      id: '/_layout/investment-risk/pretrade-budget'
+      path: '/pretrade-budget'
+      fullPath: '/investment-risk/pretrade-budget'
+      preLoaderRoute: typeof LayoutInvestmentRiskPretradeBudgetRouteImport
+      parentRoute: typeof LayoutInvestmentRiskRoute
+    }
     '/_layout/investment-risk/overview': {
       id: '/_layout/investment-risk/overview'
-      path: '/investment-risk/overview'
+      path: '/overview'
       fullPath: '/investment-risk/overview'
       preLoaderRoute: typeof LayoutInvestmentRiskOverviewRouteImport
-      parentRoute: typeof LayoutRoute
+      parentRoute: typeof LayoutInvestmentRiskRoute
+    }
+    '/_layout/investment-risk/macro-dynamics': {
+      id: '/_layout/investment-risk/macro-dynamics'
+      path: '/macro-dynamics'
+      fullPath: '/investment-risk/macro-dynamics'
+      preLoaderRoute: typeof LayoutInvestmentRiskMacroDynamicsRouteImport
+      parentRoute: typeof LayoutInvestmentRiskRoute
+    }
+    '/_layout/investment-risk/liquidity-stress': {
+      id: '/_layout/investment-risk/liquidity-stress'
+      path: '/liquidity-stress'
+      fullPath: '/investment-risk/liquidity-stress'
+      preLoaderRoute: typeof LayoutInvestmentRiskLiquidityStressRouteImport
+      parentRoute: typeof LayoutInvestmentRiskRoute
     }
     '/_layout/investment-risk/indicators': {
       id: '/_layout/investment-risk/indicators'
-      path: '/investment-risk/indicators'
+      path: '/indicators'
       fullPath: '/investment-risk/indicators'
       preLoaderRoute: typeof LayoutInvestmentRiskIndicatorsRouteImport
-      parentRoute: typeof LayoutRoute
+      parentRoute: typeof LayoutInvestmentRiskRoute
+    }
+    '/_layout/investment-risk/factor-behavior': {
+      id: '/_layout/investment-risk/factor-behavior'
+      path: '/factor-behavior'
+      fullPath: '/investment-risk/factor-behavior'
+      preLoaderRoute: typeof LayoutInvestmentRiskFactorBehaviorRouteImport
+      parentRoute: typeof LayoutInvestmentRiskRoute
     }
     '/_layout/investment-risk/attribution': {
       id: '/_layout/investment-risk/attribution'
-      path: '/investment-risk/attribution'
+      path: '/attribution'
       fullPath: '/investment-risk/attribution'
       preLoaderRoute: typeof LayoutInvestmentRiskAttributionRouteImport
-      parentRoute: typeof LayoutRoute
+      parentRoute: typeof LayoutInvestmentRiskRoute
     }
   }
 }
 
+interface LayoutInvestmentRiskRouteChildren {
+  LayoutInvestmentRiskAttributionRoute: typeof LayoutInvestmentRiskAttributionRoute
+  LayoutInvestmentRiskFactorBehaviorRoute: typeof LayoutInvestmentRiskFactorBehaviorRoute
+  LayoutInvestmentRiskIndicatorsRoute: typeof LayoutInvestmentRiskIndicatorsRoute
+  LayoutInvestmentRiskLiquidityStressRoute: typeof LayoutInvestmentRiskLiquidityStressRoute
+  LayoutInvestmentRiskMacroDynamicsRoute: typeof LayoutInvestmentRiskMacroDynamicsRoute
+  LayoutInvestmentRiskOverviewRoute: typeof LayoutInvestmentRiskOverviewRoute
+  LayoutInvestmentRiskPretradeBudgetRoute: typeof LayoutInvestmentRiskPretradeBudgetRoute
+  LayoutInvestmentRiskRatesCreditRoute: typeof LayoutInvestmentRiskRatesCreditRoute
+  LayoutInvestmentRiskIndexRoute: typeof LayoutInvestmentRiskIndexRoute
+}
+
+const LayoutInvestmentRiskRouteChildren: LayoutInvestmentRiskRouteChildren = {
+  LayoutInvestmentRiskAttributionRoute: LayoutInvestmentRiskAttributionRoute,
+  LayoutInvestmentRiskFactorBehaviorRoute:
+    LayoutInvestmentRiskFactorBehaviorRoute,
+  LayoutInvestmentRiskIndicatorsRoute: LayoutInvestmentRiskIndicatorsRoute,
+  LayoutInvestmentRiskLiquidityStressRoute:
+    LayoutInvestmentRiskLiquidityStressRoute,
+  LayoutInvestmentRiskMacroDynamicsRoute:
+    LayoutInvestmentRiskMacroDynamicsRoute,
+  LayoutInvestmentRiskOverviewRoute: LayoutInvestmentRiskOverviewRoute,
+  LayoutInvestmentRiskPretradeBudgetRoute:
+    LayoutInvestmentRiskPretradeBudgetRoute,
+  LayoutInvestmentRiskRatesCreditRoute: LayoutInvestmentRiskRatesCreditRoute,
+  LayoutInvestmentRiskIndexRoute: LayoutInvestmentRiskIndexRoute,
+}
+
+const LayoutInvestmentRiskRouteWithChildren =
+  LayoutInvestmentRiskRoute._addFileChildren(LayoutInvestmentRiskRouteChildren)
+
 interface LayoutRouteChildren {
   LayoutAdminRoute: typeof LayoutAdminRoute
   LayoutApiKeysRoute: typeof LayoutApiKeysRoute
+  LayoutAutoriskRoute: typeof LayoutAutoriskRoute
   LayoutChatRoute: typeof LayoutChatRoute
   LayoutComplianceRoute: typeof LayoutComplianceRoute
   LayoutExpertRoute: typeof LayoutExpertRoute
+  LayoutInvestmentRiskRoute: typeof LayoutInvestmentRiskRouteWithChildren
   LayoutItemsRoute: typeof LayoutItemsRoute
   LayoutNotificationsRoute: typeof LayoutNotificationsRoute
   LayoutPositionsRoute: typeof LayoutPositionsRoute
@@ -451,17 +640,16 @@ interface LayoutRouteChildren {
   LayoutSchedulesRoute: typeof LayoutSchedulesRoute
   LayoutSettingsRoute: typeof LayoutSettingsRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
-  LayoutInvestmentRiskAttributionRoute: typeof LayoutInvestmentRiskAttributionRoute
-  LayoutInvestmentRiskIndicatorsRoute: typeof LayoutInvestmentRiskIndicatorsRoute
-  LayoutInvestmentRiskOverviewRoute: typeof LayoutInvestmentRiskOverviewRoute
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutAdminRoute: LayoutAdminRoute,
   LayoutApiKeysRoute: LayoutApiKeysRoute,
+  LayoutAutoriskRoute: LayoutAutoriskRoute,
   LayoutChatRoute: LayoutChatRoute,
   LayoutComplianceRoute: LayoutComplianceRoute,
   LayoutExpertRoute: LayoutExpertRoute,
+  LayoutInvestmentRiskRoute: LayoutInvestmentRiskRouteWithChildren,
   LayoutItemsRoute: LayoutItemsRoute,
   LayoutNotificationsRoute: LayoutNotificationsRoute,
   LayoutPositionsRoute: LayoutPositionsRoute,
@@ -470,9 +658,6 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutSchedulesRoute: LayoutSchedulesRoute,
   LayoutSettingsRoute: LayoutSettingsRoute,
   LayoutIndexRoute: LayoutIndexRoute,
-  LayoutInvestmentRiskAttributionRoute: LayoutInvestmentRiskAttributionRoute,
-  LayoutInvestmentRiskIndicatorsRoute: LayoutInvestmentRiskIndicatorsRoute,
-  LayoutInvestmentRiskOverviewRoute: LayoutInvestmentRiskOverviewRoute,
 }
 
 const LayoutRouteWithChildren =

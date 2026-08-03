@@ -8,13 +8,14 @@ Param(
     [switch]$NoProcessing,
     [switch]$WithMcp,
     [switch]$WithMcpGateway,
+    [switch]$WithAutorisk,
     [switch]$WithInternalMcp,
     [switch]$WithWindMcp,
 
     [ValidateSet("processing", "entry", "backend", "frontend", "mcp-gateway", "internal-mcp", "wind-mcp")]
     [string]$Only,
 
-    [ValidateSet("processing", "entry", "backend", "frontend", "mcp-gateway", "internal-mcp", "wind-mcp")]
+    [ValidateSet("processing", "entry", "backend", "frontend", "autorisk", "mcp-gateway", "internal-mcp", "wind-mcp")]
     [string[]]$Parts,
 
     [switch]$ListParts,
@@ -61,6 +62,7 @@ Add-Flag -ArgsList $argsList -Condition $NoEntry.IsPresent -Flag "--no-entry"
 Add-Flag -ArgsList $argsList -Condition $NoProcessing.IsPresent -Flag "--no-processing"
 Add-Flag -ArgsList $argsList -Condition $WithMcp.IsPresent -Flag "--with-mcp"
 Add-Flag -ArgsList $argsList -Condition $WithMcpGateway.IsPresent -Flag "--with-mcp-gateway"
+Add-Flag -ArgsList $argsList -Condition $WithAutorisk.IsPresent -Flag "--with-autorisk"
 Add-Flag -ArgsList $argsList -Condition $WithInternalMcp.IsPresent -Flag "--with-internal-mcp"
 Add-Flag -ArgsList $argsList -Condition $WithWindMcp.IsPresent -Flag "--with-wind-mcp"
 

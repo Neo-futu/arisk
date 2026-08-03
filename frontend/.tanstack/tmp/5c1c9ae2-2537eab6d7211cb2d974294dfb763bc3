@@ -1,0 +1,11 @@
+import { createFileRoute } from '@tanstack/react-router'
+
+export const Route = createFileRoute(
+  '/_layout/investment-risk/liquidity-stress',
+)({
+  component: RouteComponent,
+})
+
+function RouteComponent() {
+  return <div>Hello "/_layout/investment-risk/liquidity-stress"!</div>
+}
