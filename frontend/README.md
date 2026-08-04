@@ -40,6 +40,41 @@ npm run build
 
 說明：build 腳本採用 `vite build && tsc -p tsconfig.build.json`，確保 TanStack Router 路由樹先生成，再進行型別檢查。
 
+## API 契約與型別生成
+
+本項目採用分層契約策略：
+
+- `backend` OpenAPI -> `frontend/src/client`（身份、管理等 API）
+- `2_processing` OpenAPI -> `frontend/src/contracts/processing`（風控/投資計算域 API）
+
+步驟：
+
+```bash
+cd frontend
+npm run contracts:refresh
+```
+
+等價分步命令：
+
+```bash
+cd frontend
+npm run contracts:sync
+npm run contracts:generate
+```
+
+僅同步單一來源（服務分開啟動時使用）：
+
+```bash
+cd frontend
+npm run contracts:sync:backend
+npm run contracts:sync:processing
+```
+
+說明：
+
+- `contracts:sync` 會從 `http://localhost:8000/openapi.json` 和 `http://localhost:8001/openapi.json` 拉取契約快照。
+- 契約快照保存在 `frontend/openapi/backend.json` 和 `frontend/openapi/processing.json`。
+
 ## 關鍵環境變量
 
 可在 `frontend/.env` 設置：
