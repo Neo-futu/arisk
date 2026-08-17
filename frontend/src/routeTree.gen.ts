@@ -30,6 +30,7 @@ import { Route as LayoutAutoriskRouteImport } from './routes/_layout/autorisk'
 import { Route as LayoutApiKeysRouteImport } from './routes/_layout/api-keys'
 import { Route as LayoutAdminRouteImport } from './routes/_layout/admin'
 import { Route as LayoutInvestmentRiskIndexRouteImport } from './routes/_layout/investment-risk.index'
+import { Route as LayoutInvestmentRiskValidationRouteImport } from './routes/_layout/investment-risk.validation'
 import { Route as LayoutInvestmentRiskRatesCreditRouteImport } from './routes/_layout/investment-risk.rates-credit'
 import { Route as LayoutInvestmentRiskPretradeBudgetRouteImport } from './routes/_layout/investment-risk.pretrade-budget'
 import { Route as LayoutInvestmentRiskOverviewRouteImport } from './routes/_layout/investment-risk.overview'
@@ -144,6 +145,12 @@ const LayoutInvestmentRiskIndexRoute =
     path: '/',
     getParentRoute: () => LayoutInvestmentRiskRoute,
   } as any)
+const LayoutInvestmentRiskValidationRoute =
+  LayoutInvestmentRiskValidationRouteImport.update({
+    id: '/validation',
+    path: '/validation',
+    getParentRoute: () => LayoutInvestmentRiskRoute,
+  } as any)
 const LayoutInvestmentRiskRatesCreditRoute =
   LayoutInvestmentRiskRatesCreditRouteImport.update({
     id: '/rates-credit',
@@ -221,6 +228,7 @@ export interface FileRoutesByFullPath {
   '/investment-risk/overview': typeof LayoutInvestmentRiskOverviewRoute
   '/investment-risk/pretrade-budget': typeof LayoutInvestmentRiskPretradeBudgetRoute
   '/investment-risk/rates-credit': typeof LayoutInvestmentRiskRatesCreditRoute
+  '/investment-risk/validation': typeof LayoutInvestmentRiskValidationRoute
   '/investment-risk/': typeof LayoutInvestmentRiskIndexRoute
 }
 export interface FileRoutesByTo {
@@ -250,6 +258,7 @@ export interface FileRoutesByTo {
   '/investment-risk/overview': typeof LayoutInvestmentRiskOverviewRoute
   '/investment-risk/pretrade-budget': typeof LayoutInvestmentRiskPretradeBudgetRoute
   '/investment-risk/rates-credit': typeof LayoutInvestmentRiskRatesCreditRoute
+  '/investment-risk/validation': typeof LayoutInvestmentRiskValidationRoute
   '/investment-risk': typeof LayoutInvestmentRiskIndexRoute
 }
 export interface FileRoutesById {
@@ -282,6 +291,7 @@ export interface FileRoutesById {
   '/_layout/investment-risk/overview': typeof LayoutInvestmentRiskOverviewRoute
   '/_layout/investment-risk/pretrade-budget': typeof LayoutInvestmentRiskPretradeBudgetRoute
   '/_layout/investment-risk/rates-credit': typeof LayoutInvestmentRiskRatesCreditRoute
+  '/_layout/investment-risk/validation': typeof LayoutInvestmentRiskValidationRoute
   '/_layout/investment-risk/': typeof LayoutInvestmentRiskIndexRoute
 }
 export interface FileRouteTypes {
@@ -314,6 +324,7 @@ export interface FileRouteTypes {
     | '/investment-risk/overview'
     | '/investment-risk/pretrade-budget'
     | '/investment-risk/rates-credit'
+    | '/investment-risk/validation'
     | '/investment-risk/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -343,6 +354,7 @@ export interface FileRouteTypes {
     | '/investment-risk/overview'
     | '/investment-risk/pretrade-budget'
     | '/investment-risk/rates-credit'
+    | '/investment-risk/validation'
     | '/investment-risk'
   id:
     | '__root__'
@@ -374,6 +386,7 @@ export interface FileRouteTypes {
     | '/_layout/investment-risk/overview'
     | '/_layout/investment-risk/pretrade-budget'
     | '/_layout/investment-risk/rates-credit'
+    | '/_layout/investment-risk/validation'
     | '/_layout/investment-risk/'
   fileRoutesById: FileRoutesById
 }
@@ -534,6 +547,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutInvestmentRiskIndexRouteImport
       parentRoute: typeof LayoutInvestmentRiskRoute
     }
+    '/_layout/investment-risk/validation': {
+      id: '/_layout/investment-risk/validation'
+      path: '/validation'
+      fullPath: '/investment-risk/validation'
+      preLoaderRoute: typeof LayoutInvestmentRiskValidationRouteImport
+      parentRoute: typeof LayoutInvestmentRiskRoute
+    }
     '/_layout/investment-risk/rates-credit': {
       id: '/_layout/investment-risk/rates-credit'
       path: '/rates-credit'
@@ -602,6 +622,7 @@ interface LayoutInvestmentRiskRouteChildren {
   LayoutInvestmentRiskOverviewRoute: typeof LayoutInvestmentRiskOverviewRoute
   LayoutInvestmentRiskPretradeBudgetRoute: typeof LayoutInvestmentRiskPretradeBudgetRoute
   LayoutInvestmentRiskRatesCreditRoute: typeof LayoutInvestmentRiskRatesCreditRoute
+  LayoutInvestmentRiskValidationRoute: typeof LayoutInvestmentRiskValidationRoute
   LayoutInvestmentRiskIndexRoute: typeof LayoutInvestmentRiskIndexRoute
 }
 
@@ -618,6 +639,7 @@ const LayoutInvestmentRiskRouteChildren: LayoutInvestmentRiskRouteChildren = {
   LayoutInvestmentRiskPretradeBudgetRoute:
     LayoutInvestmentRiskPretradeBudgetRoute,
   LayoutInvestmentRiskRatesCreditRoute: LayoutInvestmentRiskRatesCreditRoute,
+  LayoutInvestmentRiskValidationRoute: LayoutInvestmentRiskValidationRoute,
   LayoutInvestmentRiskIndexRoute: LayoutInvestmentRiskIndexRoute,
 }
 

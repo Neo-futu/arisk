@@ -53,6 +53,7 @@ const fsiItems: NavItem[] = [
     path: "/investment-risk",
     children: [
       { title: "模塊總覽", path: "/investment-risk" },
+      { title: "指標驗證", path: "/investment-risk/validation" },
       { title: "組合概況", path: "/investment-risk/overview" },
       { title: "風險指標", path: "/investment-risk/indicators" },
       { title: "績效歸因", path: "/investment-risk/attribution" },
