@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import { AlertTriangle, CheckCircle2, RefreshCw, TrendingDown, Waves } from "lucide-react"
 import { useEffect, useState } from "react"
+import { useTranslation } from "react-i18next"
 
 import { FUNDS, lastTradeDate } from "@/components/FsiToolbar"
 import { Badge } from "@/components/ui/badge"
@@ -96,7 +97,7 @@ function MetricCard({
         <div className="text-2xl font-bold">{value}</div>
         {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
         {limit && (
-          <p className="text-xs text-muted-foreground mt-1">限額：{limit}</p>
+          <p className="text-xs text-muted-foreground mt-1">{limit}</p>
         )}
       </CardContent>
     </Card>
@@ -114,6 +115,8 @@ function ComplianceRow({
   limit: string
   breach: boolean
 }) {
+  const { t } = useTranslation()
+
   return (
     <div className="flex items-center justify-between py-2 border-b last:border-0">
       <span className="text-sm">{rule}</span>
@@ -124,7 +127,7 @@ function ComplianceRow({
           variant={breach ? "destructive" : "outline"}
           className="w-14 justify-center text-xs"
         >
-          {breach ? "違規" : "合規"}
+          {breach ? t("dashboard.breach") : t("dashboard.compliant")}
         </Badge>
       </div>
     </div>
@@ -132,30 +135,31 @@ function ComplianceRow({
 }
 
 function ExposureDashboard({ data }: { data: ExposureResult }) {
+  const { t } = useTranslation()
   const nav = (data.total_nav_hkd / 1e8).toFixed(2)
 
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <MetricCard
-          title="總 NAV"
+          title={t("dashboard.totalNav")}
           value={`HKD ${nav} 億`}
           icon={Waves}
           status="ok"
         />
         <MetricCard
-          title="WAM（加權平均期限）"
+          title={t("dashboard.wam")}
           value={`${data.wam_days.toFixed(1)} 天`}
-          limit="≤ 60 天"
+          limit={t("dashboard.limit", { value: "≤ 60 天" })}
           status={
             data.wam_days > 60 ? "breach" : data.wam_days > 50 ? "warn" : "ok"
           }
           icon={TrendingDown}
         />
         <MetricCard
-          title="WAL（加權平均有效期）"
+          title={t("dashboard.wal")}
           value={`${data.wal_days.toFixed(1)} 天`}
-          limit="≤ 120 天"
+          limit={t("dashboard.limit", { value: "≤ 120 天" })}
           status={
             data.wal_days > 120
               ? "breach"
@@ -166,14 +170,14 @@ function ExposureDashboard({ data }: { data: ExposureResult }) {
           icon={TrendingDown}
         />
         <MetricCard
-          title="合規狀態"
+          title={t("dashboard.complianceStatus")}
           value={
             data.is_compliant
-              ? "全部合規"
-              : `${data.breach_flags.length} 項違規`
+              ? t("dashboard.fullyCompliant")
+              : t("dashboard.breaches", { count: data.breach_flags.length })
           }
           sub={
-            data.is_compliant ? "SFC 第 8.2 章" : data.breach_flags.join(", ")
+            data.is_compliant ? t("dashboard.chapter") : data.breach_flags.join(", ")
           }
           status={data.is_compliant ? "ok" : "breach"}
           icon={data.is_compliant ? CheckCircle2 : AlertTriangle}
@@ -183,29 +187,29 @@ function ExposureDashboard({ data }: { data: ExposureResult }) {
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">SFC 合規明細（第 8.2 章）</CardTitle>
+            <CardTitle className="text-base">{t("dashboard.sfcDetail")}</CardTitle>
           </CardHeader>
           <CardContent>
             <ComplianceRow
-              rule="WAM 加權平均期限"
+              rule={t("dashboard.ruleWam")}
               value={`${data.wam_days.toFixed(1)} 天`}
               limit="≤ 60 天"
               breach={data.breach_flags.includes("WAM_BREACH")}
             />
             <ComplianceRow
-              rule="WAL 加權平均有效期"
+              rule={t("dashboard.ruleWal")}
               value={`${data.wal_days.toFixed(1)} 天`}
               limit="≤ 120 天"
               breach={data.breach_flags.includes("WAL_BREACH")}
             />
             <ComplianceRow
-              rule="每日流動資產"
+              rule={t("dashboard.ruleDailyLiquid")}
               value={`${data.daily_liquid_pct.toFixed(2)}%`}
               limit="≥ 7.5%"
               breach={data.breach_flags.includes("DAILY_LIQUID_BREACH")}
             />
             <ComplianceRow
-              rule="每週流動資產"
+              rule={t("dashboard.ruleWeeklyLiquid")}
               value={`${data.weekly_liquid_pct.toFixed(2)}%`}
               limit="≥ 15%"
               breach={data.breach_flags.includes("WEEKLY_LIQUID_BREACH")}
@@ -215,7 +219,7 @@ function ExposureDashboard({ data }: { data: ExposureResult }) {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">資產配置（% NAV）</CardTitle>
+            <CardTitle className="text-base">{t("dashboard.assetAllocation")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
@@ -246,6 +250,7 @@ function ExposureDashboard({ data }: { data: ExposureResult }) {
 }
 
 function Dashboard() {
+  const { t } = useTranslation()
   const { user } = useAuth()
   const [fundId, setFundId] = useState(FUNDS[0].id)
   const [asOfDate, setAsOfDate] = useState(lastTradeDate)
@@ -284,15 +289,18 @@ function Dashboard() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">風控儀表板</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t("dashboard.title")}</h1>
           <p className="text-muted-foreground text-sm">
-            歡迎，{user?.full_name || user?.email} · 實際數據日：{effectiveDate}
+            {t("dashboard.welcome", {
+              user: user?.full_name || user?.email,
+              date: effectiveDate,
+            })}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <Select value={fundId} onValueChange={setFundId}>
             <SelectTrigger className="w-56">
-              <SelectValue placeholder="選擇基金" />
+              <SelectValue placeholder={t("dashboard.selectFund")} />
             </SelectTrigger>
             <SelectContent>
               {FUNDS.map((f) => (
@@ -303,7 +311,7 @@ function Dashboard() {
             </SelectContent>
           </Select>
           <DatePicker value={asOfDate} onChange={setAsOfDate} />
-          {fallbackUsed ? <Badge variant="secondary">已自動回退到最近有數據日</Badge> : null}
+          {fallbackUsed ? <Badge variant="secondary">{t("dashboard.autoFallback")}</Badge> : null}
           <Button
             variant="outline"
             size="icon"
@@ -313,7 +321,7 @@ function Dashboard() {
               void exposureQuery.refetch()
             }}
             disabled={isFetching}
-            title="重新加載"
+            title={t("dashboard.reload")}
           >
             <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
           </Button>
@@ -321,20 +329,22 @@ function Dashboard() {
       </div>
 
       {isFetching && (
-        <p className="text-muted-foreground text-sm animate-pulse">載入中...</p>
+        <p className="text-muted-foreground text-sm animate-pulse">{t("dashboard.loading")}</p>
       )}
       {isError && (
         <Card className="border-destructive">
           <CardContent className="pt-4 text-sm text-destructive">
-            API 請求失敗或該基金在參考日期之前無可用數據。請確認 Processing API（port 8001）和 Backend（port 8000）均已啟動。
+            {t("dashboard.apiError")}
           </CardContent>
         </Card>
       )}
       {exposureData && exposureData.total_nav_hkd === 0 && !isFetching && (
         <Card className="border-yellow-500/50">
           <CardContent className="pt-4 text-sm text-yellow-600">
-            查無數據：基金 <b>{fundId}</b> 在 <b>{asOfDate}</b> 無 NAV 記錄。
-            請確認日期和基金 ID 與數據庫一致，或點擊重新加載。
+            {t("dashboard.noData", {
+              fund: fundId,
+              date: asOfDate,
+            })}
           </CardContent>
         </Card>
       )}

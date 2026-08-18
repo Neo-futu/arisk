@@ -15,6 +15,7 @@ import {
   Users,
 } from "lucide-react"
 import { useEffect, useState } from "react"
+import { useTranslation } from "react-i18next"
 
 import { SidebarAppearance } from "@/components/Common/Appearance"
 import { Logo } from "@/components/Common/Logo"
@@ -45,39 +46,39 @@ type NavItem = {
   children?: Array<{ title: string; path: string }>
 }
 
-const fsiItems: NavItem[] = [
-  { icon: Home, title: "儀表板", path: "/" },
+const getFsiItems = (t: (key: string) => string): NavItem[] => [
+  { icon: Home, title: t("nav.dashboard"), path: "/" },
   {
     icon: BarChart3,
-    title: "投資風險分析",
+    title: t("nav.investmentRisk"),
     path: "/investment-risk",
     children: [
-      { title: "模塊總覽", path: "/investment-risk" },
-      { title: "指標驗證", path: "/investment-risk/validation" },
-      { title: "組合概況", path: "/investment-risk/overview" },
-      { title: "風險指標", path: "/investment-risk/indicators" },
-      { title: "績效歸因", path: "/investment-risk/attribution" },
-      { title: "利率與信用敏感度", path: "/investment-risk/rates-credit" },
-      { title: "流動性與壓力測試", path: "/investment-risk/liquidity-stress" },
-      { title: "風險預算與前置試算", path: "/investment-risk/pretrade-budget" },
-      { title: "宏觀與市場動態", path: "/investment-risk/macro-dynamics" },
-      { title: "基本面因子與行為", path: "/investment-risk/factor-behavior" },
+      { title: t("nav.moduleOverview"), path: "/investment-risk" },
+      { title: t("nav.validation"), path: "/investment-risk/validation" },
+      { title: t("nav.portfolioOverview"), path: "/investment-risk/overview" },
+      { title: t("nav.riskIndicators"), path: "/investment-risk/indicators" },
+      { title: t("nav.attribution"), path: "/investment-risk/attribution" },
+      { title: t("nav.ratesCredit"), path: "/investment-risk/rates-credit" },
+      { title: t("nav.liquidityStress"), path: "/investment-risk/liquidity-stress" },
+      { title: t("nav.pretradeBudget"), path: "/investment-risk/pretrade-budget" },
+      { title: t("nav.macroDynamics"), path: "/investment-risk/macro-dynamics" },
+      { title: t("nav.factorBehavior"), path: "/investment-risk/factor-behavior" },
     ],
   },
-  { icon: List, title: "持倉明細", path: "/positions" },
-  { icon: Shield, title: "合規核查", path: "/compliance" },
-  { icon: FileText, title: "報表中心", path: "/reports" },
-  { icon: CalendarClock, title: "定時任務", path: "/schedules" },
-  { icon: Sparkles, title: "自動風控", path: "/autorisk" },
-  { icon: MessageSquare, title: "Agent Chat", path: "/chat" },
-  { icon: BookOpen, title: "專家知識庫", path: "/expert" },
+  { icon: List, title: t("nav.positions"), path: "/positions" },
+  { icon: Shield, title: t("nav.compliance"), path: "/compliance" },
+  { icon: FileText, title: t("nav.reports"), path: "/reports" },
+  { icon: CalendarClock, title: t("nav.schedules"), path: "/schedules" },
+  { icon: Sparkles, title: t("nav.autorisk"), path: "/autorisk" },
+  { icon: MessageSquare, title: t("nav.chat"), path: "/chat" },
+  { icon: BookOpen, title: t("nav.expert"), path: "/expert" },
 ]
 
-const adminItems: NavItem[] = [
-  { icon: Users, title: "用戶管理", path: "/admin" },
-  { icon: KeyRound, title: "API Key 管理", path: "/api-keys" },
-  { icon: Bell, title: "通知中心", path: "/notifications" },
-  { icon: Settings, title: "設置", path: "/settings" },
+const getAdminItems = (t: (key: string) => string): NavItem[] => [
+  { icon: Users, title: t("nav.userManagement"), path: "/admin" },
+  { icon: KeyRound, title: t("nav.apiKeys"), path: "/api-keys" },
+  { icon: Bell, title: t("nav.notifications"), path: "/notifications" },
+  { icon: Settings, title: t("nav.settings"), path: "/settings" },
 ]
 
 function NavSection({
@@ -173,7 +174,10 @@ function NavSection({
 }
 
 export function AppSidebar() {
+  const { t } = useTranslation()
   const { user: currentUser } = useAuth()
+  const fsiItems = getFsiItems(t)
+  const adminItems = getAdminItems(t)
 
   const visibleAdminItems = currentUser?.is_superuser
     ? adminItems
@@ -185,8 +189,8 @@ export function AppSidebar() {
         <Logo variant="responsive" />
       </SidebarHeader>
       <SidebarContent>
-        <NavSection label="阿雷斯 · 智能風控和投資分析系統" items={fsiItems} />
-        <NavSection label="系統管理" items={visibleAdminItems} />
+        <NavSection label={t("nav.fsiSection")} items={fsiItems} />
+        <NavSection label={t("nav.systemManagement")} items={visibleAdminItems} />
       </SidebarContent>
       <SidebarFooter>
         <SidebarAppearance />

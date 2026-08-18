@@ -1,4 +1,7 @@
+import { useTranslation } from "react-i18next"
+
 export function Footer() {
+  const { t } = useTranslation()
   const currentYear = new Date().getFullYear()
 
   return (
@@ -8,7 +11,7 @@ export function Footer() {
           ARISK — Agent for Risk &amp; Investment Analysis System &copy; {currentYear}
         </p>
         <p className="text-muted-foreground text-xs">
-          阿雷斯 · 智能風控和投資分析系統
+          {t("footer.productName")}
         </p>
       </div>
     </footer>

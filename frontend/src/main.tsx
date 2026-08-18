@@ -12,6 +12,7 @@ import { ThemeProvider } from "./components/theme-provider"
 import { Toaster } from "./components/ui/sonner"
 import { logger } from "./lib/logger"
 import "./index.css"
+import "./i18n"
 import "react-day-picker/style.css"
 import { routeTree } from "./routeTree.gen"
 
