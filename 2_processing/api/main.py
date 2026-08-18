@@ -9,7 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .deps import get_db, verify_api_key
-from .routers import investment, op_logs, positions, reports, review, risk, schedules
+from .routers import investment, op_logs, positions, reports, review, risk, risk_rules, schedules
 
 
 @asynccontextmanager
@@ -28,6 +28,7 @@ app = FastAPI(
 
 app.include_router(positions.router, prefix="/positions", tags=["持倉"])
 app.include_router(risk.router,      prefix="/risk",      tags=["風控"])
+app.include_router(risk_rules.router, prefix="/risk-rules", tags=["風控規則配置"])
 app.include_router(investment.router, prefix="/investment", tags=["投資風險分析"])
 app.include_router(reports.router,   prefix="/reports",   tags=["報表生成"])
 app.include_router(schedules.router, prefix="/schedules", tags=["定時報表"])

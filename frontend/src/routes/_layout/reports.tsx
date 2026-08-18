@@ -260,7 +260,7 @@ function ReportCard({
 
   const handleDownload = async (filename: string) => {
     setDownloadingFile(filename)
-    try { await fsiApi.downloadReport(def.id, filename) }
+    try { await fsiApi.downloadReport(def.id, fundId, filename) }
     finally { setDownloadingFile(null) }
   }
 

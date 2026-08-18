@@ -6,7 +6,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Query
 
-from app.api.deps import CurrentUser, ProcessingClient
+from app.api.deps import PortfolioViewer, ProcessingClient
 
 router = APIRouter()
 
@@ -15,7 +15,7 @@ router = APIRouter()
 async def get_positions(
     fund_id: str,
     as_of_date: Annotated[date, Query(description="估值日期 YYYY-MM-DD")],
-    _user: CurrentUser,
+    _user: PortfolioViewer,
     client: ProcessingClient,
     asset_type: str | None = Query(default=None, description="資產類別過濾（bond/cd/deposit/repo...）"),
 ) -> Any:

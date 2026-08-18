@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import { CheckCircle2, XCircle } from "lucide-react"
+import { useMemo } from "react"
 import { useState } from "react"
 
 import { FUNDS, FsiToolbar, lastTradeDate } from "@/components/FsiToolbar"
@@ -70,8 +71,19 @@ const SFC_RULES = [
   },
 ]
 
-function RuleRow({ rule, data }: { rule: (typeof SFC_RULES)[number]; data: ExposureResult }) {
-  const breach = data.breach_flags.includes(rule.code)
+function RuleRow({
+  name,
+  limit,
+  value,
+  breach,
+  source,
+}: {
+  name: string
+  limit: string
+  value: string
+  breach: boolean
+  source?: string
+}) {
   return (
     <div className="flex items-center justify-between py-3 border-b last:border-0">
       <div className="flex items-center gap-3">
@@ -79,12 +91,13 @@ function RuleRow({ rule, data }: { rule: (typeof SFC_RULES)[number]; data: Expos
           ? <XCircle className="h-4 w-4 text-destructive shrink-0" />
           : <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />}
         <div>
-          <p className="text-sm font-medium">{rule.name}</p>
-          <p className="text-xs text-muted-foreground">{rule.limit}</p>
+          <p className="text-sm font-medium">{name}</p>
+          <p className="text-xs text-muted-foreground">{limit}</p>
+          {source ? <p className="text-xs text-muted-foreground">{source}</p> : null}
         </div>
       </div>
       <div className="flex items-center gap-3">
-        <span className="text-sm font-mono">{rule.getValue(data)}</span>
+        <span className="text-sm font-mono">{value}</span>
         <Badge
           variant={breach ? "destructive" : "outline"}
           className="w-14 justify-center text-xs"
@@ -107,6 +120,41 @@ function CompliancePage() {
     gcTime: 0,
     retry: 1,
   })
+
+  const renderedRules = useMemo(() => {
+    if (!data) return []
+    if (data.compliance_details?.length) {
+      return data.compliance_details.map((detail) => {
+        const value = detail.unit === "PCT"
+          ? `${detail.current_value.toFixed(2)}%`
+          : `${detail.current_value.toFixed(1)} 天`
+        const limitValue = detail.unit === "PCT"
+          ? `${detail.limit_value}%`
+          : `${detail.limit_value} 天`
+        const trace = data.rule_trace?.[detail.rule_code]
+        const source = trace
+          ? `${trace.used_default ? "Default" : "Config"} (R:${trace.regulatory}/C:${trace.contract}/I:${trace.internal})`
+          : undefined
+        return {
+          key: detail.breach_code,
+          name: `${detail.rule_code} - ${detail.rule_name}`,
+          limit: `${detail.operator} ${limitValue}`,
+          value,
+          breach: detail.is_breached,
+          source,
+        }
+      })
+    }
+
+    return SFC_RULES.map((rule) => ({
+      key: rule.code,
+      name: rule.name,
+      limit: rule.limit,
+      value: rule.getValue(data),
+      breach: data.breach_flags.includes(rule.code),
+      source: undefined,
+    }))
+  }, [data])
 
   return (
     <div className="space-y-6">
@@ -158,11 +206,18 @@ function CompliancePage() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">第 8.2 章守則逐項核查</CardTitle>
+              <CardTitle className="text-base">第 8.2 章守則逐項核查（含通過項）</CardTitle>
             </CardHeader>
             <CardContent>
-              {SFC_RULES.map((rule) => (
-                <RuleRow key={rule.code} rule={rule} data={data} />
+              {renderedRules.map((rule) => (
+                <RuleRow
+                  key={rule.key}
+                  name={rule.name}
+                  limit={rule.limit}
+                  value={rule.value}
+                  breach={rule.breach}
+                  source={rule.source}
+                />
               ))}
             </CardContent>
           </Card>

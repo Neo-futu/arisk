@@ -31,6 +31,25 @@ export interface ExposureResult {
   weekly_liquid_pct: number
   is_compliant: boolean
   breach_flags: string[]
+  effective_limits?: Record<string, number>
+  compliance_details?: Array<{
+    rule_code: string
+    breach_code: string
+    rule_name: string
+    current_value: number
+    limit_value: number
+    operator: "<=" | ">="
+    unit: string
+    is_breached: boolean
+  }>
+  rule_trace?: Record<string, {
+    regulatory: number
+    contract: number
+    internal: number
+    total: number
+    used_default: boolean
+    direction: "MIN" | "MAX"
+  }>
   by_asset_type: Record<string, { mv_hkd: number; pct: number }>
   by_currency: Record<string, { mv_hkd: number; pct: number }>
   by_maturity_bucket: Record<string, { mv_hkd: number; pct: number }>
@@ -41,6 +60,109 @@ export interface ExposureLatestDateResult {
   fund_id: string
   requested_as_of_date: string
   effective_date: string | null
+}
+
+export type PortfolioAccessLevel = "VIEW" | "MANAGE"
+
+export interface AuthorizedPortfolio {
+  port_id: string
+  port_name: string
+  port_name_en?: string | null
+  port_type: string
+  base_currency: string
+  access_level: PortfolioAccessLevel
+  /** Business fund manager(s) from FSI master data (para_person). */
+  manager_name?: string | null
+  /** Platform login accounts (iam.user) granted MANAGE access. */
+  manage_users?: string | null
+}
+
+export interface AccessRoleSummary {
+  id: string
+  code: string
+  name: string
+}
+
+export interface MyAccessContext {
+  user_id: string
+  is_superuser: boolean
+  roles: AccessRoleSummary[]
+  permission_codes: string[]
+  menu_codes: string[]
+  menu_paths: string[]
+  portfolios: AuthorizedPortfolio[]
+  can_manage_access: boolean
+}
+
+export interface AccessRole extends AccessRoleSummary {
+  description?: string | null
+  is_active: boolean
+  permission_ids: string[]
+  menu_ids: string[]
+}
+
+export interface AccessPermission {
+  id: string
+  name: string
+  code: string
+  description?: string | null
+}
+
+export interface AccessMenu {
+  id: string
+  name: string
+  code: string
+  path?: string | null
+  sort_order: number
+  is_active: boolean
+}
+
+export interface PortfolioCatalogItem extends Omit<AuthorizedPortfolio, "access_level"> {
+  is_active: boolean
+}
+
+export interface AccessCatalog {
+  roles: AccessRole[]
+  permissions: AccessPermission[]
+  menus: AccessMenu[]
+  portfolios: PortfolioCatalogItem[]
+}
+
+export interface UserAccessConfiguration {
+  user_id: string
+  role_ids: string[]
+  portfolios: Array<{ port_id: string; access_level: PortfolioAccessLevel }>
+}
+
+export interface UserAccessGrant {
+  user_id: string
+  email: string
+  full_name: string | null
+  is_active: boolean
+  is_superuser: boolean
+  roles: AccessRoleSummary[]
+  portfolios: Array<{ port_id: string; port_name: string | null; access_level: PortfolioAccessLevel }>
+}
+
+export interface PortfolioDashboardItem extends AuthorizedPortfolio {
+  status: "ok" | "no_data" | "error"
+  effective_date?: string | null
+  total_nav_hkd?: number
+  wam_days?: number
+  wal_days?: number
+  is_compliant?: boolean
+  breach_count?: number
+  breach_flags?: string[]
+  error?: string
+}
+
+export interface PortfolioDashboardOverview {
+  requested_as_of_date: string
+  total: number
+  with_data: number
+  compliant: number
+  breached: number
+  portfolios: PortfolioDashboardItem[]
 }
 
 export interface VarResult {
@@ -63,6 +185,47 @@ export interface VarCompareResult {
   horizon_days: number
   results: VarResult[]
   max_var_pct_nav: number
+}
+
+export interface IndicatorSql {
+  id: string
+  title: string
+  sql: string
+}
+
+export interface PortfolioBasicInfo {
+  fund_id: string
+  as_of_date: string
+  data_date: string | null
+  portfolio: {
+    port_id: string
+    port_name: string
+    port_name_en?: string | null
+    port_type?: string | null
+    fund_category: "MONEY_MARKET" | "BOND" | "EQUITY" | "MIXED" | "OTHER"
+    base_currency?: string | null
+    inception_date?: string | null
+    close_date?: string | null
+    is_active?: boolean | null
+    is_mmf?: boolean | null
+    mmf_wam_limit_days?: number | null
+    mmf_wal_limit_days?: number | null
+    asset_mgr_id?: string | null
+    trustee_id?: string | null
+    custodian_id?: string | null
+  }
+  managers: Array<{
+    person_id: string
+    person_name: string
+    person_name_en?: string | null
+    role: string
+    is_lead: boolean
+    begin_date: string | null
+    end_date: string | null
+    email?: string | null
+    sfc_licence_no?: string | null
+    is_current: boolean
+  }>
 }
 
 export interface PortfolioOverviewResult {
@@ -102,12 +265,34 @@ export interface PortfolioOverviewResult {
     weight_pct: number
     unrealized_pnl: number | null
   }>
+  top_bonds: Array<{
+    security_code: string
+    security_name: string
+    market_id: string | null
+    issuer_name: string
+    sector: string
+    currency: string
+    market_value_base: number
+    weight_pct: number
+    accrued_interest: number | null
+    ytm: number | null
+    duration: number | null
+    coupon_rate: number | null
+    maturity_date: string | null
+    remaining_days: number | null
+    rating: string | null
+  }>
   stock_sectors: Array<{
     sector: string
     market_value_base: number
     weight_pct: number
     position_count: number
   }>
+  snapshot_dates?: {
+    asset: string | null
+    stock: string | null
+    bond: string | null
+  }
 }
 
 export interface PortfolioOverviewTimeseriesResult {
@@ -335,6 +520,16 @@ export interface PretradeRiskResult {
     issuer_pct_nav: number
     tracking_error_proxy_pct: number
   }
+  applied_rules?: Array<{
+    application_id: number
+    rule_type: string
+    code: string
+    name: string
+    dimension: string
+    limit_value: number
+    limit_unit: string
+    target_limit: string
+  }>
   breach_flags: string[]
   decision: "ALLOW" | "ALLOW_WITH_WARNING" | "BLOCK"
 }
@@ -477,6 +672,159 @@ export interface AgentTaskStatus {
   error?: string
 }
 
+// ── 風控規則配置 ────────────────────────────────────────────────
+export type RiskRuleType = "regulatory" | "contract" | "internal"
+
+export interface RiskRule {
+  id: number
+  rule_type: RiskRuleType
+  port_id: string
+  code: string
+  name: string
+  name_en: string | null
+  category: string | null
+  source: string | null
+  dimension: string
+  dimension_key: string | null
+  lower_limit: number | null
+  upper_limit: number | null
+  limit_unit: string
+  limit_direction: "MIN" | "MAX" | null
+  clause_ref: string | null
+  mandate_ref: string | null
+  client_name: string | null
+  breach_action: string | null
+  alert_pct: number | null
+  is_hard: boolean
+  effective_date: string
+  expiry_date: string | null
+  is_active: boolean
+  description: string | null
+  created_by: string | null
+  updated_by: string | null
+  created_at: string
+  updated_at: string
+  attachment_count?: number
+}
+
+export interface RiskRuleAttachment {
+  id: number
+  rule_type: RiskRuleType
+  rule_id: number
+  file_name: string
+  content_type: string
+  file_size: number
+  note: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface RiskRuleAttachmentListResponse {
+  items: RiskRuleAttachment[]
+  count: number
+}
+
+export interface RegulatoryRuleBriefItem {
+  code: string
+  name: string | null
+  name_en: string | null
+  dimension: string | null
+  limit_unit: string | null
+  clause_ref: string | null
+  description: string | null
+  active_count: number
+  total_count: number
+  limit_brief: string
+}
+
+export interface RegulatoryRuleBriefResponse {
+  items: RegulatoryRuleBriefItem[]
+  count: number
+}
+
+export type RuleApplyScope = "portfolio" | "trade" | "pretrade" | "posttrade"
+
+export interface RuleApplication {
+  application_id: number
+  rule_type: RiskRuleType
+  rule_id: number
+  rule_code: string | null
+  rule_name: string | null
+  rule_name_en: string | null
+  apply_scope: RuleApplyScope
+  port_id: string | null
+  strategy_code: string | null
+  instrument_type: string | null
+  trade_side: "BUY" | "SELL" | "BOTH" | null
+  priority: number
+  effective_date: string
+  expiry_date: string | null
+  is_active: boolean
+  note: string | null
+  created_by: string | null
+  updated_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface RuleApplicationPayload {
+  rule_type: RiskRuleType
+  rule_id: number
+  apply_scope: RuleApplyScope
+  port_id?: string | null
+  strategy_code?: string | null
+  instrument_type?: string | null
+  trade_side?: "BUY" | "SELL" | "BOTH" | null
+  priority: number
+  effective_date: string
+  expiry_date?: string | null
+  is_active: boolean
+  note?: string | null
+}
+
+export interface RuleApplicationListResponse {
+  items: RuleApplication[]
+  count: number
+}
+
+export interface RiskRulePayload {
+  rule_type: RiskRuleType
+  port_id: string
+  code: string
+  name: string
+  name_en?: string | null
+  category?: string | null
+  source?: string | null
+  dimension: string
+  dimension_key?: string | null
+  lower_limit?: number | null
+  upper_limit?: number | null
+  limit_unit: string
+  limit_direction?: "MIN" | "MAX" | null
+  clause_ref?: string | null
+  mandate_ref?: string | null
+  client_name?: string | null
+  breach_action?: string | null
+  alert_pct?: number | null
+  is_hard?: boolean
+  effective_date: string
+  expiry_date?: string | null
+  is_active?: boolean
+  description?: string | null
+}
+
+export interface RiskRuleListResponse {
+  items: RiskRule[]
+  count: number
+}
+
+export interface RiskRuleSummary {
+  by_type: Partial<Record<RiskRuleType, { total: number; active: number }>>
+  total: number
+  active: number
+}
+
 // ── 定時報表 ─────────────────────────────────────────────────────
 export interface Schedule {
   schedule_id: string
@@ -585,6 +933,58 @@ export interface ChatMessageRecord {
 // ── API 調用 ──────────────────────────────────────────────────────
 
 export const fsiApi = {
+  getMyAccessContext() {
+    return axios.get<MyAccessContext>(`${BASE}/api/v1/access-control/me`, { headers: authHeaders() })
+  },
+
+  getAccessCatalog() {
+    return axios.get<AccessCatalog>(`${BASE}/api/v1/access-control/catalog`, { headers: authHeaders() })
+  },
+
+  getUserAccess(userId: string) {
+    return axios.get<UserAccessConfiguration>(`${BASE}/api/v1/access-control/users/${userId}`, { headers: authHeaders() })
+  },
+
+  getAccessGrants() {
+    return axios.get<{ grants: UserAccessGrant[] }>(`${BASE}/api/v1/access-control/grants`, { headers: authHeaders() })
+  },
+
+  updateUserAccess(userId: string, data: Omit<UserAccessConfiguration, "user_id">) {
+    return axios.put<UserAccessConfiguration>(`${BASE}/api/v1/access-control/users/${userId}`, data, { headers: authHeaders() })
+  },
+
+  updateRoleAccess(roleId: string, data: {
+    name: string
+    description?: string | null
+    is_active: boolean
+    permission_ids: string[]
+    menu_ids: string[]
+  }) {
+    return axios.put<AccessRole>(`${BASE}/api/v1/access-control/roles/${roleId}`, data, { headers: authHeaders() })
+  },
+
+  createRole(data: {
+    name: string
+    code: string
+    description?: string | null
+    is_active: boolean
+    permission_ids: string[]
+    menu_ids: string[]
+  }) {
+    return axios.post<AccessRole>(`${BASE}/api/v1/access-control/roles`, data, { headers: authHeaders() })
+  },
+
+  deleteRole(roleId: string) {
+    return axios.delete<{ message: string }>(`${BASE}/api/v1/access-control/roles/${roleId}`, { headers: authHeaders() })
+  },
+
+  getDashboardOverview(asOfDate: string) {
+    return axios.get<PortfolioDashboardOverview>(`${BASE}/api/v1/fsi/risk/dashboard-overview`, {
+      params: { as_of_date: asOfDate },
+      headers: authHeaders(),
+    })
+  },
+
   /** 投資風險分析：組合概況 */
   getPortfolioOverview(fundId: string, asOfDate: string) {
     return axios.get<PortfolioOverviewResult>(
@@ -598,6 +998,22 @@ export const fsiApi = {
     return axios.get<PortfolioOverviewTimeseriesResult>(
       `${BASE}/api/v1/fsi/investment/overview-timeseries/${fundId}`,
       { params: { start, end }, headers: authHeaders() },
+    )
+  },
+
+  /** 投資風險分析：基金基本信息與投資經理 */
+  getBasicInfo(fundId: string, asOfDate: string) {
+    return axios.get<PortfolioBasicInfo>(
+      `${BASE}/api/v1/fsi/investment/basic-info/${fundId}`,
+      { params: { as_of_date: asOfDate }, headers: authHeaders() },
+    )
+  },
+
+  /** 風控指標 SQL 片段目錄（查看SQL） */
+  getIndicatorSqlCatalog() {
+    return axios.get<{ items: IndicatorSql[] }>(
+      `${BASE}/api/v1/fsi/indicator-sql/`,
+      { headers: authHeaders() },
     )
   },
 
@@ -771,6 +1187,106 @@ export const fsiApi = {
     )
   },
 
+  // ── 風控規則配置 API ──────────────────────────────────────────
+  listRiskRules(params?: {
+    ruleType?: RiskRuleType
+    fundId?: string
+    activeOnly?: boolean
+    search?: string
+    skip?: number
+    limit?: number
+  }) {
+    return axios.get<RiskRuleListResponse>(`${BASE}/api/v1/fsi/risk-rules/`, {
+      params: {
+        rule_type: params?.ruleType,
+        fund_id: params?.fundId,
+        active_only: params?.activeOnly ?? false,
+        search: params?.search,
+        skip: params?.skip ?? 0,
+        limit: params?.limit ?? 200,
+      },
+      headers: authHeaders(),
+    })
+  },
+  getRiskRuleSummary() {
+    return axios.get<RiskRuleSummary>(`${BASE}/api/v1/fsi/risk-rules/summary`, { headers: authHeaders() })
+  },
+  createRiskRule(data: RiskRulePayload) {
+    return axios.post<RiskRule>(`${BASE}/api/v1/fsi/risk-rules/`, data, { headers: authHeaders() })
+  },
+  updateRiskRule(ruleType: RiskRuleType, ruleId: number, data: Partial<RiskRulePayload>) {
+    return axios.patch<RiskRule>(`${BASE}/api/v1/fsi/risk-rules/${ruleType}/${ruleId}`, data, { headers: authHeaders() })
+  },
+  deactivateRiskRule(ruleType: RiskRuleType, ruleId: number) {
+    return axios.delete<RiskRule>(`${BASE}/api/v1/fsi/risk-rules/${ruleType}/${ruleId}`, { headers: authHeaders() })
+  },
+  listRiskRuleAttachments(ruleType: RiskRuleType, ruleId: number) {
+    return axios.get<RiskRuleAttachmentListResponse>(`${BASE}/api/v1/fsi/risk-rules/${ruleType}/${ruleId}/attachments`, {
+      headers: authHeaders(),
+    })
+  },
+  uploadRiskRuleAttachment(ruleType: RiskRuleType, ruleId: number, file: File, note?: string) {
+    const form = new FormData()
+    form.append("file", file)
+    if (note) form.append("note", note)
+    return axios.post<RiskRuleAttachment>(`${BASE}/api/v1/fsi/risk-rules/${ruleType}/${ruleId}/attachments`, form, {
+      headers: { ...authHeaders(), "Content-Type": "multipart/form-data" },
+    })
+  },
+  downloadRiskRuleAttachment(attachmentId: number) {
+    return axios.get<Blob>(`${BASE}/api/v1/fsi/risk-rules/attachment-files/${attachmentId}/download`, {
+      responseType: "blob",
+      headers: authHeaders(),
+    })
+  },
+  deleteRiskRuleAttachment(attachmentId: number) {
+    return axios.delete<{ ok: boolean; attachment_id: number }>(`${BASE}/api/v1/fsi/risk-rules/attachment-files/${attachmentId}`, {
+      headers: authHeaders(),
+    })
+  },
+  bootstrapRegulatoryRules(effectiveDate = "2024-01-01") {
+    return axios.post<{ inserted: number; active_regulatory_total: number; effective_date: string }>(
+      `${BASE}/api/v1/fsi/risk-rules/regulatory/bootstrap`,
+      null,
+      { params: { effective_date: effectiveDate }, headers: authHeaders() },
+    )
+  },
+  getRegulatoryRuleBrief(fundId?: string, activeOnly = true) {
+    return axios.get<RegulatoryRuleBriefResponse>(`${BASE}/api/v1/fsi/risk-rules/regulatory-brief`, {
+      params: { fund_id: fundId, active_only: activeOnly },
+      headers: authHeaders(),
+    })
+  },
+  listRuleApplications(params?: {
+    applyScope?: RuleApplyScope
+    fundId?: string
+    activeOnly?: boolean
+    skip?: number
+    limit?: number
+  }) {
+    return axios.get<RuleApplicationListResponse>(`${BASE}/api/v1/fsi/risk-rules/applications`, {
+      params: {
+        apply_scope: params?.applyScope,
+        fund_id: params?.fundId,
+        active_only: params?.activeOnly ?? false,
+        skip: params?.skip ?? 0,
+        limit: params?.limit ?? 200,
+      },
+      headers: authHeaders(),
+    })
+  },
+  createRuleApplication(data: RuleApplicationPayload) {
+    return axios.post<RuleApplication>(`${BASE}/api/v1/fsi/risk-rules/applications`, data, { headers: authHeaders() })
+  },
+  updateRuleApplication(applicationId: number, data: Partial<RuleApplicationPayload>) {
+    return axios.patch<RuleApplication>(`${BASE}/api/v1/fsi/risk-rules/applications/item/${applicationId}`, data, { headers: authHeaders() })
+  },
+  deactivateRuleApplication(applicationId: number) {
+    return axios.delete<{ application_id: number; is_active: boolean }>(`${BASE}/api/v1/fsi/risk-rules/applications/item/${applicationId}`, {
+      headers: authHeaders(),
+    })
+  },
+
   chat(payload: AgentTaskRequest) {
     return axios.post<AgentChatResponse>(
       `${BASE}/api/v1/fsi/agent/chat`,
@@ -861,10 +1377,10 @@ export const fsiApi = {
   },
 
   /** 下載報表文件（axios blob → 觸發瀏覽器另存） */
-  async downloadReport(reportId: string, filename: string): Promise<void> {
+  async downloadReport(reportId: string, fundId: string, filename: string): Promise<void> {
     const resp = await axios.get(
       `${BASE}/api/v1/fsi/reports/download/${reportId}/${encodeURIComponent(filename)}`,
-      { headers: authHeaders(), responseType: "blob" },
+      { params: { fund_id: fundId }, headers: authHeaders(), responseType: "blob" },
     )
     const url = URL.createObjectURL(new Blob([resp.data]))
     const a = document.createElement("a")

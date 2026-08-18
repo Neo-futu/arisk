@@ -17,6 +17,7 @@ import { Route as LayoutRouteImport } from './routes/_layout'
 import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
 import { Route as LayoutSettingsRouteImport } from './routes/_layout/settings'
 import { Route as LayoutSchedulesRouteImport } from './routes/_layout/schedules'
+import { Route as LayoutRiskRulesRouteImport } from './routes/_layout/risk-rules'
 import { Route as LayoutRiskRouteImport } from './routes/_layout/risk'
 import { Route as LayoutReportsRouteImport } from './routes/_layout/reports'
 import { Route as LayoutPositionsRouteImport } from './routes/_layout/positions'
@@ -77,6 +78,11 @@ const LayoutSettingsRoute = LayoutSettingsRouteImport.update({
 const LayoutSchedulesRoute = LayoutSchedulesRouteImport.update({
   id: '/schedules',
   path: '/schedules',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutRiskRulesRoute = LayoutRiskRulesRouteImport.update({
+  id: '/risk-rules',
+  path: '/risk-rules',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutRiskRoute = LayoutRiskRouteImport.update({
@@ -218,6 +224,7 @@ export interface FileRoutesByFullPath {
   '/positions': typeof LayoutPositionsRoute
   '/reports': typeof LayoutReportsRoute
   '/risk': typeof LayoutRiskRoute
+  '/risk-rules': typeof LayoutRiskRulesRoute
   '/schedules': typeof LayoutSchedulesRoute
   '/settings': typeof LayoutSettingsRoute
   '/investment-risk/attribution': typeof LayoutInvestmentRiskAttributionRoute
@@ -247,6 +254,7 @@ export interface FileRoutesByTo {
   '/positions': typeof LayoutPositionsRoute
   '/reports': typeof LayoutReportsRoute
   '/risk': typeof LayoutRiskRoute
+  '/risk-rules': typeof LayoutRiskRulesRoute
   '/schedules': typeof LayoutSchedulesRoute
   '/settings': typeof LayoutSettingsRoute
   '/': typeof LayoutIndexRoute
@@ -280,6 +288,7 @@ export interface FileRoutesById {
   '/_layout/positions': typeof LayoutPositionsRoute
   '/_layout/reports': typeof LayoutReportsRoute
   '/_layout/risk': typeof LayoutRiskRoute
+  '/_layout/risk-rules': typeof LayoutRiskRulesRoute
   '/_layout/schedules': typeof LayoutSchedulesRoute
   '/_layout/settings': typeof LayoutSettingsRoute
   '/_layout/': typeof LayoutIndexRoute
@@ -314,6 +323,7 @@ export interface FileRouteTypes {
     | '/positions'
     | '/reports'
     | '/risk'
+    | '/risk-rules'
     | '/schedules'
     | '/settings'
     | '/investment-risk/attribution'
@@ -343,6 +353,7 @@ export interface FileRouteTypes {
     | '/positions'
     | '/reports'
     | '/risk'
+    | '/risk-rules'
     | '/schedules'
     | '/settings'
     | '/'
@@ -375,6 +386,7 @@ export interface FileRouteTypes {
     | '/_layout/positions'
     | '/_layout/reports'
     | '/_layout/risk'
+    | '/_layout/risk-rules'
     | '/_layout/schedules'
     | '/_layout/settings'
     | '/_layout/'
@@ -454,6 +466,13 @@ declare module '@tanstack/react-router' {
       path: '/schedules'
       fullPath: '/schedules'
       preLoaderRoute: typeof LayoutSchedulesRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/risk-rules': {
+      id: '/_layout/risk-rules'
+      path: '/risk-rules'
+      fullPath: '/risk-rules'
+      preLoaderRoute: typeof LayoutRiskRulesRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/risk': {
@@ -659,6 +678,7 @@ interface LayoutRouteChildren {
   LayoutPositionsRoute: typeof LayoutPositionsRoute
   LayoutReportsRoute: typeof LayoutReportsRoute
   LayoutRiskRoute: typeof LayoutRiskRoute
+  LayoutRiskRulesRoute: typeof LayoutRiskRulesRoute
   LayoutSchedulesRoute: typeof LayoutSchedulesRoute
   LayoutSettingsRoute: typeof LayoutSettingsRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
@@ -677,6 +697,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutPositionsRoute: LayoutPositionsRoute,
   LayoutReportsRoute: LayoutReportsRoute,
   LayoutRiskRoute: LayoutRiskRoute,
+  LayoutRiskRulesRoute: LayoutRiskRulesRoute,
   LayoutSchedulesRoute: LayoutSchedulesRoute,
   LayoutSettingsRoute: LayoutSettingsRoute,
   LayoutIndexRoute: LayoutIndexRoute,

@@ -11,6 +11,7 @@ from ...tools.performance.investment_analysis import (
     compute_macro_market_dynamics,
     compute_performance_attribution,
     compute_performance_attribution_timeseries,
+    compute_portfolio_basic_info,
     compute_portfolio_overview,
     compute_portfolio_overview_timeseries,
     compute_pretrade_risk_budget,
@@ -21,6 +22,16 @@ from ...tools.performance.investment_analysis import (
 from ..deps import get_db, verify_api_key
 
 router = APIRouter(dependencies=[Depends(verify_api_key)])
+
+
+@router.get("/basic-info/{fund_id}")
+async def get_portfolio_basic_info(
+    fund_id: str,
+    as_of_date: Annotated[date, Query(description="估值日期 YYYY-MM-DD")],
+    db: AsyncSession = Depends(get_db),
+):
+    """基金基本信息：主數據、資金類型、最近數據日與投資經理任職記錄。"""
+    return await compute_portfolio_basic_info(fund_id, as_of_date, db)
 
 
 @router.get("/overview/{fund_id}")

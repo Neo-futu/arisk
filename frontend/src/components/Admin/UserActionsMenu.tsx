@@ -11,6 +11,7 @@ import {
 import useAuth from "@/hooks/useAuth"
 import DeleteUser from "./DeleteUser"
 import EditUser from "./EditUser"
+import UserAccessDialog from "./UserAccessDialog"
 
 interface UserActionsMenuProps {
   user: UserPublic
@@ -32,6 +33,7 @@ export const UserActionsMenu = ({ user }: UserActionsMenuProps) => {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
+        <UserAccessDialog user={user} onSuccess={() => setOpen(false)} />
         <EditUser user={user} onSuccess={() => setOpen(false)} />
         <DeleteUser id={user.id} onSuccess={() => setOpen(false)} />
       </DropdownMenuContent>

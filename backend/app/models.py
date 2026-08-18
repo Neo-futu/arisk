@@ -4,7 +4,7 @@ import uuid
 from datetime import UTC, datetime
 
 from pydantic import EmailStr
-from sqlalchemy import DateTime
+from sqlalchemy import CheckConstraint, DateTime
 from sqlmodel import Field, SQLModel
 
 IAM_SCHEMA  = "iam"     # 用戶身份認證 + 用戶個人配置
@@ -200,6 +200,45 @@ class RoleMenu(SQLModel, table=True):
         foreign_key=f"{IAM_SCHEMA}.menu.id", primary_key=True, ondelete="CASCADE"
     )
     created_at: datetime | None = Field(
+        default_factory=get_datetime_utc,
+        sa_type=DateTime(timezone=True),  # type: ignore
+    )
+
+
+class UserPortfolioAccess(SQLModel, table=True):
+    """A user's effective business access to one investment portfolio.
+
+    VIEW grants read/oversight access. MANAGE includes VIEW and additionally
+    permits investment-management and trade-related operations when the user
+    also has the matching global role permission.
+    """
+
+    __tablename__ = "user_portfolio_access"
+    __table_args__ = (
+        CheckConstraint(
+            "access_level IN ('VIEW', 'MANAGE')",
+            name="ck_user_portfolio_access_level",
+        ),
+        {"schema": IAM_SCHEMA},
+    )
+
+    user_id: uuid.UUID = Field(
+        foreign_key=f"{IAM_SCHEMA}.user.id",
+        primary_key=True,
+        ondelete="CASCADE",
+    )
+    port_id: str = Field(primary_key=True, max_length=16, index=True)
+    access_level: str = Field(max_length=16)
+    granted_by: uuid.UUID | None = Field(
+        default=None,
+        foreign_key=f"{IAM_SCHEMA}.user.id",
+        ondelete="SET NULL",
+    )
+    created_at: datetime = Field(
+        default_factory=get_datetime_utc,
+        sa_type=DateTime(timezone=True),  # type: ignore
+    )
+    updated_at: datetime = Field(
         default_factory=get_datetime_utc,
         sa_type=DateTime(timezone=True),  # type: ignore
     )

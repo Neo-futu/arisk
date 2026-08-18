@@ -15,6 +15,7 @@ from app.core import security
 from app.core.config import settings
 from app.core.db import engine
 from app.models import TokenPayload, User, UserApiKey
+from app.services.portfolio_access import ensure_global_permission, ensure_portfolio_access
 
 reusable_oauth2 = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/login/access-token",
@@ -82,6 +83,61 @@ def get_current_user(
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+def require_portfolio_view(
+    fund_id: str,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> User:
+    ensure_portfolio_access(session, current_user, fund_id, "VIEW")
+    return current_user
+
+
+def require_portfolio_manage(
+    fund_id: str,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> User:
+    ensure_portfolio_access(
+        session,
+        current_user,
+        fund_id,
+        "MANAGE",
+        permission_code="portfolio.manage",
+    )
+    return current_user
+
+
+def require_portfolio_trade_manage(
+    fund_id: str,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> User:
+    ensure_portfolio_access(
+        session,
+        current_user,
+        fund_id,
+        "MANAGE",
+        permission_code="trade.manage",
+    )
+    return current_user
+
+
+PortfolioViewer = Annotated[User, Depends(require_portfolio_view)]
+PortfolioManager = Annotated[User, Depends(require_portfolio_manage)]
+PortfolioTradeManager = Annotated[User, Depends(require_portfolio_trade_manage)]
+
+
+def get_current_access_admin(
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> User:
+    ensure_global_permission(session, current_user, "iam.access.manage")
+    return current_user
+
+
+AccessAdmin = Annotated[User, Depends(get_current_access_admin)]
 
 
 def get_current_active_superuser(current_user: CurrentUser) -> User:

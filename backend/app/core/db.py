@@ -1,3 +1,4 @@
+from sqlalchemy import text
 from sqlmodel import Session, create_engine, select
 
 from app import crud
@@ -31,3 +32,23 @@ def init_db(session: Session) -> None:
             is_superuser=True,
         )
         user = crud.create_user(session=session, user_create=user_in)
+
+    # Ensure the bootstrap superuser holds SYSTEM_ADMIN so a fresh install (where the
+    # superuser is created after the RBAC seed migration) still lands in a usable state.
+    # Guarded so it is a no-op until the RBAC seed migration has run.
+    try:
+        session.execute(
+            text(
+                """
+                INSERT INTO iam.user_role (user_id, role_id, created_at)
+                SELECT :user_id, r.id, NOW()
+                FROM iam.role r
+                WHERE r.code = 'SYSTEM_ADMIN'
+                ON CONFLICT DO NOTHING
+                """
+            ),
+            {"user_id": user.id},
+        )
+        session.commit()
+    except Exception:
+        session.rollback()

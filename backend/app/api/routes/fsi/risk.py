@@ -4,12 +4,14 @@
 """
 from __future__ import annotations
 
+import asyncio
 from datetime import date
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.api.deps import CurrentUser, ProcessingClient
+from app.api.deps import CurrentUser, PortfolioViewer, ProcessingClient, SessionDep
+from app.services.portfolio_access import list_accessible_portfolios
 
 router = APIRouter()
 
@@ -26,11 +28,70 @@ async def _proxy(
     return resp.json()
 
 
+@router.get("/dashboard-overview", summary="当前用户全部有权组合风控概览")
+async def get_dashboard_overview(
+    as_of_date: Annotated[date, Query(description="参考日期 YYYY-MM-DD")],
+    current_user: CurrentUser,
+    session: SessionDep,
+    client: ProcessingClient,
+) -> dict[str, Any]:
+    portfolios = list_accessible_portfolios(session, current_user)
+
+    async def load_portfolio(portfolio: dict[str, object]) -> dict[str, Any]:
+        fund_id = str(portfolio["port_id"])
+        latest_response = await client.get(
+            f"/risk/exposure-latest-date/{fund_id}",
+            params={"as_of_date": str(as_of_date)},
+        )
+        if latest_response.status_code != 200:
+            return {**portfolio, "status": "error", "error": latest_response.text}
+
+        latest_payload = latest_response.json()
+        effective_date = latest_payload.get("effective_date")
+        if not effective_date:
+            return {**portfolio, "status": "no_data", "effective_date": None}
+
+        exposure_response = await client.get(
+            f"/risk/exposure/{fund_id}",
+            params={"as_of_date": effective_date},
+        )
+        if exposure_response.status_code != 200:
+            return {
+                **portfolio,
+                "status": "error",
+                "effective_date": effective_date,
+                "error": exposure_response.text,
+            }
+        exposure = exposure_response.json()
+        return {
+            **portfolio,
+            "status": "ok",
+            "effective_date": effective_date,
+            "total_nav_hkd": exposure.get("total_nav_hkd", 0),
+            "wam_days": exposure.get("wam_days", 0),
+            "wal_days": exposure.get("wal_days", 0),
+            "is_compliant": exposure.get("is_compliant", False),
+            "breach_count": len(exposure.get("breach_flags") or []),
+            "breach_flags": exposure.get("breach_flags") or [],
+        }
+
+    items = await asyncio.gather(*(load_portfolio(item) for item in portfolios))
+    ok_items = [item for item in items if item.get("status") == "ok"]
+    return {
+        "requested_as_of_date": str(as_of_date),
+        "total": len(items),
+        "with_data": len(ok_items),
+        "compliant": sum(1 for item in ok_items if item.get("is_compliant")),
+        "breached": sum(1 for item in ok_items if not item.get("is_compliant")),
+        "portfolios": items,
+    }
+
+
 @router.get("/exposure/{fund_id}", summary="暴露分析 + SFC MMF 合規狀態")
 async def get_exposure(
     fund_id: str,
     as_of_date: Annotated[date, Query(description="估值日期 YYYY-MM-DD")],
-    _user: CurrentUser,
+    _user: PortfolioViewer,
     client: ProcessingClient,
 ) -> Any:
     """WAM / WAL / 流動性 / 集中度 / 合規狀態（代理 processing /risk/exposure）。"""
@@ -41,7 +102,7 @@ async def get_exposure(
 async def get_exposure_latest_date(
     fund_id: str,
     as_of_date: Annotated[date, Query(description="參考日期 YYYY-MM-DD")],
-    _user: CurrentUser,
+    _user: PortfolioViewer,
     client: ProcessingClient,
 ) -> Any:
     """返回基金在參考日期之前（含當天）的最新可用暴露數據日期。"""
@@ -52,7 +113,7 @@ async def get_exposure_latest_date(
 async def get_var(
     fund_id: str,
     as_of_date: Annotated[date, Query()],
-    _user: CurrentUser,
+    _user: PortfolioViewer,
     client: ProcessingClient,
     confidence: float = 0.99,
     horizon_days: int = 1,
@@ -77,7 +138,7 @@ async def get_var(
 async def get_var_compare(
     fund_id: str,
     as_of_date: Annotated[date, Query()],
-    _user: CurrentUser,
+    _user: PortfolioViewer,
     client: ProcessingClient,
     confidence: float = 0.99,
     horizon_days: int = 1,

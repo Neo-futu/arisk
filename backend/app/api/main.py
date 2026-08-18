@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.routes import (
+    access_control,
     api_keys,
     items,
     login,
@@ -22,6 +23,7 @@ api_router = APIRouter()
 # ── 模板原有路由（認證 / 用戶管理 / 工具） ─────────────────────
 api_router.include_router(login.router)
 api_router.include_router(users.router)
+api_router.include_router(access_control.router)
 api_router.include_router(utils.router)
 api_router.include_router(items.router)
 api_router.include_router(api_keys.router, prefix="/api-keys", tags=["User API Keys"])

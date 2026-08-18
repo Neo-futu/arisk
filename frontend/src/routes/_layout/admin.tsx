@@ -4,10 +4,13 @@ import { Suspense } from "react"
 
 import { type UserPublic, UsersService } from "@/client"
 import AddUser from "@/components/Admin/AddUser"
+import RoleAccessPanel from "@/components/Admin/RoleAccessPanel"
+import UserPortfolioAccessPanel from "@/components/Admin/UserPortfolioAccessPanel"
 import { columns, type UserTableData } from "@/components/Admin/columns"
 import { DataTable } from "@/components/Common/DataTable"
 import PendingUsers from "@/components/Pending/PendingUsers"
 import useAuth from "@/hooks/useAuth"
+import { fsiApi } from "@/fsiClient"
 
 function getUsersQueryOptions() {
   return {
@@ -19,8 +22,8 @@ function getUsersQueryOptions() {
 export const Route = createFileRoute("/_layout/admin")({
   component: Admin,
   beforeLoad: async () => {
-    const user = await UsersService.readUserMe()
-    if (!user.is_superuser) {
+    const access = await fsiApi.getMyAccessContext().then((response) => response.data)
+    if (!access.can_manage_access) {
       throw redirect({
         to: "/",
       })
@@ -60,14 +63,16 @@ function Admin() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Users</h1>
+          <h1 className="text-2xl font-bold tracking-tight">用户与权限管理</h1>
           <p className="text-muted-foreground">
-            Manage user accounts and permissions
+            管理用户、平台角色、菜单权限，以及组合查看与投资管理授权。
           </p>
         </div>
         <AddUser />
       </div>
       <UsersTable />
+      <UserPortfolioAccessPanel />
+      <RoleAccessPanel />
     </div>
   )
 }

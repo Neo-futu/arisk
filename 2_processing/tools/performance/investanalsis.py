@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from .investment_analysis_attribution import compute_performance_attribution
+from .investment_analysis_basic_info import compute_portfolio_basic_info
 from .investment_analysis_factor import compute_factor_behavior_risk
 from .investment_analysis_liquidity_stress import compute_liquidity_stress_testing
 from .investment_analysis_macro import compute_macro_market_dynamics
@@ -17,6 +18,7 @@ from .investment_analysis_timeseries import (
 
 __all__ = [
     "compute_portfolio_overview",
+    "compute_portfolio_basic_info",
     "compute_risk_indicators",
     "compute_performance_attribution",
     "compute_rates_credit_sensitivity",

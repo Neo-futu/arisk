@@ -10,7 +10,7 @@ from datetime import date, timedelta
 from sqlalchemy import and_, desc, func, literal, or_, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .exposure_domain import ExposureResult, check_mmf_compliance
+from .exposure_domain import ExposureResult, evaluate_mmf_compliance
 from .exposure_models import (
     BalanceBond,
     BalanceCash,
@@ -21,6 +21,7 @@ from .exposure_models import (
     BalancePortfolioNav,
     BalanceRepo,
 )
+from .rule_limits import load_effective_mmf_limits_with_trace
 
 logger = logging.getLogger(__name__)
 
@@ -182,7 +183,12 @@ async def compute_exposure_orm(
         result.by_issuer[issuer] = mv
         result.by_group[group] = result.by_group.get(group, 0) + mv
 
-    result.breach_flags = check_mmf_compliance(result, nav)
+    limits, trace = await load_effective_mmf_limits_with_trace(db, fund_id, as_of_date)
+    flags, details, effective = evaluate_mmf_compliance(result, nav, limits)
+    result.effective_limits = effective
+    result.compliance_details = details
+    result.rule_trace = trace
+    result.breach_flags = flags
     result.is_compliant = not any(result.breach_flags.values())
     return result
 

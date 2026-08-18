@@ -26,9 +26,9 @@ python scripts/dev.py --parts processing entry backend frontend autorisk mcp-gat
 |---|---|---|---|---|
 | 基金/日期選擇與最近有效日回退 | 查詢指定日期之前最近可用風控數據日期 | fsi.balance_portfolio_nav | SQL-DB-01 | PY-DB-01 |
 | 總 NAV | 展示基金在查詢日的總資產淨值（HKD） | fsi.balance_portfolio_nav | SQL-DB-NAV-01 | PY-DB-01 |
-| 風控 KPI（NAV/WAM/WAL/合規） | 展示核心風控與合規狀態 | fsi.balance_portfolio_nav, fsi.balance_portfolio_asset, fsi.balance_bond, fsi.balance_cd, fsi.balance_deposit, fsi.balance_repo, fsi.balance_cash | SQL-DB-02 | PY-DB-01 |
-| SFC 合規明細 | 顯示 WAM/WAL/日流動性/週流動性規則 | 同上 | SQL-DB-02 | PY-DB-01 |
-| 資產配置（%NAV） | 顯示資產類別占比結構 | fsi.balance_portfolio_asset, fsi.balance_portfolio_mmf | SQL-DB-03 | PY-DB-01 |
+| 風控 KPI（NAV/WAM/WAL/合規） | 展示核心風控與合規狀態 | fsi.balance_portfolio_nav, fsi.balance_portfolio_mmf, fsi.balance_bond, fsi.balance_cd, fsi.balance_deposit, fsi.balance_repo, fsi.balance_cash | SQL-DB-KPI-01 | PY-DB-01 |
+| SFC 合規明細 | 顯示 WAM/WAL/日流動性/週流動性規則（含每條通過/未通過） | fsi.balance_portfolio_nav, fsi.balance_portfolio_mmf, fsi.balance_bond, fsi.balance_cd, fsi.balance_deposit, fsi.balance_repo, fsi.balance_cash | SQL-DB-SFC-LIST-01 | PY-DB-01 |
+| 資產配置（%NAV） | 顯示資產類別占比結構 | fsi.balance_portfolio_asset, fsi.balance_portfolio_mmf | SQL-DB-ALLOC-01 | PY-DB-01 |
 
 ### 2.1 模塊總覽頁（/investment-risk）
 
@@ -52,7 +52,10 @@ python scripts/dev.py --parts processing entry backend frontend autorisk mcp-gat
 | 總體業績（表） | 多區間收益明細 | fsi.balance_portfolio_nav | SQL-OV-02 | PY-OV-01 |
 | 資產配置（表） | 類別、市值、佔比 | fsi.balance_portfolio_asset | SQL-OV-03 | PY-OV-01 |
 | 前十大個股（搜索/導出） | 持倉股明細 | fsi.balance_stock | SQL-OV-04 | PY-OV-01 |
+| 前十大個券（搜索/導出） | 持倉債明細（YTM/久期/評級/到期） | fsi.balance_bond | SQL-OV-06 | PY-OV-01 |
 | 股票行業配置 | 行業聚合分佈 | fsi.balance_stock | SQL-OV-05 | PY-OV-01 |
+
+> 注：持倉類模塊（資產配置、個股、個券）採用「≤ as_of_date 的最近快照日」回退，與風控儀表盤一致；返回 `snapshot_dates` 標示各表實際採用的日期。貨幣市場基金（如 BHMMF001）無股票持倉，個股/行業表為空屬正常，個券表提供其債券/存單持倉。
 
 ### 2.3 風險指標頁（/investment-risk/indicators）
 
@@ -165,23 +168,423 @@ WHERE port_id = 'BHMMF001'
   AND evaluate_date = '2026-06-25';
 ```
 
-### SQL-DB-02 儀表板合規核心數據
+### SQL-DB-KPI-01 儀表板風控 KPI（NAV/WAM/WAL/合規）
 
 ```sql
-SELECT net_asset
-FROM fsi.balance_portfolio_nav
-WHERE port_id = 'BHMMF001'
-  AND evaluate_date = '2026-06-25';
-
+WITH base AS (
+  SELECT 'BHMMF001'::text AS fid,
+         '2026-06-25'::date AS dt
+),
+nav AS (
+  SELECT COALESCE(MAX(net_asset), 0)::numeric AS nav
+  FROM fsi.balance_portfolio_nav n, base b
+  WHERE n.port_id = b.fid
+    AND n.evaluate_date = b.dt
+    AND n.class_id IS NULL
+),
+mmf AS (
+  SELECT
+    COALESCE(MAX(wam_days), 0)::numeric AS wam_days,
+    COALESCE(MAX(wal_days), 0)::numeric AS wal_days
+  FROM fsi.balance_portfolio_mmf m, base b
+  WHERE m.port_id = b.fid
+    AND m.evaluate_date = b.dt
+),
+cash AS (
+  SELECT COALESCE(SUM(amount_base_ccy), SUM(amount), 0)::numeric AS cash_v
+  FROM fsi.balance_cash c, base b
+  WHERE c.port_id = b.fid
+    AND c.evaluate_date = b.dt
+),
+dla_govbond AS (
+  SELECT COALESCE(SUM(market_value), 0)::numeric AS v
+  FROM fsi.balance_bond x, base b
+  WHERE x.port_id = b.fid
+    AND x.evaluate_date = b.dt
+    AND x.asset_subtype = 'BOND_GOVT'
+    AND x.maturity_date <= b.dt + INTERVAL '1 day'
+),
+dla_cd AS (
+  SELECT COALESCE(SUM(market_value), 0)::numeric AS v
+  FROM fsi.balance_cd x, base b
+  WHERE x.port_id = b.fid
+    AND x.evaluate_date = b.dt
+    AND x.maturity_date <= b.dt + INTERVAL '1 day'
+),
+dla_deposit AS (
+  SELECT COALESCE(SUM(principal), 0)::numeric AS v
+  FROM fsi.balance_deposit x, base b
+  WHERE x.port_id = b.fid
+    AND x.evaluate_date = b.dt
+    AND (x.is_overnight = TRUE OR x.maturity_date <= b.dt + INTERVAL '1 day')
+),
+dla_revrepo AS (
+  SELECT COALESCE(SUM(principal), 0)::numeric AS v
+  FROM fsi.balance_repo x, base b
+  WHERE x.port_id = b.fid
+    AND x.evaluate_date = b.dt
+    AND x.repo_type = 'REV_REPO'
+    AND COALESCE(x.actual_maturity_date, x.maturity_date) <= b.dt + INTERVAL '1 day'
+),
+wla_govbond AS (
+  SELECT COALESCE(SUM(market_value), 0)::numeric AS v
+  FROM fsi.balance_bond x, base b
+  WHERE x.port_id = b.fid
+    AND x.evaluate_date = b.dt
+    AND x.asset_subtype = 'BOND_GOVT'
+    AND x.maturity_date <= b.dt + INTERVAL '5 days'
+),
+wla_cd AS (
+  SELECT COALESCE(SUM(market_value), 0)::numeric AS v
+  FROM fsi.balance_cd x, base b
+  WHERE x.port_id = b.fid
+    AND x.evaluate_date = b.dt
+    AND x.maturity_date <= b.dt + INTERVAL '5 days'
+),
+wla_deposit AS (
+  SELECT COALESCE(SUM(principal), 0)::numeric AS v
+  FROM fsi.balance_deposit x, base b
+  WHERE x.port_id = b.fid
+    AND x.evaluate_date = b.dt
+    AND (x.is_overnight = TRUE OR x.maturity_date <= b.dt + INTERVAL '5 days')
+),
+wla_revrepo AS (
+  SELECT COALESCE(SUM(principal), 0)::numeric AS v
+  FROM fsi.balance_repo x, base b
+  WHERE x.port_id = b.fid
+    AND x.evaluate_date = b.dt
+    AND x.repo_type = 'REV_REPO'
+    AND COALESCE(x.actual_maturity_date, x.maturity_date) <= b.dt + INTERVAL '5 days'
+),
+wla_corpbond AS (
+  SELECT COALESCE(SUM(market_value), 0)::numeric AS v
+  FROM fsi.balance_bond x, base b
+  WHERE x.port_id = b.fid
+    AND x.evaluate_date = b.dt
+    AND x.asset_subtype != 'BOND_GOVT'
+    AND x.maturity_date <= b.dt + INTERVAL '5 days'
+),
+liquidity AS (
+  SELECT
+    (SELECT cash_v FROM cash)
+    + (SELECT v FROM dla_govbond)
+    + (SELECT v FROM dla_cd)
+    + (SELECT v FROM dla_deposit)
+    + (SELECT v FROM dla_revrepo) AS dla,
+    (SELECT cash_v FROM cash)
+    + (SELECT v FROM wla_govbond)
+    + (SELECT v FROM wla_cd)
+    + (SELECT v FROM wla_deposit)
+    + (SELECT v FROM wla_revrepo)
+    + (SELECT v FROM wla_corpbond) AS wla
+)
 SELECT
-  SUM(CASE WHEN asset_class::text IN ('CASH','DEPOSIT','CD','REPO') THEN COALESCE(market_value_base, market_value, 0) ELSE 0 END) AS liquid_mv,
-  SUM(COALESCE(market_value_base, market_value, 0)) AS total_mv
-FROM fsi.balance_portfolio_asset
-WHERE port_id = 'BHMMF001'
-  AND evaluate_date = '2026-06-25';
+  n.nav AS total_nav_hkd,
+  m.wam_days,
+  m.wal_days,
+  NOT (
+    (m.wam_days > 60)
+    OR (m.wal_days > 120)
+    OR (CASE WHEN n.nav > 0 THEN l.dla / n.nav * 100 ELSE 0 END < 7.5)
+    OR (CASE WHEN n.nav > 0 THEN l.wla / n.nav * 100 ELSE 0 END < 15.0)
+  ) AS is_compliant
+FROM nav n
+CROSS JOIN mmf m
+CROSS JOIN liquidity l;
 ```
 
-### SQL-DB-03 儀表板資產配置
+### SQL-DB-KPI-BREACH-01 儀表板合規狀態（違規清單）
+
+```sql
+WITH base AS (
+  SELECT 'BHMMF001'::text AS fid,
+         '2026-06-25'::date AS dt
+),
+nav AS (
+  SELECT COALESCE(MAX(net_asset), 0)::numeric AS nav
+  FROM fsi.balance_portfolio_nav n, base b
+  WHERE n.port_id = b.fid
+    AND n.evaluate_date = b.dt
+    AND n.class_id IS NULL
+),
+mmf AS (
+  SELECT
+    COALESCE(MAX(wam_days), 0)::numeric AS wam_days,
+    COALESCE(MAX(wal_days), 0)::numeric AS wal_days
+  FROM fsi.balance_portfolio_mmf m, base b
+  WHERE m.port_id = b.fid
+    AND m.evaluate_date = b.dt
+),
+cash AS (
+  SELECT COALESCE(SUM(amount_base_ccy), SUM(amount), 0)::numeric AS cash_v
+  FROM fsi.balance_cash c, base b
+  WHERE c.port_id = b.fid
+    AND c.evaluate_date = b.dt
+),
+dla_govbond AS (
+  SELECT COALESCE(SUM(market_value), 0)::numeric AS v
+  FROM fsi.balance_bond x, base b
+  WHERE x.port_id = b.fid
+    AND x.evaluate_date = b.dt
+    AND x.asset_subtype = 'BOND_GOVT'
+    AND x.maturity_date <= b.dt + INTERVAL '1 day'
+),
+dla_cd AS (
+  SELECT COALESCE(SUM(market_value), 0)::numeric AS v
+  FROM fsi.balance_cd x, base b
+  WHERE x.port_id = b.fid
+    AND x.evaluate_date = b.dt
+    AND x.maturity_date <= b.dt + INTERVAL '1 day'
+),
+dla_deposit AS (
+  SELECT COALESCE(SUM(principal), 0)::numeric AS v
+  FROM fsi.balance_deposit x, base b
+  WHERE x.port_id = b.fid
+    AND x.evaluate_date = b.dt
+    AND (x.is_overnight = TRUE OR x.maturity_date <= b.dt + INTERVAL '1 day')
+),
+dla_revrepo AS (
+  SELECT COALESCE(SUM(principal), 0)::numeric AS v
+  FROM fsi.balance_repo x, base b
+  WHERE x.port_id = b.fid
+    AND x.evaluate_date = b.dt
+    AND x.repo_type = 'REV_REPO'
+    AND COALESCE(x.actual_maturity_date, x.maturity_date) <= b.dt + INTERVAL '1 day'
+),
+wla_govbond AS (
+  SELECT COALESCE(SUM(market_value), 0)::numeric AS v
+  FROM fsi.balance_bond x, base b
+  WHERE x.port_id = b.fid
+    AND x.evaluate_date = b.dt
+    AND x.asset_subtype = 'BOND_GOVT'
+    AND x.maturity_date <= b.dt + INTERVAL '5 days'
+),
+wla_cd AS (
+  SELECT COALESCE(SUM(market_value), 0)::numeric AS v
+  FROM fsi.balance_cd x, base b
+  WHERE x.port_id = b.fid
+    AND x.evaluate_date = b.dt
+    AND x.maturity_date <= b.dt + INTERVAL '5 days'
+),
+wla_deposit AS (
+  SELECT COALESCE(SUM(principal), 0)::numeric AS v
+  FROM fsi.balance_deposit x, base b
+  WHERE x.port_id = b.fid
+    AND x.evaluate_date = b.dt
+    AND (x.is_overnight = TRUE OR x.maturity_date <= b.dt + INTERVAL '5 days')
+),
+wla_revrepo AS (
+  SELECT COALESCE(SUM(principal), 0)::numeric AS v
+  FROM fsi.balance_repo x, base b
+  WHERE x.port_id = b.fid
+    AND x.evaluate_date = b.dt
+    AND x.repo_type = 'REV_REPO'
+    AND COALESCE(x.actual_maturity_date, x.maturity_date) <= b.dt + INTERVAL '5 days'
+),
+wla_corpbond AS (
+  SELECT COALESCE(SUM(market_value), 0)::numeric AS v
+  FROM fsi.balance_bond x, base b
+  WHERE x.port_id = b.fid
+    AND x.evaluate_date = b.dt
+    AND x.asset_subtype != 'BOND_GOVT'
+    AND x.maturity_date <= b.dt + INTERVAL '5 days'
+),
+liquidity AS (
+  SELECT
+    (SELECT cash_v FROM cash)
+    + (SELECT v FROM dla_govbond)
+    + (SELECT v FROM dla_cd)
+    + (SELECT v FROM dla_deposit)
+    + (SELECT v FROM dla_revrepo) AS dla,
+    (SELECT cash_v FROM cash)
+    + (SELECT v FROM wla_govbond)
+    + (SELECT v FROM wla_cd)
+    + (SELECT v FROM wla_deposit)
+    + (SELECT v FROM wla_revrepo)
+    + (SELECT v FROM wla_corpbond) AS wla
+),
+flags AS (
+  SELECT
+    (m.wam_days > 60) AS wam_breach,
+    (m.wal_days > 120) AS wal_breach,
+    (CASE WHEN n.nav > 0 THEN l.dla / n.nav * 100 ELSE 0 END < 7.5) AS daily_liquid_breach,
+    (CASE WHEN n.nav > 0 THEN l.wla / n.nav * 100 ELSE 0 END < 15.0) AS weekly_liquid_breach
+  FROM nav n
+  CROSS JOIN mmf m
+  CROSS JOIN liquidity l
+),
+items AS (
+  SELECT 'WAM_BREACH' AS breach_code, wam_breach AS is_breach FROM flags
+  UNION ALL
+  SELECT 'WAL_BREACH', wal_breach FROM flags
+  UNION ALL
+  SELECT 'DAILY_LIQUID_BREACH', daily_liquid_breach FROM flags
+  UNION ALL
+  SELECT 'WEEKLY_LIQUID_BREACH', weekly_liquid_breach FROM flags
+)
+SELECT
+  SUM(CASE WHEN is_breach THEN 1 ELSE 0 END) AS breach_count,
+  COALESCE(STRING_AGG(breach_code, ', ' ORDER BY breach_code) FILTER (WHERE is_breach), '') AS breach_list,
+  (SUM(CASE WHEN is_breach THEN 1 ELSE 0 END) = 0) AS is_compliant
+FROM items;
+```
+
+### SQL-DB-SFC-LIST-01 儀表板 SFC 合規明細（列表）
+
+```sql
+WITH base AS (
+  SELECT 'BHMMF001'::text AS fid,
+         '2026-06-25'::date AS dt
+),
+nav AS (
+  SELECT COALESCE(MAX(net_asset), 0)::numeric AS nav
+  FROM fsi.balance_portfolio_nav n, base b
+  WHERE n.port_id = b.fid
+    AND n.evaluate_date = b.dt
+    AND n.class_id IS NULL
+),
+mmf AS (
+  SELECT
+    COALESCE(MAX(wam_days), 0)::numeric AS wam_days,
+    COALESCE(MAX(wal_days), 0)::numeric AS wal_days
+  FROM fsi.balance_portfolio_mmf m, base b
+  WHERE m.port_id = b.fid
+    AND m.evaluate_date = b.dt
+),
+cash AS (
+  SELECT COALESCE(SUM(amount_base_ccy), SUM(amount), 0)::numeric AS cash_v
+  FROM fsi.balance_cash c, base b
+  WHERE c.port_id = b.fid
+    AND c.evaluate_date = b.dt
+),
+dla_govbond AS (
+  SELECT COALESCE(SUM(market_value), 0)::numeric AS v
+  FROM fsi.balance_bond x, base b
+  WHERE x.port_id = b.fid
+    AND x.evaluate_date = b.dt
+    AND x.asset_subtype = 'BOND_GOVT'
+    AND x.maturity_date <= b.dt + INTERVAL '1 day'
+),
+dla_cd AS (
+  SELECT COALESCE(SUM(market_value), 0)::numeric AS v
+  FROM fsi.balance_cd x, base b
+  WHERE x.port_id = b.fid
+    AND x.evaluate_date = b.dt
+    AND x.maturity_date <= b.dt + INTERVAL '1 day'
+),
+dla_deposit AS (
+  SELECT COALESCE(SUM(principal), 0)::numeric AS v
+  FROM fsi.balance_deposit x, base b
+  WHERE x.port_id = b.fid
+    AND x.evaluate_date = b.dt
+    AND (x.is_overnight = TRUE OR x.maturity_date <= b.dt + INTERVAL '1 day')
+),
+dla_revrepo AS (
+  SELECT COALESCE(SUM(principal), 0)::numeric AS v
+  FROM fsi.balance_repo x, base b
+  WHERE x.port_id = b.fid
+    AND x.evaluate_date = b.dt
+    AND x.repo_type = 'REV_REPO'
+    AND COALESCE(x.actual_maturity_date, x.maturity_date) <= b.dt + INTERVAL '1 day'
+),
+wla_govbond AS (
+  SELECT COALESCE(SUM(market_value), 0)::numeric AS v
+  FROM fsi.balance_bond x, base b
+  WHERE x.port_id = b.fid
+    AND x.evaluate_date = b.dt
+    AND x.asset_subtype = 'BOND_GOVT'
+    AND x.maturity_date <= b.dt + INTERVAL '5 days'
+),
+wla_cd AS (
+  SELECT COALESCE(SUM(market_value), 0)::numeric AS v
+  FROM fsi.balance_cd x, base b
+  WHERE x.port_id = b.fid
+    AND x.evaluate_date = b.dt
+    AND x.maturity_date <= b.dt + INTERVAL '5 days'
+),
+wla_deposit AS (
+  SELECT COALESCE(SUM(principal), 0)::numeric AS v
+  FROM fsi.balance_deposit x, base b
+  WHERE x.port_id = b.fid
+    AND x.evaluate_date = b.dt
+    AND (x.is_overnight = TRUE OR x.maturity_date <= b.dt + INTERVAL '5 days')
+),
+wla_revrepo AS (
+  SELECT COALESCE(SUM(principal), 0)::numeric AS v
+  FROM fsi.balance_repo x, base b
+  WHERE x.port_id = b.fid
+    AND x.evaluate_date = b.dt
+    AND x.repo_type = 'REV_REPO'
+    AND COALESCE(x.actual_maturity_date, x.maturity_date) <= b.dt + INTERVAL '5 days'
+),
+wla_corpbond AS (
+  SELECT COALESCE(SUM(market_value), 0)::numeric AS v
+  FROM fsi.balance_bond x, base b
+  WHERE x.port_id = b.fid
+    AND x.evaluate_date = b.dt
+    AND x.asset_subtype != 'BOND_GOVT'
+    AND x.maturity_date <= b.dt + INTERVAL '5 days'
+),
+liquidity AS (
+  SELECT
+    (SELECT cash_v FROM cash)
+    + (SELECT v FROM dla_govbond)
+    + (SELECT v FROM dla_cd)
+    + (SELECT v FROM dla_deposit)
+    + (SELECT v FROM dla_revrepo) AS dla,
+    (SELECT cash_v FROM cash)
+    + (SELECT v FROM wla_govbond)
+    + (SELECT v FROM wla_cd)
+    + (SELECT v FROM wla_deposit)
+    + (SELECT v FROM wla_revrepo)
+    + (SELECT v FROM wla_corpbond) AS wla
+)
+SELECT
+  check_item,
+  limit_desc,
+  actual_value,
+  pass
+FROM (
+  SELECT
+    'WAM'::text AS check_item,
+    '<= 60 days'::text AS limit_desc,
+    ROUND(m.wam_days, 4) AS actual_value,
+    (m.wam_days <= 60) AS pass
+  FROM mmf m
+
+  UNION ALL
+
+  SELECT
+    'WAL'::text,
+    '<= 120 days'::text,
+    ROUND(m.wal_days, 4),
+    (m.wal_days <= 120)
+  FROM mmf m
+
+  UNION ALL
+
+  SELECT
+    'DAILY_LIQUID_PCT'::text,
+    '>= 7.5%'::text,
+    ROUND(CASE WHEN n.nav > 0 THEN l.dla / n.nav * 100 ELSE 0 END, 4),
+    (CASE WHEN n.nav > 0 THEN l.dla / n.nav * 100 ELSE 0 END >= 7.5)
+  FROM nav n
+  CROSS JOIN liquidity l
+
+  UNION ALL
+
+  SELECT
+    'WEEKLY_LIQUID_PCT'::text,
+    '>= 15.0%'::text,
+    ROUND(CASE WHEN n.nav > 0 THEN l.wla / n.nav * 100 ELSE 0 END, 4),
+    (CASE WHEN n.nav > 0 THEN l.wla / n.nav * 100 ELSE 0 END >= 15.0)
+  FROM nav n
+  CROSS JOIN liquidity l
+) t
+ORDER BY check_item;
+```
+
+### SQL-DB-ALLOC-01 儀表板資產配置
 
 ```sql
 SELECT asset_class::text,
@@ -249,6 +652,27 @@ FROM fsi.balance_stock
 WHERE port_id = 'BHMMF001' AND evaluate_date = '2026-06-25'
 GROUP BY COALESCE(sector, '未分類')
 ORDER BY weight_pct DESC;
+```
+
+### SQL-OV-06 前十大個券
+
+```sql
+-- 採用 ≤ as_of_date 的最近快照日回退
+WITH snap AS (
+  SELECT MAX(evaluate_date) AS d
+  FROM fsi.balance_bond
+  WHERE port_id = 'BHMMF001' AND evaluate_date <= '2026-06-25'
+)
+SELECT security_code, security_name,
+       COALESCE(issuer_name, '—') AS issuer_name,
+       COALESCE(debt_rating, issuer_rating, internal_rating) AS rating,
+       COALESCE(market_value_base, total_market_value, market_value, 0) AS mv,
+       COALESCE(weight_pct, 0) AS weight_pct,
+       ytm, duration, coupon_rate, maturity_date, remaining_days
+FROM fsi.balance_bond
+WHERE port_id = 'BHMMF001' AND evaluate_date = (SELECT d FROM snap)
+ORDER BY mv DESC
+LIMIT 10;
 ```
 
 ### SQL-RI-01 風險指標基礎（NAV + 換手）

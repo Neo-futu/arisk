@@ -7,8 +7,9 @@ from datetime import date
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .exposure_domain import ExposureResult, check_mmf_compliance
+from .exposure_domain import ExposureResult, evaluate_mmf_compliance
 from .exposure_repository import get_asset_allocation, get_mmf_snapshot, get_nav_value
+from .rule_limits import load_effective_mmf_limits_with_trace
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +154,12 @@ async def compute_exposure_hybrid(
         group = str(row.issuer_group)
         result.by_group[group] = result.by_group.get(group, 0) + mv
 
-    result.breach_flags = check_mmf_compliance(result, nav)
+    limits, trace = await load_effective_mmf_limits_with_trace(db, fund_id, as_of_date)
+    flags, details, effective = evaluate_mmf_compliance(result, nav, limits)
+    result.effective_limits = effective
+    result.compliance_details = details
+    result.rule_trace = trace
+    result.breach_flags = flags
     result.is_compliant = not any(result.breach_flags.values())
     return result
 

@@ -7,6 +7,7 @@ from .investanalsis import (
     compute_macro_market_dynamics,
     compute_performance_attribution,
     compute_performance_attribution_timeseries,
+    compute_portfolio_basic_info,
     compute_portfolio_overview,
     compute_portfolio_overview_timeseries,
     compute_pretrade_risk_budget,
@@ -17,6 +18,7 @@ from .investanalsis import (
 
 __all__ = [
     "compute_portfolio_overview",
+    "compute_portfolio_basic_info",
     "compute_risk_indicators",
     "compute_performance_attribution",
     "compute_portfolio_overview_timeseries",

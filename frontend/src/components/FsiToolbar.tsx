@@ -2,7 +2,8 @@
  * FsiToolbar — 所有 FSI 頁面共用的基金選擇 + 日期選擇 + 刷新工具欄
  */
 import { RefreshCw } from "lucide-react"
-import type { ReactNode } from "react"
+import { useQuery } from "@tanstack/react-query"
+import { useEffect, type ReactNode } from "react"
 
 import { DatePicker } from "@/components/DatePicker"
 import { Button } from "@/components/ui/button"
@@ -13,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { fsiApi } from "@/fsiClient"
 
 export const FUNDS = [
   { id: "BHMMF001", name: "博匯港元貨幣市場基金 I" },
@@ -45,6 +47,24 @@ export function FsiToolbar({
   isFetching = false,
   extra,
 }: FsiToolbarProps) {
+  const accessQuery = useQuery({
+    queryKey: ["my-access-context"],
+    queryFn: () => fsiApi.getMyAccessContext().then((response) => response.data),
+    staleTime: 30_000,
+  })
+  const authorizedFunds = accessQuery.data?.portfolios.map((portfolio) => ({
+    id: portfolio.port_id,
+    name: portfolio.port_name,
+  }))
+  const funds = authorizedFunds ?? FUNDS
+
+  useEffect(() => {
+    if (!authorizedFunds || authorizedFunds.length === 0) return
+    if (!authorizedFunds.some((fund) => fund.id === fundId)) {
+      onFundChange(authorizedFunds[0].id)
+    }
+  }, [authorizedFunds, fundId, onFundChange])
+
   return (
     <div className="flex flex-wrap items-center gap-3">
       <Select value={fundId} onValueChange={onFundChange}>
@@ -52,7 +72,7 @@ export function FsiToolbar({
           <SelectValue placeholder="選擇基金" />
         </SelectTrigger>
         <SelectContent>
-          {FUNDS.map((f) => (
+          {funds.map((f) => (
             <SelectItem key={f.id} value={f.id}>
               {f.name}
             </SelectItem>

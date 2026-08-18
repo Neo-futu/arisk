@@ -14,6 +14,7 @@ import {
   Sparkles,
   Users,
 } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 
@@ -36,6 +37,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import useAuth from "@/hooks/useAuth"
+import { fsiApi } from "@/fsiClient"
 import { useNavigate, useRouterState } from "@tanstack/react-router"
 import { User } from "./User"
 
@@ -67,6 +69,7 @@ const getFsiItems = (t: (key: string) => string): NavItem[] => [
   },
   { icon: List, title: t("nav.positions"), path: "/positions" },
   { icon: Shield, title: t("nav.compliance"), path: "/compliance" },
+  { icon: Shield, title: t("nav.riskRules"), path: "/risk-rules" },
   { icon: FileText, title: t("nav.reports"), path: "/reports" },
   { icon: CalendarClock, title: t("nav.schedules"), path: "/schedules" },
   { icon: Sparkles, title: t("nav.autorisk"), path: "/autorisk" },
@@ -178,10 +181,19 @@ export function AppSidebar() {
   const { user: currentUser } = useAuth()
   const fsiItems = getFsiItems(t)
   const adminItems = getAdminItems(t)
+  const accessQuery = useQuery({
+    queryKey: ["my-access-context"],
+    queryFn: () => fsiApi.getMyAccessContext().then((response) => response.data),
+    enabled: Boolean(currentUser),
+    staleTime: 30_000,
+  })
+  const menuPaths = new Set(accessQuery.data?.menu_paths ?? [])
+  const hasMenu = (path: string) => Boolean(
+    currentUser?.is_superuser || menuPaths.has(path),
+  )
+  const visibleFsiItems = fsiItems.filter((item) => hasMenu(item.path))
 
-  const visibleAdminItems = currentUser?.is_superuser
-    ? adminItems
-    : adminItems.filter((i) => i.path !== "/admin")
+  const visibleAdminItems = adminItems.filter((item) => hasMenu(item.path))
 
   return (
     <Sidebar collapsible="icon">
@@ -189,8 +201,10 @@ export function AppSidebar() {
         <Logo variant="responsive" />
       </SidebarHeader>
       <SidebarContent>
-        <NavSection label={t("nav.fsiSection")} items={fsiItems} />
-        <NavSection label={t("nav.systemManagement")} items={visibleAdminItems} />
+        <NavSection label={t("nav.fsiSection")} items={visibleFsiItems} />
+        {visibleAdminItems.length > 0 ? (
+          <NavSection label={t("nav.systemManagement")} items={visibleAdminItems} />
+        ) : null}
       </SidebarContent>
       <SidebarFooter>
         <SidebarAppearance />

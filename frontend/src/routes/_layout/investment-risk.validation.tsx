@@ -21,7 +21,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { fsiApi } from "@/fsiClient"
+import {
+  callEndpoint,
+  safeJson,
+  summarize,
+  type IndicatorResult,
+  type RunnerParams,
+} from "@/modules/investment-risk/indicatorRunner"
 import {
   PROCESSING_INDICATORS,
   type EndpointKey,
@@ -33,55 +39,10 @@ export const Route = createFileRoute("/_layout/investment-risk/validation")({
   head: () => ({ meta: [{ title: "指標驗證 — 投資風險分析 — ARISK" }] }),
 })
 
-type IndicatorResult = {
-  running: boolean
-  ok: boolean
-  latencyMs: number
-  outputPreview: string
-  rawOutput?: unknown
-  message?: string
-}
-
 function shiftDate(dateText: string, offsetDays: number) {
   const date = new Date(`${dateText}T00:00:00`)
   date.setDate(date.getDate() + offsetDays)
   return date.toISOString().split("T")[0]
-}
-
-function safeJson(value: unknown) {
-  try {
-    return JSON.stringify(value, null, 2)
-  } catch {
-    return String(value)
-  }
-}
-
-function summarize(endpoint: EndpointKey, payload: any): string {
-  if (!payload) return "空輸出"
-  switch (endpoint) {
-    case "overview":
-      return `NAV: ${Number(payload.portfolio?.net_asset ?? 0).toLocaleString("zh-HK", { maximumFractionDigits: 0 })}`
-    case "risk-indicators":
-      return `Vol: ${Number(payload.annualized_volatility_pct ?? 0).toFixed(3)}%`
-    case "attribution":
-      return `Active: ${Number(payload.summary?.active_return_pct ?? 0).toFixed(3)}%`
-    case "rates-credit":
-      return `DV01: ${Number(payload.portfolio_dv01 ?? 0).toLocaleString("zh-HK", { maximumFractionDigits: 0 })}`
-    case "liquidity-stress":
-      return `LCR: ${Number(payload.stress_summary?.liquidity_coverage_ratio ?? 0).toFixed(2)}`
-    case "pretrade-check":
-      return `Decision: ${String(payload.decision ?? "UNKNOWN")}`
-    case "macro-dynamics":
-      return `Regime: ${String(payload.fund_regime?.regime ?? "UNKNOWN")}`
-    case "factor-behavior":
-      return `HHI: ${Number(payload.sector_concentration?.hhi ?? 0).toFixed(2)}`
-    case "exposure":
-      return `D/W: ${Number(payload.daily_liquid_pct ?? 0).toFixed(2)}% / ${Number(payload.weekly_liquid_pct ?? 0).toFixed(2)}%`
-    case "var-compare":
-      return `Max VaR: ${Number(payload.max_var_pct_nav ?? 0).toFixed(4)}%`
-    default:
-      return "已完成"
-  }
 }
 
 function InvestmentRiskValidationPage() {
@@ -114,61 +75,19 @@ function InvestmentRiskValidationPage() {
 
   const targets = scope === "single" ? [fundId] : FUNDS.map((f) => f.id)
 
-  async function callEndpoint(endpoint: EndpointKey, targetFundId: string) {
-    switch (endpoint) {
-      case "overview": {
-        const response = await fsiApi.getPortfolioOverview(targetFundId, asOfDate)
-        return response.data
-      }
-      case "risk-indicators": {
-        const response = await fsiApi.getRiskIndicators(targetFundId, startDate, endDate)
-        return response.data
-      }
-      case "attribution": {
-        const response = await fsiApi.getPerformanceAttribution(targetFundId, startDate, endDate)
-        return response.data
-      }
-      case "rates-credit": {
-        const response = await fsiApi.getRatesCredit(targetFundId, asOfDate)
-        return response.data
-      }
-      case "liquidity-stress": {
-        const response = await fsiApi.getLiquidityStress(targetFundId, asOfDate, {
-          redemptionPct: Number(redemptionPct),
-          rateShockBps: Number(rateShockBps),
-        })
-        return response.data
-      }
-      case "pretrade-check": {
-        const response = await fsiApi.getPretradeCheck(targetFundId, asOfDate, {
-          tradeAmount: Number(tradeAmount),
-          tradeSide,
-          assetClass,
-          durationYears: Number(durationYears),
-          issuerName,
-        })
-        return response.data
-      }
-      case "macro-dynamics": {
-        const response = await fsiApi.getMacroDynamics(targetFundId, startDate, endDate)
-        return response.data
-      }
-      case "factor-behavior": {
-        const response = await fsiApi.getFactorBehavior(targetFundId, startDate, endDate)
-        return response.data
-      }
-      case "exposure": {
-        const response = await fsiApi.getExposure(targetFundId, asOfDate)
-        return response.data
-      }
-      case "var-compare": {
-        const response = await fsiApi.getVarCompare(targetFundId, asOfDate, {
-          confidence: Number(confidence),
-          horizonDays: Number(horizonDays),
-        })
-        return response.data
-      }
-    }
+  const runnerParams: RunnerParams = {
+    asOfDate,
+    startDate,
+    endDate,
+    redemptionPct: Number(redemptionPct),
+    rateShockBps: Number(rateShockBps),
+    tradeAmount: Number(tradeAmount),
+    tradeSide,
+    assetClass,
+    durationYears: Number(durationYears),
+    issuerName,
+    confidence: Number(confidence),
+    horizonDays: Number(horizonDays),
   }
 
   async function runIndicator(item: ProcessingIndicator) {
@@ -200,7 +119,7 @@ function InvestmentRiskValidationPage() {
     try {
       const allOutputs = await Promise.all(
         targets.map(async (target) => {
-          const payload = await callEndpoint(item.endpointKey as EndpointKey, target)
+          const payload = await callEndpoint(item.endpointKey as EndpointKey, target, runnerParams)
           return {
             fundId: target,
             summary: summarize(item.endpointKey as EndpointKey, payload),

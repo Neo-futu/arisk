@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..risk.rule_limits import load_effective_pretrade_limits
 from .investment_analysis_common import _number
 
 
@@ -73,9 +74,16 @@ async def compute_pretrade_risk_budget(
     projected_dv01 = projected_bond_mv * projected_duration * 0.0001
     current_dv01 = total_bond_mv * current_duration * 0.0001
 
-    duration_limit = 4.0
-    issuer_limit_pct = 10.0
-    te_limit_pct = 5.0
+    configured_limits, applied_rules = await load_effective_pretrade_limits(
+        db=db,
+        fund_id=fund_id,
+        as_of_date=as_of_date,
+        asset_class=asset_class,
+        trade_side=trade_side,
+    )
+    duration_limit = configured_limits["duration_years"]
+    issuer_limit_pct = configured_limits["issuer_pct_nav"]
+    te_limit_pct = configured_limits["tracking_error_proxy_pct"]
     breaches = []
     if projected_duration > duration_limit:
         breaches.append(f"組合久期超限（>{duration_limit:.1f}年）")
@@ -117,6 +125,7 @@ async def compute_pretrade_risk_budget(
             "issuer_pct_nav": issuer_limit_pct,
             "tracking_error_proxy_pct": te_limit_pct,
         },
+        "applied_rules": applied_rules,
         "breach_flags": breaches,
         "decision": decision,
     }
