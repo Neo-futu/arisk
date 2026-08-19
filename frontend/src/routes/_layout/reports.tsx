@@ -10,6 +10,7 @@ import {
   RefreshCw,
 } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { useTranslation } from "react-i18next"
 
 import { FUNDS, FsiToolbar, lastTradeDate } from "@/components/FsiToolbar"
 import { Badge } from "@/components/ui/badge"
@@ -108,11 +109,12 @@ function getInitialReportFilters() {
 }
 
 function StatusBadge({ status }: { status: ReportTask["status"] }) {
+  const { t } = useTranslation()
   const map = {
-    queued:    { label: "排隊中", cls: "bg-muted text-muted-foreground" },
-    running:   { label: "生成中", cls: "bg-blue-100 text-blue-700" },
-    completed: { label: "已完成", cls: "bg-green-100 text-green-700" },
-    failed:    { label: "失敗",   cls: "bg-red-100 text-red-700" },
+    queued:    { label: t("reports.statusQueued"),    cls: "bg-muted text-muted-foreground" },
+    running:   { label: t("reports.statusRunning"),   cls: "bg-blue-100 text-blue-700" },
+    completed: { label: t("reports.statusCompleted"), cls: "bg-green-100 text-green-700" },
+    failed:    { label: t("reports.statusFailed"),    cls: "bg-red-100 text-red-700" },
   }
   const { label, cls } = map[status] ?? map.queued
   return (
@@ -136,6 +138,7 @@ function ConfirmDialog({
   description: string
   onConfirm: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
@@ -145,10 +148,10 @@ function ConfirmDialog({
         </DialogHeader>
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            取消
+            {t("reports.cancel")}
           </Button>
           <Button onClick={() => { onOpenChange(false); onConfirm() }}>
-            重新生成
+            {t("reports.regenerate")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -170,6 +173,7 @@ function ReportCard({
   const [confirmOpen, setConfirmOpen] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const queryClient = useQueryClient()
+  const { t } = useTranslation()
   const Icon = TYPE_ICON[def.type] ?? FileText
 
   const stopPoll = () => {
@@ -216,7 +220,7 @@ function ReportCard({
         as_of_date:   asOfDate,
         status:       "completed",
         progress:     100,
-        message:      `已有 ${existingResult.output_files.length} 個文件（頁面刷新恢復）`,
+        message:      t("reports.restoredFiles", { count: existingResult.output_files.length }),
         output_file:  existingResult.output_files[0] ?? null,
         output_files: existingResult.output_files,
         created_at:   "",
@@ -230,7 +234,7 @@ function ReportCard({
   const doGenerate = async () => {
     setTask({
       task_id: "", report_id: def.id, fund_id: fundId, as_of_date: asOfDate,
-      status: "queued", progress: 0, message: "提交中...",
+      status: "queued", progress: 0, message: t("reports.submitting"),
       output_file: null, created_at: new Date().toISOString(), finished_at: null,
     })
     try {
@@ -242,7 +246,7 @@ function ReportCard({
         ...prev,
         status: "failed",
         progress: 0,
-        message: e?.response?.data?.detail ?? e?.message ?? "請求失敗",
+        message: e?.response?.data?.detail ?? e?.message ?? t("reports.requestFailed"),
         finished_at: new Date().toISOString(),
       }))
     }
@@ -290,7 +294,7 @@ function ReportCard({
           <div className="flex flex-col items-end gap-1 shrink-0">
             <Badge variant="outline" className="text-xs uppercase">{def.type}</Badge>
             <Badge variant="secondary" className="text-xs">
-              {def.frequency === "daily" ? "每日" : "每月"}
+              {def.frequency === "daily" ? t("reports.freqDaily") : t("reports.freqMonthly")}
             </Badge>
           </div>
         </CardHeader>
@@ -326,7 +330,7 @@ function ReportCard({
               {isRunning
                 ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 : <RefreshCw className="h-3.5 w-3.5" />}
-              {isRunning ? "生成中..." : task?.status === "completed" ? "重新生成" : "生成報表"}
+              {isRunning ? t("reports.generating") : task?.status === "completed" ? t("reports.regenerate") : t("reports.generate")}
             </Button>
 
             {completedFiles.map(filename => {
@@ -356,8 +360,8 @@ function ReportCard({
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title="重新生成報表？"
-        description={`已存在 ${def.name}（${asOfDate}）的生成結果，重新生成將覆蓋現有文件。`}
+        title={t("reports.confirmTitle")}
+        description={t("reports.confirmDesc", { name: def.name, date: asOfDate })}
         onConfirm={doGenerate}
       />
     </>
@@ -366,6 +370,7 @@ function ReportCard({
 
 // ── 主頁面 ────────────────────────────────────────────────────────
 function ReportsPage() {
+  const { t } = useTranslation()
   const [fundId, setFundId] = useState(() => getInitialReportFilters().fundId)
   const [asOfDate, setAsOfDate] = useState(() => getInitialReportFilters().asOfDate)
 
@@ -382,9 +387,9 @@ function ReportsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">報表中心</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{t("reports.title")}</h1>
         <p className="text-muted-foreground text-sm">
-          生成 MMF 日報、月報 Factsheet 及詳細分析報告
+          {t("reports.subtitle")}
         </p>
       </div>
 
@@ -396,7 +401,7 @@ function ReportsPage() {
 
       <div className="space-y-3">
         <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-          每日報表
+          {t("reports.dailyReports")}
         </h2>
         {daily.map((r) => (
           <ReportCard key={r.id} def={r} fundId={fundId} asOfDate={asOfDate} />
@@ -405,7 +410,7 @@ function ReportsPage() {
 
       <div className="space-y-3">
         <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-          月度報表
+          {t("reports.monthlyReports")}
         </h2>
         {monthly.map((r) => (
           <ReportCard key={r.id} def={r} fundId={fundId} asOfDate={asOfDate} />

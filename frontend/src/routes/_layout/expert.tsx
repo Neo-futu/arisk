@@ -9,6 +9,7 @@ import {
   Send, Sparkles, Trash2,
 } from "lucide-react"
 import { useRef, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -23,7 +24,7 @@ import axios from "axios"
 
 export const Route = createFileRoute("/_layout/expert")({
   component: ExpertPage,
-  head: () => ({ meta: [{ title: "專家知識庫 — ARISK" }] }),
+  head: () => ({ meta: [{ title: "Expert Knowledge Base — ARISK" }] }),
 })
 
 const BASE = (import.meta.env.VITE_API_URL as string) || ""
@@ -46,6 +47,7 @@ const isPlaceholderSkillTitle = (title: string) => {
 
 // ── 知識文檔列表 ────────────────────────────────────────────────
 function DocumentList() {
+  const { t } = useTranslation()
   const qc = useQueryClient()
   const { data: docs = [], isLoading } = useQuery({
     queryKey: ["knowledge-docs"],
@@ -67,13 +69,13 @@ function DocumentList() {
       <CardHeader className="pb-2">
         <CardTitle className="text-sm flex items-center gap-2">
           <BookOpen className="h-4 w-4" />
-          已索引知識文檔
-          <Badge variant="outline" className="ml-auto">{visibleDocs.length} 篇</Badge>
+          {t("expert.indexedDocs")}
+          <Badge variant="outline" className="ml-auto">{t("expert.docCount", { count: visibleDocs.length })}</Badge>
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {isLoading ? <p className="text-xs text-muted-foreground animate-pulse">載入中...</p>
-          : visibleDocs.length === 0 ? <p className="text-xs text-muted-foreground">暫無文檔</p>
+        {isLoading ? <p className="text-xs text-muted-foreground animate-pulse">{t("expert.loading")}</p>
+          : visibleDocs.length === 0 ? <p className="text-xs text-muted-foreground">{t("expert.noDocs")}</p>
           : (
             <div className="space-y-1.5 max-h-64 overflow-y-auto">
               {visibleDocs.map((d: any) => (
@@ -82,7 +84,7 @@ function DocumentList() {
                     {d.source}
                   </span>
                   <span className="flex-1 truncate">{d.title}</span>
-                  <span className="text-muted-foreground shrink-0">{d.chunk_count}塊</span>
+                  <span className="text-muted-foreground shrink-0">{t("expert.chunkCount", { count: d.chunk_count })}</span>
                   <button
                     className="invisible group-hover:visible text-muted-foreground hover:text-destructive"
                     onClick={() => axios.delete(`${BASE}/api/v1/knowledge/${d.id}`, { headers: authHeaders() })
@@ -99,6 +101,7 @@ function DocumentList() {
 
 // ── 主頁面 ──────────────────────────────────────────────────────
 function ExpertPage() {
+  const { t } = useTranslation()
   const qc = useQueryClient()
 
   // 模型選擇
@@ -177,7 +180,7 @@ function ExpertPage() {
       })
 
       if (!resp.ok) {
-        updateLastAssistant(`請求失敗 (${resp.status})`)
+        updateLastAssistant(t("expert.requestFailed", { status: resp.status }))
         return
       }
 
@@ -203,7 +206,7 @@ function ExpertPage() {
         }
       }
     } catch (err: any) {
-      updateLastAssistant(`錯誤：${err.message}`)
+      updateLastAssistant(t("expert.errorPrefix", { error: err.message }))
     } finally {
       setStreaming(false)
     }
@@ -211,8 +214,8 @@ function ExpertPage() {
 
   // ── AI 提取技能 ──────────────────────────────────────────────
   const extractSkill = async () => {
-    if (messages.length < 2) { alert("請先與 AI 對話，描述您的業務知識"); return }
-    if (!topic.trim()) { alert("請填寫技能主題"); return }
+    if (messages.length < 2) { alert(t("expert.alertConverseFirst")); return }
+    if (!topic.trim()) { alert(t("expert.alertTopicRequired")); return }
     setExtracting(true)
     try {
       const resp = await axios.post(`${BASE}/api/v1/knowledge/extract-skill`,
@@ -220,7 +223,7 @@ function ExpertPage() {
         { headers: authHeaders() })
       setExtractedSkill(resp.data.skill_content || "")
     } catch (err: any) {
-      alert(`提取失敗：${err.response?.data?.detail || err.message}`)
+      alert(t("expert.extractFailed", { error: err.response?.data?.detail || err.message }))
     } finally { setExtracting(false) }
   }
 
@@ -234,10 +237,10 @@ function ExpertPage() {
       const resp = await axios.post(`${BASE}/api/v1/knowledge/save-skill`,
         { skill_name: skillName, skill_content: extractedSkill, layer: layer === "platform" ? "expert" : "chat", also_index: true },
         { headers: authHeaders() })
-      setSaveMsg(`✅ 已保存：${resp.data.file_path}${resp.data.indexed ? " + 已索引" : ""}`)
+      setSaveMsg(`✅ ${t("expert.saved", { path: resp.data.file_path })}${resp.data.indexed ? t("expert.savedIndexed") : ""}`)
       qc.invalidateQueries({ queryKey: ["knowledge-docs"] })
     } catch (err: any) {
-      setSaveMsg(`❌ 失敗：${err.response?.data?.detail || err.message}`)
+      setSaveMsg(`❌ ${t("expert.saveFailed", { error: err.response?.data?.detail || err.message })}`)
     } finally { setSaving(false) }
   }
 
@@ -248,10 +251,10 @@ function ExpertPage() {
       const resp = await axios.post(`${BASE}/api/v1/knowledge/ingest`,
         { title: `[Expert Chat] ${topic}`, content: extractedSkill, source: "expert_chat", doc_type: "skill" },
         { headers: authHeaders() })
-      setSaveMsg(`✅ 已索引 ${resp.data.chunk_count} 塊（${resp.data.search_mode}）`)
+      setSaveMsg(`✅ ${t("expert.indexedChunks", { count: resp.data.chunk_count, mode: resp.data.search_mode })}`)
       qc.invalidateQueries({ queryKey: ["knowledge-docs"] })
     } catch (err: any) {
-      setSaveMsg(`❌ 失敗：${err.response?.data?.detail || err.message}`)
+      setSaveMsg(`❌ ${t("expert.saveFailed", { error: err.response?.data?.detail || err.message })}`)
     } finally { setSaving(false) }
   }
 
@@ -263,10 +266,10 @@ function ExpertPage() {
     try {
       const resp = await axios.post(`${BASE}/api/v1/knowledge/ingest-file`, form,
         { headers: { ...authHeaders(), "Content-Type": "multipart/form-data" } })
-      setUploadMsg(`✅ ${resp.data.message}`)
+      setUploadMsg(`✅ ${t("expert.uploadSuccess", { message: resp.data.message })}`)
       qc.invalidateQueries({ queryKey: ["knowledge-docs"] })
     } catch (err: any) {
-      setUploadMsg(`❌ 失敗：${err.response?.data?.detail || err.message}`)
+      setUploadMsg(`❌ ${t("expert.saveFailed", { error: err.response?.data?.detail || err.message })}`)
     } finally { setUploading(false) }
   }
 
@@ -276,8 +279,8 @@ function ExpertPage() {
       <div className="flex items-center gap-3">
         <Brain className="h-6 w-6 text-primary" />
         <div className="flex-1">
-          <h1 className="text-xl font-bold">專家知識庫</h1>
-          <p className="text-xs text-muted-foreground">通過 AI 對話提取業務技能，索引入 3_skills 知識庫</p>
+          <h1 className="text-xl font-bold">{t("expert.title")}</h1>
+          <p className="text-xs text-muted-foreground">{t("expert.subtitle")}</p>
         </div>
         {/* 模型選擇器 */}
         <Select value={modelId} onValueChange={setModelId}>
@@ -291,14 +294,20 @@ function ExpertPage() {
               return (
                 <div key={group.key}>
                   <div className={`px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide ${gi > 0 ? "mt-1 border-t" : ""}`}>
-                    {group.label}
+                    {t(group.labelKey)}
                   </div>
-                  {items.map(m => (
-                    <SelectItem key={m.id} value={m.id} className="text-xs">
-                      <span className={`${group.color} mr-1`}>{group.icon}</span>
-                      {m.label}
-                    </SelectItem>
-                  ))}
+                  {items.map(m => {
+                    const cm = m as { id: string; label: string; baseLabel?: string; tagKey?: string | null }
+                    const label = cm.baseLabel
+                      ? (cm.tagKey ? `${cm.baseLabel} (${t(cm.tagKey)})` : cm.baseLabel)
+                      : cm.label
+                    return (
+                      <SelectItem key={m.id} value={m.id} className="text-xs">
+                        <span className={`${group.color} mr-1`}>{group.icon}</span>
+                        {label}
+                      </SelectItem>
+                    )
+                  })}
                 </div>
               )
             })}
@@ -312,17 +321,17 @@ function ExpertPage() {
           {/* 技能設置 */}
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">技能主題設置</CardTitle>
+              <CardTitle className="text-sm">{t("expert.topicSettings")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <Input value={topic} onChange={e => setTopic(e.target.value)}
-                placeholder="技能主題，如：MMF 信用評級分析方法" className="text-sm" />
+                placeholder={t("expert.topicPlaceholder")} className="text-sm" />
               <div className="flex gap-2">
                 {(["chat", "platform"] as const).map(l => (
                   <button key={l}
                     className={`flex-1 rounded-md border py-1.5 text-xs transition-colors ${layer === l ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
                     onClick={() => setLayer(l)}>
-                    {l === "chat" ? "用戶業務技能" : "系統業務技能"}
+                    {l === "chat" ? t("expert.layerUser") : t("expert.layerSystem")}
                   </button>
                 ))}
               </div>
@@ -333,9 +342,9 @@ function ExpertPage() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
-                與 AI 對話，描述業務知識
+                {t("expert.chatTitle")}
                 {streaming && <Badge variant="secondary" className="gap-1 text-xs ml-auto">
-                  <Loader2 className="h-3 w-3 animate-spin" />分析中
+                  <Loader2 className="h-3 w-3 animate-spin" />{t("expert.analyzing")}
                 </Badge>}
               </CardTitle>
             </CardHeader>
@@ -343,12 +352,12 @@ function ExpertPage() {
               <div className="h-56 overflow-y-auto space-y-2 border rounded-lg p-2 bg-background">
                 {messages.length === 0 ? (
                   <p className="text-xs text-muted-foreground text-center py-6">
-                    描述您的業務知識，AI 會幫助完善細節...<br/>
-                    <span className="text-[10px]">當前模型：{modelId}</span>
+                    {t("expert.chatEmpty")}<br/>
+                    <span className="text-[10px]">{t("expert.currentModel", { model: modelId })}</span>
                   </p>
                 ) : messages.map((m, i) => (
                   <div key={i} className={`text-xs rounded-lg p-2 ${m.role === "user" ? "bg-primary/10 ml-6" : "bg-muted mr-6"}`}>
-                    <span className="font-medium text-muted-foreground">{m.role === "user" ? "您" : "AI"}：</span>
+                    <span className="font-medium text-muted-foreground">{m.role === "user" ? t("expert.roleUser") : t("expert.roleAi")}：</span>
                     <span className="whitespace-pre-wrap">{m.content}</span>
                     {m.role === "assistant" && streaming && i === messages.length - 1 && (
                       <span className="inline-block h-3 w-0.5 bg-current animate-pulse align-middle ml-0.5" />
@@ -360,7 +369,7 @@ function ExpertPage() {
               <div className="flex gap-2">
                 <Textarea value={input} onChange={e => setInput(e.target.value)}
                   onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage() }}}
-                  placeholder="描述業務知識、執行步驟、注意事項... (Enter 發送)" rows={2}
+                  placeholder={t("expert.inputPlaceholder")} rows={2}
                   disabled={streaming} className="text-sm resize-none" />
                 <Button size="icon" onClick={sendMessage} disabled={streaming || !input.trim()}>
                   {streaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -373,28 +382,28 @@ function ExpertPage() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-amber-500" />AI 提取結構化技能
+                <Sparkles className="h-4 w-4 text-amber-500" />{t("expert.extractTitle")}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <Button className="w-full gap-2" variant="outline" onClick={extractSkill}
                 disabled={extracting || messages.length < 2}>
                 {extracting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Brain className="h-4 w-4" />}
-                {extracting ? "提取中..." : "從對話提取技能"}
+                {extracting ? t("expert.extracting") : t("expert.extractFromChat")}
               </Button>
 
               {extractedSkill && (
                 <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">提取結果（可編輯後保存）：</p>
+                  <p className="text-xs text-muted-foreground">{t("expert.extractResultHint")}</p>
                   <Textarea value={extractedSkill} onChange={e => setExtractedSkill(e.target.value)}
                     rows={8} className="text-xs font-mono" />
                   <div className="grid grid-cols-2 gap-2">
                     <Button variant="default" className="gap-1.5 text-xs" onClick={saveSkillAsFile} disabled={saving}>
                       {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <BookOpen className="h-3.5 w-3.5" />}
-                      保存為 3_skills 技能
+                      {t("expert.saveAsSkill")}
                     </Button>
                     <Button variant="outline" className="gap-1.5 text-xs" onClick={saveToKnowledgeOnly} disabled={saving}>
-                      <Plus className="h-3.5 w-3.5" />僅入知識庫
+                      <Plus className="h-3.5 w-3.5" />{t("expert.saveToKnowledgeOnly")}
                     </Button>
                   </div>
                   {saveMsg && <p className={`text-xs ${saveMsg.startsWith("✅") ? "text-green-600" : "text-red-500"}`}>{saveMsg}</p>}
@@ -409,20 +418,20 @@ function ExpertPage() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
-                <FileUp className="h-4 w-4" />上傳文件到知識庫
+                <FileUp className="h-4 w-4" />{t("expert.uploadTitle")}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="border-2 border-dashed rounded-lg p-5 text-center cursor-pointer hover:bg-muted/50 transition-colors"
                 onClick={() => fileRef.current?.click()}>
                 <FileUp className="h-7 w-7 mx-auto text-muted-foreground mb-1.5" />
-                <p className="text-xs text-muted-foreground">PDF / Word / MD / TXT</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">SFC 守則、基金章程、操作手冊...</p>
+                <p className="text-xs text-muted-foreground">{t("expert.uploadFormats")}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{t("expert.uploadHint")}</p>
               </div>
               <input ref={fileRef} type="file" accept=".pdf,.docx,.md,.txt" className="hidden"
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files?.[0]) uploadFile(e.target.files[0]) }} />
               {uploading && <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin" />處理中...</div>}
+                <Loader2 className="h-3 w-3 animate-spin" />{t("expert.processing")}</div>}
               {uploadMsg && <p className={`text-xs ${uploadMsg.startsWith("✅") ? "text-green-600" : "text-red-500"}`}>{uploadMsg}</p>}
             </CardContent>
           </Card>
@@ -431,15 +440,15 @@ function ExpertPage() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">知識庫說明</CardTitle>
+              <CardTitle className="text-sm">{t("expert.knowledgeHelpTitle")}</CardTitle>
             </CardHeader>
             <CardContent className="text-xs text-muted-foreground space-y-1.5">
-              <p>📝 <strong>後台開發</strong>：在 <code>3_skills/skills/</code> 寫 SKILL.md → 運行索引腳本</p>
-              <p>💬 <strong>Expert Chat</strong>：AI 對話提取技能 → 保存為 3_skills 文件</p>
-              <p>📄 <strong>文件上傳</strong>：PDF/Word 直接索引入庫</p>
+              <p>📝 <strong>{t("expert.helpBackendLabel")}</strong>：{t("expert.helpBackend")}</p>
+              <p>💬 <strong>{t("expert.helpExpertLabel")}</strong>：{t("expert.helpExpert")}</p>
+              <p>📄 <strong>{t("expert.helpUploadLabel")}</strong>：{t("expert.helpUpload")}</p>
               <div className="border-t pt-1.5 mt-1">
-                <p><code>skill_doc</code> = 業務技能（步驟/規則/格式）</p>
-                <p><code>agent_prompt</code> = Agent 知識（定位/能力/場景）</p>
+                <p><code>skill_doc</code> {t("expert.helpSkillDoc")}</p>
+                <p><code>agent_prompt</code> {t("expert.helpAgentPrompt")}</p>
               </div>
             </CardContent>
           </Card>

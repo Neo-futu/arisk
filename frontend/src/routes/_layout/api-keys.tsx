@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import { Check, Copy, KeyRound, Loader2, Plus, ShieldCheck, Trash2 } from "lucide-react"
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -29,12 +30,13 @@ import { fsiApi } from "@/fsiClient"
 
 export const Route = createFileRoute("/_layout/api-keys")({
   component: ApiKeysPage,
-  head: () => ({ meta: [{ title: "API Key 管理 — ARISK" }] }),
+  head: () => ({ meta: [{ title: "API Key Management — ARISK" }] }),
 })
 
 function ApiKeysPage() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const [name, setName] = useState("本地開發")
+  const [name, setName] = useState(() => t("apiKeys.defaultKeyName"))
   const [expiresDays, setExpiresDays] = useState("90")
   const [createdKey, setCreatedKey] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
@@ -55,24 +57,24 @@ function ApiKeysPage() {
     onSuccess: (response) => {
       setCreatedKey(response.data.key)
       queryClient.invalidateQueries({ queryKey: ["user-api-keys"] })
-      toast.success("API Key 已建立")
+      toast.success(t("apiKeys.createdToast"))
     },
-    onError: () => toast.error("API Key 建立失敗"),
+    onError: () => toast.error(t("apiKeys.createFailedToast")),
   })
   const revokeKey = useMutation({
     mutationFn: (id: string) => fsiApi.revokeApiKey(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["user-api-keys"] })
-      toast.success("API Key 已撤銷")
+      toast.success(t("apiKeys.revokedToast"))
     },
-    onError: () => toast.error("API Key 撤銷失敗"),
+    onError: () => toast.error(t("apiKeys.revokeFailedToast")),
   })
 
   async function copyKey() {
     if (!createdKey) return
     await navigator.clipboard.writeText(createdKey)
     setCopied(true)
-    toast.success("已複製到剪貼簿")
+    toast.success(t("apiKeys.copiedToast"))
     window.setTimeout(() => setCopied(false), 1500)
   }
 
@@ -81,31 +83,31 @@ function ApiKeysPage() {
       <div>
         <div className="mb-1 flex items-center gap-2">
           <KeyRound className="h-5 w-5 text-primary" />
-          <span className="text-muted-foreground text-sm">系統管理</span>
+          <span className="text-muted-foreground text-sm">{t("apiKeys.breadcrumb")}</span>
         </div>
-        <h1 className="text-2xl font-bold tracking-tight">API Key 管理</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{t("apiKeys.title")}</h1>
         <p className="text-muted-foreground text-sm">
-          為本地腳本和外部客戶端建立個人 API Key；密鑰只會顯示一次。
+          {t("apiKeys.subtitle")}
         </p>
       </div>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">本地 API 配置</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t("apiKeys.localConfigTitle")}</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           {localConfig.data ? (
             <div className="grid gap-4 md:grid-cols-2">
-              <ConfigItem label="API Base URL" value={localConfig.data.api_base_url} />
-              <ConfigItem label="認證 Header" value={localConfig.data.header_name} />
-              <ConfigItem label="用戶 Key 前綴" value={localConfig.data.key_prefix} />
-              <ConfigItem label="內部 Processing API" value={localConfig.data.processing_api.url} />
+              <ConfigItem label={t("apiKeys.apiBaseUrl")} value={localConfig.data.api_base_url} />
+              <ConfigItem label={t("apiKeys.authHeader")} value={localConfig.data.header_name} />
+              <ConfigItem label={t("apiKeys.keyPrefix")} value={localConfig.data.key_prefix} />
+              <ConfigItem label={t("apiKeys.processingApi")} value={localConfig.data.processing_api.url} />
             </div>
           ) : (
-            <p className="text-muted-foreground text-sm">載入本地配置中...</p>
+            <p className="text-muted-foreground text-sm">{t("apiKeys.loadingConfig")}</p>
           )}
           {localConfig.data && (
             <Alert>
               <ShieldCheck className="h-4 w-4" />
-              <AlertTitle>內部 Key 隔離</AlertTitle>
+              <AlertTitle>{t("apiKeys.internalKeyIsolation")}</AlertTitle>
               <AlertDescription>
                 {localConfig.data.note} {localConfig.data.processing_api.secret_source}。
               </AlertDescription>
@@ -115,44 +117,44 @@ function ApiKeysPage() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">建立 API Key</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t("apiKeys.createTitle")}</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-[1fr_220px_auto] md:items-end">
             <div className="space-y-2">
-              <Label htmlFor="api-key-name">名稱</Label>
-              <Input id="api-key-name" value={name} onChange={(event) => setName(event.target.value)} maxLength={100} placeholder="例如：本地 Python 報表" />
+              <Label htmlFor="api-key-name">{t("apiKeys.nameLabel")}</Label>
+              <Input id="api-key-name" value={name} onChange={(event) => setName(event.target.value)} maxLength={100} placeholder={t("apiKeys.namePlaceholder")} />
             </div>
             <div className="space-y-2">
-              <Label>有效期</Label>
+              <Label>{t("apiKeys.expiryLabel")}</Label>
               <Select value={expiresDays} onValueChange={setExpiresDays}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="30">30 天</SelectItem>
-                  <SelectItem value="90">90 天</SelectItem>
-                  <SelectItem value="365">1 年</SelectItem>
-                  <SelectItem value="never">永不過期</SelectItem>
+                  <SelectItem value="30">{t("apiKeys.expiry30")}</SelectItem>
+                  <SelectItem value="90">{t("apiKeys.expiry90")}</SelectItem>
+                  <SelectItem value="365">{t("apiKeys.expiry365")}</SelectItem>
+                  <SelectItem value="never">{t("apiKeys.expiryNever")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <Button onClick={() => createKey.mutate()} disabled={!name.trim() || createKey.isPending}>
               {createKey.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-              建立
+              {t("apiKeys.createButton")}
             </Button>
           </div>
 
           {createdKey && (
             <Alert className="border-amber-500/50 bg-amber-500/5">
               <KeyRound className="h-4 w-4" />
-              <AlertTitle>請立即保存此 Key</AlertTitle>
+              <AlertTitle>{t("apiKeys.saveKeyTitle")}</AlertTitle>
               <AlertDescription className="space-y-3">
-                <p>關閉後無法再次查看明文。如遺失，請撤銷並重新建立。</p>
+                <p>{t("apiKeys.saveKeyWarning")}</p>
                 <div className="flex items-center gap-2 rounded-md border bg-background p-2">
                   <code className="min-w-0 flex-1 break-all text-xs">{createdKey}</code>
-                  <Button variant="outline" size="icon" onClick={copyKey} title="複製 API Key">
+                  <Button variant="outline" size="icon" onClick={copyKey} title={t("apiKeys.copyKey")}>
                     {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                   </Button>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => setCreatedKey(null)}>我已保存，關閉</Button>
+                <Button variant="ghost" size="sm" onClick={() => setCreatedKey(null)}>{t("apiKeys.savedClose")}</Button>
               </AlertDescription>
             </Alert>
           )}
@@ -160,10 +162,10 @@ function ApiKeysPage() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">我的 API Keys</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t("apiKeys.myKeysTitle")}</CardTitle></CardHeader>
         <CardContent>
           <Table>
-            <TableHeader><TableRow><TableHead>名稱</TableHead><TableHead>Key</TableHead><TableHead>建立時間</TableHead><TableHead>到期時間</TableHead><TableHead>最後使用</TableHead><TableHead>狀態</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>{t("apiKeys.colName")}</TableHead><TableHead>{t("apiKeys.colKey")}</TableHead><TableHead>{t("apiKeys.colCreated")}</TableHead><TableHead>{t("apiKeys.colExpires")}</TableHead><TableHead>{t("apiKeys.colLastUsed")}</TableHead><TableHead>{t("apiKeys.colStatus")}</TableHead><TableHead className="text-right">{t("apiKeys.colActions")}</TableHead></TableRow></TableHeader>
             <TableBody>
               {keys.data?.map((key) => (
                 <TableRow key={key.id}>
@@ -172,16 +174,16 @@ function ApiKeysPage() {
                   <TableCell>{formatDate(key.created_at)}</TableCell>
                   <TableCell>{formatDate(key.expires_at)}</TableCell>
                   <TableCell>{formatDate(key.last_used_at)}</TableCell>
-                  <TableCell><Badge variant={key.is_active ? "default" : "secondary"}>{key.is_active ? "有效" : "已撤銷"}</Badge></TableCell>
+                  <TableCell><Badge variant={key.is_active ? "default" : "secondary"}>{key.is_active ? t("apiKeys.statusActive") : t("apiKeys.statusRevoked")}</Badge></TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="sm" disabled={!key.is_active || revokeKey.isPending} onClick={() => revokeKey.mutate(key.id)}>
-                      <Trash2 className="h-4 w-4" />撤銷
+                      <Trash2 className="h-4 w-4" />{t("apiKeys.revoke")}
                     </Button>
                   </TableCell>
                 </TableRow>
               ))}
               {!keys.isLoading && !keys.data?.length && (
-                <TableRow><TableCell colSpan={7} className="h-20 text-center text-muted-foreground">尚未建立 API Key</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="h-20 text-center text-muted-foreground">{t("apiKeys.emptyKeys")}</TableCell></TableRow>
               )}
             </TableBody>
           </Table>

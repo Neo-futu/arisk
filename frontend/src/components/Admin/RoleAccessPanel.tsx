@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Plus, Settings2, Shield, Trash2 } from "lucide-react"
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -43,6 +44,7 @@ function RoleEditor({
   const isCreate = mode.type === "create"
   const role = mode.type === "edit" ? mode.role : null
   const isBuiltin = role ? BUILTIN_ROLE_CODES.has(role.code) : false
+  const { t } = useTranslation()
 
   const [name, setName] = useState(role?.name ?? "")
   const [code, setCode] = useState(role?.code ?? "")
@@ -78,7 +80,7 @@ function RoleEditor({
             menu_ids: menuIds,
           }),
     onSuccess: () => {
-      showSuccessToast(isCreate ? "角色已创建" : "角色配置已更新")
+      showSuccessToast(isCreate ? t("admin.roles.created") : t("admin.roles.updated"))
       invalidate()
       onClose()
     },
@@ -94,40 +96,40 @@ function RoleEditor({
     <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>{isCreate ? "新建角色" : `配置角色：${role!.name}`}</DialogTitle>
+          <DialogTitle>{isCreate ? t("admin.roles.create") : t("admin.roles.editTitle", { name: role!.name })}</DialogTitle>
           <DialogDescription>
-            {isCreate ? "定义角色的标识、菜单可见性与功能权限。" : `${role!.code} · 配置菜单可见性与功能权限。`}
+            {isCreate ? t("admin.roles.createDesc") : t("admin.roles.editDesc", { code: role!.code })}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
           <section className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label>角色名称 <span className="text-destructive">*</span></Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="如：合规经理" />
+              <Label>{t("admin.roles.roleName")} <span className="text-destructive">*</span></Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("admin.roles.roleNamePlaceholder")} />
             </div>
             <div className="space-y-2">
-              <Label>角色代码 {isCreate ? <span className="text-destructive">*</span> : null}</Label>
+              <Label>{t("admin.roles.roleCode")} {isCreate ? <span className="text-destructive">*</span> : null}</Label>
               <Input
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
-                placeholder="如：COMPLIANCE_OFFICER"
+                placeholder={t("admin.roles.roleCodePlaceholder")}
                 disabled={!isCreate}
               />
-              {isCreate ? <p className="text-xs text-muted-foreground">字母开头，仅限字母/数字/下划线；创建后不可修改。</p> : null}
+              {isCreate ? <p className="text-xs text-muted-foreground">{t("admin.roles.codeHint")}</p> : null}
             </div>
             <div className="space-y-2 sm:col-span-2">
-              <Label>描述</Label>
-              <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="角色职责说明" />
+              <Label>{t("admin.roles.descriptionLabel")}</Label>
+              <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("admin.roles.descriptionPlaceholder")} />
             </div>
             <div className="flex items-center gap-3 sm:col-span-2">
               <Switch checked={isActive} onCheckedChange={setIsActive} disabled={isBuiltin && role?.code === "SYSTEM_ADMIN"} />
-              <span className="text-sm">启用该角色</span>
+              <span className="text-sm">{t("admin.roles.enableRole")}</span>
             </div>
           </section>
 
           <section>
-            <h3 className="mb-3 text-sm font-semibold">菜单权限</h3>
+            <h3 className="mb-3 text-sm font-semibold">{t("admin.roles.menuPermissions")}</h3>
             <div className="grid gap-2 sm:grid-cols-2">
               {catalog.menus.map((menu) => (
                 <label key={menu.id} className="flex cursor-pointer items-center gap-3 rounded-md border p-3">
@@ -145,7 +147,7 @@ function RoleEditor({
           </section>
 
           <section>
-            <h3 className="mb-3 text-sm font-semibold">功能权限</h3>
+            <h3 className="mb-3 text-sm font-semibold">{t("admin.roles.functionPermissions")}</h3>
             <div className="grid gap-2 sm:grid-cols-2">
               {catalog.permissions.map((permission) => (
                 <label key={permission.id} className="flex cursor-pointer items-start gap-3 rounded-md border p-3">
@@ -164,13 +166,13 @@ function RoleEditor({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>取消</Button>
+          <Button variant="outline" onClick={onClose}>{t("admin.roles.cancel")}</Button>
           <Button
             className="bg-orange-600 hover:bg-orange-700"
             disabled={!canSubmit || mutation.isPending}
             onClick={() => mutation.mutate()}
           >
-            {mutation.isPending ? "保存中..." : isCreate ? "创建角色" : "保存角色配置"}
+            {mutation.isPending ? t("admin.roles.saving") : isCreate ? t("admin.roles.createBtn") : t("admin.roles.saveBtn")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -182,11 +184,12 @@ function DeleteRoleButton({ role }: { role: AccessRole }) {
   const [open, setOpen] = useState(false)
   const queryClient = useQueryClient()
   const { showSuccessToast, showErrorToast } = useCustomToast()
+  const { t } = useTranslation()
 
   const mutation = useMutation({
     mutationFn: () => fsiApi.deleteRole(role.id),
     onSuccess: () => {
-      showSuccessToast("角色已删除")
+      showSuccessToast(t("admin.roles.deleted"))
       void queryClient.invalidateQueries({ queryKey: ["access-control-catalog"] })
       void queryClient.invalidateQueries({ queryKey: ["access-control-grants"] })
       setOpen(false)
@@ -203,21 +206,21 @@ function DeleteRoleButton({ role }: { role: AccessRole }) {
         onClick={() => setOpen(true)}
       >
         <Trash2 />
-        删除角色
+        {t("admin.roles.delete")}
       </Button>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>删除角色：{role.name}</DialogTitle>
+          <DialogTitle>{t("admin.roles.deleteTitle", { name: role.name })}</DialogTitle>
           <DialogDescription>
-            此操作不可撤销。若该角色仍分配给用户，需先取消分配。
+            {t("admin.roles.deleteDesc")}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <DialogClose asChild>
-            <Button variant="outline" disabled={mutation.isPending}>取消</Button>
+            <Button variant="outline" disabled={mutation.isPending}>{t("admin.roles.cancel")}</Button>
           </DialogClose>
           <Button variant="destructive" disabled={mutation.isPending} onClick={() => mutation.mutate()}>
-            {mutation.isPending ? "删除中..." : "确认删除"}
+            {mutation.isPending ? t("admin.roles.deleting") : t("admin.roles.confirmDelete")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -226,6 +229,7 @@ function DeleteRoleButton({ role }: { role: AccessRole }) {
 }
 
 export default function RoleAccessPanel() {
+  const { t } = useTranslation()
   const [editor, setEditor] = useState<EditorMode | null>(null)
   const catalogQuery = useQuery({
     queryKey: ["access-control-catalog"],
@@ -240,10 +244,10 @@ export default function RoleAccessPanel() {
           <div>
             <CardTitle className="flex items-center gap-2 text-base">
               <Shield className="h-5 w-5 text-orange-600" />
-              角色、菜单与功能权限
+              {t("admin.roles.title")}
             </CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
-              角色决定平台菜单和职能能力；组合 VIEW/MANAGE 范围在用户行的橙色授权入口配置。
+              {t("admin.roles.subtitle")}
             </p>
           </div>
           <Button
@@ -253,13 +257,13 @@ export default function RoleAccessPanel() {
             onClick={() => setEditor({ type: "create" })}
           >
             <Plus />
-            新建角色
+            {t("admin.roles.create")}
           </Button>
         </div>
       </CardHeader>
       <CardContent>
         {catalogQuery.isLoading ? (
-          <p className="text-sm text-muted-foreground">正在加载角色配置...</p>
+          <p className="text-sm text-muted-foreground">{t("admin.roles.loading")}</p>
         ) : (
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             {catalogQuery.data?.roles.map((role) => (
@@ -271,18 +275,18 @@ export default function RoleAccessPanel() {
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <Badge variant={role.is_active ? "secondary" : "outline"}>
-                      {role.is_active ? "启用" : "停用"}
+                      {role.is_active ? t("admin.roles.enabled") : t("admin.roles.disabled")}
                     </Badge>
                     {BUILTIN_ROLE_CODES.has(role.code) ? (
-                      <Badge variant="outline" className="text-[10px]">内置</Badge>
+                      <Badge variant="outline" className="text-[10px]">{t("admin.roles.builtin")}</Badge>
                     ) : null}
                   </div>
                 </div>
                 <p className="mt-3 min-h-10 text-xs text-muted-foreground">{role.description}</p>
                 <div className="mt-3 flex gap-2 text-xs text-muted-foreground">
-                  <span>{role.menu_ids.length} 个菜单</span>
+                  <span>{t("admin.roles.menuCount", { count: role.menu_ids.length })}</span>
                   <span>·</span>
-                  <span>{role.permission_ids.length} 项权限</span>
+                  <span>{t("admin.roles.permissionCount", { count: role.permission_ids.length })}</span>
                 </div>
                 <Button
                   variant="outline"
@@ -291,7 +295,7 @@ export default function RoleAccessPanel() {
                   onClick={() => setEditor({ type: "edit", role })}
                 >
                   <Settings2 />
-                  配置角色权限
+                  {t("admin.roles.configure")}
                 </Button>
                 {!BUILTIN_ROLE_CODES.has(role.code) ? <DeleteRoleButton role={role} /> : null}
               </div>

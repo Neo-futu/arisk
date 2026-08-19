@@ -4,6 +4,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { Bot, Loader2, Send, SquarePen } from "lucide-react"
+import { useTranslation } from "react-i18next"
 import { MODEL_GROUPS } from "./constants"
 import { MessageBubble } from "./MessageBubble"
 import type { ChatMessage } from "./types"
@@ -34,6 +35,7 @@ export function ChatArea({
   agentList, modelList, sendMessage, newChat,
   bottomRef, inputRef,
 }: Props) {
+  const { t } = useTranslation()
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage() }
   }
@@ -43,7 +45,7 @@ export function ChatArea({
       {/* 頂欄 */}
       <div className="relative z-10 flex flex-wrap items-center gap-2 border-b pb-3 mb-3">
         <Bot className="h-5 w-5 text-primary shrink-0" />
-        <h1 className="text-lg font-bold tracking-tight">Agent Chat</h1>
+        <h1 className="text-lg font-bold tracking-tight">{t("chat.title")}</h1>
 
         <Select value={agentId} onValueChange={setAgentId}>
           <SelectTrigger className="h-8 w-44 text-xs"><SelectValue /></SelectTrigger>
@@ -63,13 +65,13 @@ export function ChatArea({
               return (
                 <div key={group.key}>
                   <div className={`px-2 py-1 ${gi > 0 ? "mt-1 border-t" : ""} text-[10px] font-semibold text-muted-foreground uppercase tracking-wide`}>
-                    {group.label}
+                    {t(group.labelKey)}
                   </div>
                   {items.map(m => (
                     <SelectItem key={m.id} value={m.id} className="text-xs">
                       <span className={`${group.color} mr-1`}>{group.icon}</span>
                       {m.label}
-                      {m.default && <span className="ml-1 text-[10px] text-muted-foreground">默認</span>}
+                      {m.default && <span className="ml-1 text-[10px] text-muted-foreground">{t("chat.defaultModelSuffix")}</span>}
                     </SelectItem>
                   ))}
                 </div>
@@ -81,11 +83,11 @@ export function ChatArea({
         <div className="ml-auto flex items-center gap-2">
           {streaming && (
             <Badge variant="secondary" className="gap-1 text-xs">
-              <Loader2 className="h-3 w-3 animate-spin" />分析中...
+              <Loader2 className="h-3 w-3 animate-spin" />{t("chat.analyzing")}
             </Badge>
           )}
-          <Button size="sm" variant="ghost" className="h-8 gap-1 text-xs text-muted-foreground" onClick={newChat} disabled={streaming} title="新對話">
-            <SquarePen className="h-3.5 w-3.5" />新對話
+          <Button size="sm" variant="ghost" className="h-8 gap-1 text-xs text-muted-foreground" onClick={newChat} disabled={streaming} title={t("chat.newChatTitle")}>
+            <SquarePen className="h-3.5 w-3.5" />{t("chat.newChat")}
           </Button>
         </div>
       </div>
@@ -96,11 +98,11 @@ export function ChatArea({
           <div className="flex h-full flex-col items-center justify-center gap-4 text-center text-muted-foreground">
             <Bot className="h-12 w-12 opacity-30" />
             <div>
-              <p className="font-medium">開始與 Agent 對話</p>
-              <p className="text-sm mt-1">可調用風控 API，返回 WAM / WAL / VaR / 持倉等業務數據</p>
+              <p className="font-medium">{t("chat.emptyTitle")}</p>
+              <p className="text-sm mt-1">{t("chat.emptySubtitle")}</p>
             </div>
             <div className="flex flex-wrap gap-2 justify-center">
-              {["分析 BHMMF001 的 WAM/WAL 和 SFC 合規狀態", "計算 99% 置信度的 VaR 三方法對比", "查詢今日持倉構成和資產配置"].map(hint => (
+              {[t("chat.hintWamWal"), t("chat.hintVar"), t("chat.hintPositions")].map(hint => (
                 <button key={hint} className="rounded-full border px-3 py-1.5 text-xs hover:bg-muted transition-colors"
                   onClick={() => { setInput(hint); inputRef.current?.focus() }}>
                   {hint}
@@ -120,7 +122,7 @@ export function ChatArea({
             ref={inputRef} value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown} rows={2} disabled={streaming}
-            placeholder={`向「${agentList.find(a => a.id === agentId)?.name ?? agentId}」提問... （Enter 發送，Shift+Enter 換行）`}
+            placeholder={t("chat.inputPlaceholder", { agent: agentList.find(a => a.id === agentId)?.name ?? agentId })}
             className="flex-1 resize-none rounded-xl border border-input bg-background px-4 py-3 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
           />
           <Button size="icon" className="h-12 w-12 rounded-xl shrink-0" onClick={sendMessage} disabled={streaming || !input.trim()}>
@@ -128,7 +130,7 @@ export function ChatArea({
           </Button>
         </div>
         <p className="mt-1.5 text-xs text-muted-foreground text-center">
-          工具調用路徑：<span className="font-mono">6_entry:8010 → processing:8001</span>
+          {t("chat.toolPathLabel")}<span className="font-mono">6_entry:8010 → processing:8001</span>
         </p>
       </div>
     </div>

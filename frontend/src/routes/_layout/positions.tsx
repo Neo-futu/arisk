@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 
 import { FUNDS, FsiToolbar, lastTradeDate } from "@/components/FsiToolbar"
 import { Badge } from "@/components/ui/badge"
@@ -78,6 +79,7 @@ function PositionRow({ p }: { p: Position }) {
 }
 
 function PositionsPage() {
+  const { t } = useTranslation()
   const [fundId, setFundId] = useState(FUNDS[0].id)
   const [asOfDate, setAsOfDate] = useState(lastTradeDate)
   const [assetType, setAssetType] = useState("")
@@ -99,9 +101,9 @@ function PositionsPage() {
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {ASSET_TYPES.map((t) => (
-          <SelectItem key={t.value} value={t.value}>
-            {t.label}
+        {ASSET_TYPES.map((tp) => (
+          <SelectItem key={tp.value} value={tp.value}>
+            {tp.value === "" ? t("positions.allAssetTypes") : tp.label}
           </SelectItem>
         ))}
       </SelectContent>
@@ -111,8 +113,8 @@ function PositionsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">持倉明細</h1>
-        <p className="text-muted-foreground text-sm">當日持倉列表，按市值降序排列</p>
+        <h1 className="text-2xl font-bold tracking-tight">{t("positions.title")}</h1>
+        <p className="text-muted-foreground text-sm">{t("positions.subtitle")}</p>
       </div>
 
       <FsiToolbar
@@ -123,12 +125,12 @@ function PositionsPage() {
       />
 
       {isFetching && (
-        <p className="text-muted-foreground text-sm animate-pulse">載入中...</p>
+        <p className="text-muted-foreground text-sm animate-pulse">{t("positions.loading")}</p>
       )}
       {isError && (
         <Card className="border-destructive">
           <CardContent className="pt-4 text-sm text-destructive">
-            無法載入持倉數據。請確認 Processing API 已啟動。
+            {t("positions.loadError")}
           </CardContent>
         </Card>
       )}
@@ -139,27 +141,27 @@ function PositionsPage() {
             <CardTitle className="text-base">
               {fundId} · {asOfDate}
               <span className="ml-2 text-sm font-normal text-muted-foreground">
-                共 {data.count} 筆
+                {t("positions.countLabel", { count: data.count })}
               </span>
             </CardTitle>
           </CardHeader>
           <CardContent>
             {positions.length === 0 ? (
               <p className="text-center text-muted-foreground py-8 text-sm">
-                {asOfDate} 無持倉數據
+                {t("positions.noData", { date: asOfDate })}
               </p>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>資產代碼</TableHead>
-                    <TableHead>名稱</TableHead>
-                    <TableHead>類別</TableHead>
-                    <TableHead>幣種</TableHead>
-                    <TableHead className="text-right">市值（HKD）</TableHead>
-                    <TableHead className="text-right">佔 NAV</TableHead>
-                    <TableHead>到期日</TableHead>
-                    <TableHead>評級</TableHead>
+                    <TableHead>{t("positions.colAssetId")}</TableHead>
+                    <TableHead>{t("positions.colName")}</TableHead>
+                    <TableHead>{t("positions.colType")}</TableHead>
+                    <TableHead>{t("positions.colCurrency")}</TableHead>
+                    <TableHead className="text-right">{t("positions.colMarketValue")}</TableHead>
+                    <TableHead className="text-right">{t("positions.colWeight")}</TableHead>
+                    <TableHead>{t("positions.colMaturity")}</TableHead>
+                    <TableHead>{t("positions.colRating")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

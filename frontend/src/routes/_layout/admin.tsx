@@ -1,6 +1,7 @@
 import { useSuspenseQuery } from "@tanstack/react-query"
 import { createFileRoute, redirect } from "@tanstack/react-router"
 import { Suspense } from "react"
+import { useTranslation } from "react-i18next"
 
 import { type UserPublic, UsersService } from "@/client"
 import AddUser from "@/components/Admin/AddUser"
@@ -59,13 +60,14 @@ function UsersTable() {
 }
 
 function Admin() {
+  const { t } = useTranslation()
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">用户与权限管理</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t("admin.pageTitle")}</h1>
           <p className="text-muted-foreground">
-            管理用户、平台角色、菜单权限，以及组合查看与投资管理授权。
+            {t("admin.pageSubtitle")}
           </p>
         </div>
         <AddUser />

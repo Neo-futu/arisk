@@ -1,5 +1,6 @@
 import { MessageSquarePlus, Search, Sparkles, Trash2, X } from "lucide-react"
 import { type MouseEvent, useState } from "react"
+import { useTranslation } from "react-i18next"
 import axios from "axios"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -30,6 +31,7 @@ function SkillExtractModal({
   session: ChatSessionRecord
   onClose: () => void
 }) {
+  const { t } = useTranslation()
   const [topic,     setTopic]     = useState(session.title.slice(0, 40))
   const [layer,     setLayer]     = useState<"chat" | "expert">("chat")
   const [extracted, setExtracted] = useState("")
@@ -38,13 +40,13 @@ function SkillExtractModal({
   const [msg,       setMsg]       = useState("")
 
   const extract = async () => {
-    if (!topic.trim()) { alert("請填寫技能主題"); return }
+    if (!topic.trim()) { alert(t("chat.alertTopicRequired")); return }
     setLoading(true); setMsg("")
     try {
       // 先拉取對話消息
       const msgsResp = await fsiApi.getChatMessages(session.id)
       const conversation = msgsResp.data.map(m => ({ role: m.role, content: m.content }))
-      if (conversation.length < 2) { alert("對話內容太少，無法提取技能"); return }
+      if (conversation.length < 2) { alert(t("chat.alertConversationTooShort")); return }
 
       // 從 localStorage 讀取用戶偏好模型，默認 Grok（OpenRouter，無地區限制）
       const preferredModel = localStorage.getItem("arisk_preferred_model") || "x-ai/grok-4.20"
@@ -53,7 +55,7 @@ function SkillExtractModal({
         { headers: authHeaders() })
       setExtracted(resp.data.skill_content || "")
     } catch (err: any) {
-      setMsg(`❌ 提取失敗：${err.response?.data?.detail || err.message}`)
+      setMsg(t("chat.extractFailed", { error: err.response?.data?.detail || err.message }))
     } finally { setLoading(false) }
   }
 
@@ -65,9 +67,9 @@ function SkillExtractModal({
       const resp = await axios.post(`${BASE}/api/v1/knowledge/save-skill`,
         { skill_name: skillName, skill_content: extracted, layer, also_index: true },
         { headers: authHeaders() })
-      setMsg(`✅ 已保存：${resp.data.file_path}${resp.data.indexed ? " + 已索引" : ""}`)
+      setMsg(t("chat.saveSuccess", { path: resp.data.file_path, indexed: resp.data.indexed ? t("chat.savedIndexed") : "" }))
     } catch (err: any) {
-      setMsg(`❌ 保存失敗：${err.response?.data?.detail || err.message}`)
+      setMsg(t("chat.saveFailed", { error: err.response?.data?.detail || err.message }))
     } finally { setSaving(false) }
   }
 
@@ -78,24 +80,24 @@ function SkillExtractModal({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-amber-500" />
-            <span className="font-semibold text-sm">從對話提取業務技能</span>
+            <span className="font-semibold text-sm">{t("chat.modalTitle")}</span>
           </div>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
             <X className="h-4 w-4" />
           </button>
         </div>
-        <p className="text-xs text-muted-foreground">對話：{session.title}</p>
+        <p className="text-xs text-muted-foreground">{t("chat.modalConversation", { title: session.title })}</p>
 
         {/* 設置 */}
         <div className="space-y-2">
           <Input value={topic} onChange={e => setTopic(e.target.value)}
-            placeholder="技能主題，如：VaR 分析流程" className="text-sm" />
+            placeholder={t("chat.topicPlaceholder")} className="text-sm" />
           <div className="flex gap-2">
             {(["chat", "expert"] as const).map(l => (
               <button key={l}
                 className={`flex-1 rounded border py-1 text-xs transition-colors ${layer === l ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
                 onClick={() => setLayer(l)}>
-                {l === "chat" ? "用戶業務技能" : "系統專家技能（3_skills）"}
+                {l === "chat" ? t("chat.layerChat") : t("chat.layerExpert")}
               </button>
             ))}
           </div>
@@ -104,18 +106,18 @@ function SkillExtractModal({
         {/* 提取按鈕 */}
         <Button variant="outline" className="gap-2 text-xs" onClick={extract} disabled={loading}>
           {loading
-            ? <><span className="h-3.5 w-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />提取中...</>
-            : <><Sparkles className="h-3.5 w-3.5 text-amber-500" />AI 提取技能</>}
+            ? <><span className="h-3.5 w-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />{t("chat.extracting")}</>
+            : <><Sparkles className="h-3.5 w-3.5 text-amber-500" />{t("chat.aiExtract")}</>}
         </Button>
 
         {/* 提取結果 */}
         {extracted && (
           <div className="flex-1 overflow-hidden flex flex-col gap-2">
-            <p className="text-xs text-muted-foreground">提取結果（可編輯）：</p>
+            <p className="text-xs text-muted-foreground">{t("chat.extractResultLabel")}</p>
             <Textarea value={extracted} onChange={e => setExtracted(e.target.value)}
               className="flex-1 text-xs font-mono resize-none min-h-[180px]" />
             <Button className="gap-2 text-xs" onClick={save} disabled={saving}>
-              {saving ? "保存中..." : "保存技能"}
+              {saving ? t("chat.saving") : t("chat.saveSkill")}
             </Button>
           </div>
         )}
@@ -136,6 +138,7 @@ function SessionItem({
   onDelete:        () => void
   onExtractSkill:  () => void
 }) {
+  const { t } = useTranslation()
   const [hover, setHover] = useState(false)
   return (
     <div
@@ -154,15 +157,15 @@ function SessionItem({
             className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium
                        bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-200 transition-colors"
             onClick={(e: MouseEvent) => { e.stopPropagation(); onExtractSkill() }}
-            title="從此對話提取業務技能"
+            title={t("chat.extractTitle")}
           >
-            <Sparkles className="h-3 w-3" />提取
+            <Sparkles className="h-3 w-3" />{t("chat.extractButton")}
           </button>
           {/* 刪除 */}
           <button
             className="rounded p-0.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
             onClick={(e: MouseEvent) => { e.stopPropagation(); onDelete() }}
-            title="刪除對話"
+            title={t("chat.deleteTitle")}
           >
             <Trash2 className="h-3.5 w-3.5" />
           </button>
@@ -174,13 +177,19 @@ function SessionItem({
 
 // ── 主面板 ───────────────────────────────────────────────────────
 export function SessionPanel({ sessions, currentSessionId, onSelect, onDelete, onNew }: Props) {
+  const { t } = useTranslation()
   const [query,            setQuery]           = useState("")
   const [extractingSession, setExtractingSession] = useState<ChatSessionRecord | null>(null)
 
   const filtered = query.trim()
     ? sessions.filter(s => s.title.toLowerCase().includes(query.toLowerCase()))
     : sessions
-  const groups = groupSessionsByDate(filtered)
+  const groups = groupSessionsByDate(filtered, {
+    today:     t("chat.groupToday"),
+    yesterday: t("chat.groupYesterday"),
+    thisWeek:  t("chat.groupThisWeek"),
+    older:     t("chat.groupOlder"),
+  })
 
   return (
     <>
@@ -188,7 +197,7 @@ export function SessionPanel({ sessions, currentSessionId, onSelect, onDelete, o
         {/* 新對話 */}
         <div className="border-b p-3">
           <Button size="sm" variant="outline" className="w-full gap-2 text-xs" onClick={onNew}>
-            <MessageSquarePlus className="h-3.5 w-3.5" />新對話
+            <MessageSquarePlus className="h-3.5 w-3.5" />{t("chat.newChat")}
           </Button>
         </div>
 
@@ -197,14 +206,14 @@ export function SessionPanel({ sessions, currentSessionId, onSelect, onDelete, o
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
             <Input value={query} onChange={e => setQuery(e.target.value)}
-              placeholder="搜索對話..." className="h-8 pl-8 text-xs" />
+              placeholder={t("chat.searchPlaceholder")} className="h-8 pl-8 text-xs" />
           </div>
         </div>
 
         {/* 會話列表 */}
         <div className="flex-1 overflow-y-auto px-2 py-2 space-y-3">
           {groups.length === 0 && (
-            <p className="px-3 py-4 text-center text-xs text-muted-foreground">暫無對話記錄</p>
+            <p className="px-3 py-4 text-center text-xs text-muted-foreground">{t("chat.noSessions")}</p>
           )}
           {groups.map(group => (
             <div key={group.label}>
@@ -229,7 +238,7 @@ export function SessionPanel({ sessions, currentSessionId, onSelect, onDelete, o
         <div className="border-t px-3 py-2">
           <p className="text-[10px] text-muted-foreground flex items-center gap-1">
             <Sparkles className="h-3 w-3 text-amber-400" />
-            Hover 對話可提取技能
+            {t("chat.hoverExtractHint")}
           </p>
         </div>
       </div>

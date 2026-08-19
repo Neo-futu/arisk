@@ -13,6 +13,7 @@ import {
   XCircle,
 } from "lucide-react"
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -80,6 +81,7 @@ function ScheduleDialog({
   onSave: (data: FormState) => void
   isSaving: boolean
 }) {
+  const { t } = useTranslation()
   const [form, setForm] = useState<FormState>({
     name:      initial?.name      ?? "",
     report_id: initial?.report_id ?? "report_03_mmf",
@@ -95,24 +97,24 @@ function ScheduleDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{initial?.name ? "編輯定時任務" : "新建定時任務"}</DialogTitle>
+          <DialogTitle>{initial?.name ? t("schedules.editTitle") : t("schedules.createTitle")}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
           {/* 任務名稱 */}
           <div className="space-y-1">
-            <label className="text-sm font-medium">任務名稱</label>
+            <label className="text-sm font-medium">{t("schedules.taskName")}</label>
             <input
               className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
               value={form.name}
               onChange={e => set("name", e.target.value)}
-              placeholder="例：每日 MMF 日報 BHMMF001"
+              placeholder={t("schedules.taskNamePlaceholder")}
             />
           </div>
 
           {/* 報表類型 */}
           <div className="space-y-1">
-            <label className="text-sm font-medium">報表類型</label>
+            <label className="text-sm font-medium">{t("schedules.reportType")}</label>
             <select
               className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
               value={form.report_id}
@@ -124,7 +126,7 @@ function ScheduleDialog({
 
           {/* 基金選擇 */}
           <div className="space-y-1">
-            <label className="text-sm font-medium">基金</label>
+            <label className="text-sm font-medium">{t("schedules.fund")}</label>
             <select
               className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
               value={form.fund_id}
@@ -136,14 +138,14 @@ function ScheduleDialog({
 
           {/* 定時時間 */}
           <div className="space-y-1">
-            <label className="text-sm font-medium">每日執行時間</label>
+            <label className="text-sm font-medium">{t("schedules.dailyRunTime")}</label>
             <div className="flex items-center gap-2">
               <select
                 className="h-9 w-24 rounded-md border border-input bg-background px-2 text-sm"
                 value={form.hour}
                 onChange={e => set("hour", Number(e.target.value))}
               >
-                {HOURS.map(h => <option key={h} value={h}>{String(h).padStart(2,"0")} 時</option>)}
+                {HOURS.map(h => <option key={h} value={h}>{t("schedules.hourUnit", { value: String(h).padStart(2,"0") })}</option>)}
               </select>
               <span className="text-muted-foreground">:</span>
               <select
@@ -151,10 +153,10 @@ function ScheduleDialog({
                 value={form.minute}
                 onChange={e => set("minute", Number(e.target.value))}
               >
-                {MINUTES.map(m => <option key={m} value={m}>{String(m).padStart(2,"0")} 分</option>)}
+                {MINUTES.map(m => <option key={m} value={m}>{t("schedules.minuteUnit", { value: String(m).padStart(2,"0") })}</option>)}
               </select>
               <span className="text-xs text-muted-foreground ml-1">
-                → 每天 {fmtTime(form.hour, form.minute)} 自動生成
+                {t("schedules.autoGenerateHint", { time: fmtTime(form.hour, form.minute) })}
               </span>
             </div>
           </div>
@@ -162,15 +164,15 @@ function ScheduleDialog({
           {/* 啟用開關 */}
           <div className="flex items-center gap-3">
             <Switch checked={form.enabled} onCheckedChange={v => set("enabled", v)} />
-            <span className="text-sm">{form.enabled ? "啟用" : "停用"}</span>
+            <span className="text-sm">{form.enabled ? t("schedules.enabled") : t("schedules.disabled")}</span>
           </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t("schedules.cancel")}</Button>
           <Button onClick={() => onSave(form)} disabled={isSaving || !form.name.trim()}>
             {isSaving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
-            保存
+            {t("schedules.save")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -181,6 +183,7 @@ function ScheduleDialog({
 // ── 歷史與文件面板 ────────────────────────────────────────────────
 function ScheduleDetail({ schedule }: { schedule: Schedule }) {
   const qc = useQueryClient()
+  const { t } = useTranslation()
 
   const { data: history } = useQuery({
     queryKey: ["schedule-history", schedule.schedule_id],
@@ -213,13 +216,13 @@ function ScheduleDetail({ schedule }: { schedule: Schedule }) {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-1.5">
-            <History className="h-4 w-4" /> 執行歷史
-            <span className="text-xs font-normal text-muted-foreground">（本地時間）</span>
+            <History className="h-4 w-4" /> {t("schedules.runHistory")}
+            <span className="text-xs font-normal text-muted-foreground">{t("schedules.localTime")}</span>
           </CardTitle>
         </CardHeader>
         <CardContent>
           {!history?.length
-            ? <p className="text-xs text-muted-foreground">暫無執行記錄</p>
+            ? <p className="text-xs text-muted-foreground">{t("schedules.noHistory")}</p>
             : (
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {history.map(h => (
@@ -235,7 +238,7 @@ function ScheduleDetail({ schedule }: { schedule: Schedule }) {
                     </div>
                     <button
                       className="invisible group-hover:visible shrink-0 rounded p-0.5 text-muted-foreground hover:text-destructive transition-colors"
-                      title="刪除此記錄"
+                      title={t("schedules.deleteRecord")}
                       onClick={() => deleteHistoryMut.mutate(h.run_id)}
                     >
                       <Trash2 className="h-3 w-3" />
@@ -251,12 +254,12 @@ function ScheduleDetail({ schedule }: { schedule: Schedule }) {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-1.5">
-            <FileText className="h-4 w-4" /> 已生成文件
+            <FileText className="h-4 w-4" /> {t("schedules.generatedFiles")}
           </CardTitle>
         </CardHeader>
         <CardContent>
           {!files?.length
-            ? <p className="text-xs text-muted-foreground">暫無文件</p>
+            ? <p className="text-xs text-muted-foreground">{t("schedules.noFiles")}</p>
             : (
               <div className="space-y-1.5 max-h-48 overflow-y-auto">
                 {files.map(f => (
@@ -287,6 +290,7 @@ function ScheduleDetail({ schedule }: { schedule: Schedule }) {
 // ── 主頁面 ────────────────────────────────────────────────────────
 function SchedulesPage() {
   const qc = useQueryClient()
+  const { t } = useTranslation()
   const [createOpen, setCreateOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<Schedule | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -337,25 +341,25 @@ function SchedulesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">定時任務</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t("schedules.title")}</h1>
           <p className="text-muted-foreground text-sm">
-            設置報表自動生成任務，每天指定時間執行，結果存儲於 artefacts/scheduled/
+            {t("schedules.subtitle")}
           </p>
         </div>
         <Button onClick={() => setCreateOpen(true)} className="gap-1.5">
-          <Plus className="h-4 w-4" />新建任務
+          <Plus className="h-4 w-4" />{t("schedules.newTask")}
         </Button>
       </div>
 
       {/* 任務列表 */}
       {isLoading ? (
-        <p className="text-muted-foreground text-sm animate-pulse">載入中...</p>
+        <p className="text-muted-foreground text-sm animate-pulse">{t("schedules.loading")}</p>
       ) : schedules.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-12">
             <Clock className="h-10 w-10 text-muted-foreground" />
-            <p className="text-muted-foreground">尚未創建任何定時任務</p>
-            <Button size="sm" onClick={() => setCreateOpen(true)}>新建第一個任務</Button>
+            <p className="text-muted-foreground">{t("schedules.emptyList")}</p>
+            <Button size="sm" onClick={() => setCreateOpen(true)}>{t("schedules.newFirstTask")}</Button>
           </CardContent>
         </Card>
       ) : (
@@ -368,24 +372,24 @@ function SchedulesPage() {
                     <div className="flex items-center gap-2">
                       <CardTitle className="text-base">{sch.name}</CardTitle>
                       <Badge variant={sch.enabled ? "default" : "outline"} className="text-xs">
-                        {sch.enabled ? "啟用" : "停用"}
+                        {sch.enabled ? t("schedules.enabled") : t("schedules.disabled")}
                       </Badge>
                       {sch.last_status && (
                         <Badge
                           variant={sch.last_status === "completed" ? "outline" : "destructive"}
                           className="text-xs"
                         >
-                          上次：{sch.last_status === "completed" ? "成功" : "失敗"}
+                          {t("schedules.lastLabel")}{sch.last_status === "completed" ? t("schedules.lastSuccess") : t("schedules.lastFailed")}
                         </Badge>
                       )}
                     </div>
                     <CardDescription className="mt-0.5 text-xs">
-                      {sch.report_name} · {sch.fund_name} · 每天{" "}
+                      {sch.report_name} · {sch.fund_name} · {t("schedules.everyDayAt")}{" "}
                       <span className="font-mono font-medium text-foreground">
                         {fmtTime(sch.hour, sch.minute)}
                       </span>{" "}
-                      執行 · 已執行 {sch.run_count} 次
-                      {sch.last_run && ` · 上次：${fmtDate(sch.last_run)}`}
+                      {t("schedules.runAction")} · {t("schedules.runsCount", { count: sch.run_count })}
+                      {sch.last_run && ` · ${t("schedules.lastLabel")}${fmtDate(sch.last_run)}`}
                     </CardDescription>
                   </div>
 
@@ -394,29 +398,29 @@ function SchedulesPage() {
                     <Switch
                       checked={sch.enabled}
                       onCheckedChange={() => toggleEnabled(sch)}
-                      title={sch.enabled ? "點擊停用" : "點擊啟用"}
+                      title={sch.enabled ? t("schedules.clickToDisable") : t("schedules.clickToEnable")}
                     />
                     <Button
                       size="sm" variant="outline" className="gap-1"
                       onClick={() => runNow(sch)}
                       disabled={runningIds.has(sch.schedule_id)}
-                      title="立即執行一次"
+                      title={t("schedules.runNowTitle")}
                     >
                       {runningIds.has(sch.schedule_id)
                         ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         : <Play className="h-3.5 w-3.5" />}
-                      立即執行
+                      {t("schedules.runNow")}
                     </Button>
                     <Button
                       size="sm" variant="ghost" className="gap-1"
                       onClick={() => setEditTarget(sch)}
                     >
-                      編輯
+                      {t("schedules.edit")}
                     </Button>
                     <Button
                       size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground"
                       onClick={() => deleteMut.mutate(sch.schedule_id)}
-                      title="刪除任務"
+                      title={t("schedules.deleteTask")}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
@@ -424,7 +428,7 @@ function SchedulesPage() {
                       size="sm" variant="ghost"
                       onClick={() => setExpandedId(expandedId === sch.schedule_id ? null : sch.schedule_id)}
                     >
-                      {expandedId === sch.schedule_id ? "收起" : "歷史▾"}
+                      {expandedId === sch.schedule_id ? t("schedules.collapse") : `${t("schedules.historyToggle")}▾`}
                     </Button>
                   </div>
                 </div>

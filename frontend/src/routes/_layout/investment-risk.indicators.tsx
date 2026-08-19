@@ -382,13 +382,13 @@ function RiskIndicatorsPage() {
                 <CardHeader>
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex flex-wrap items-center gap-2">
-                      <CardTitle className="text-base">個股 Beta 貢獻（前十大權重）</CardTitle>
+                      <CardTitle className="text-base">{t("investmentRisk.indicators.betaTitle")}</CardTitle>
                       {fundCategory ? (
                         EQUITY_CATEGORIES.includes(fundCategory) ? (
-                          <Badge className="bg-emerald-600 hover:bg-emerald-600">建議適用</Badge>
+                          <Badge className="bg-emerald-600 hover:bg-emerald-600">{t("investmentRisk.common.applicableSuggested")}</Badge>
                         ) : (
-                          <Badge variant="outline" className="text-muted-foreground" title="本基金無股票持倉時，Beta 明細可能為空">
-                            本基金可能不適用
+                          <Badge variant="outline" className="text-muted-foreground" title={t("investmentRisk.indicators.betaNotApplicable")}>
+                            {t("investmentRisk.common.notApplicable")}
                           </Badge>
                         )
                       ) : null}
@@ -398,14 +398,14 @@ function RiskIndicatorsPage() {
                         <Search className="h-4 w-4 text-muted-foreground" />
                         <Input
                           className="h-8 w-56 border-0 p-0 shadow-none focus-visible:ring-0"
-                          placeholder="搜尋個股代碼或名稱"
+                          placeholder={t("investmentRisk.indicators.searchConstituent")}
                           value={constituentQuery}
                           onChange={(event) => setConstituentQuery(event.target.value)}
                         />
                       </div>
                       <Button variant="outline" size="sm" onClick={exportConstituents}>
                         <Download className="mr-2 h-4 w-4" />
-                        匯出
+                        {t("investmentRisk.common.export")}
                       </Button>
                       <SqlViewButton sqlIds={["SQL-RI-04"]} />
                     </div>
@@ -413,7 +413,7 @@ function RiskIndicatorsPage() {
                 </CardHeader>
                 <CardContent>
                   <Table>
-                    <TableHeader><TableRow><TableHead>代碼</TableHead><TableHead>名稱</TableHead><TableHead className="text-right">權重</TableHead><TableHead className="text-right">Beta</TableHead><TableHead className="text-right">樣本數</TableHead></TableRow></TableHeader>
+                    <TableHeader><TableRow><TableHead>{t("investmentRisk.overview.code")}</TableHead><TableHead>{t("investmentRisk.overview.name")}</TableHead><TableHead className="text-right">{t("investmentRisk.overview.weight")}</TableHead><TableHead className="text-right">{t("investmentRisk.indicators.betaValue")}</TableHead><TableHead className="text-right">{t("investmentRisk.indicators.sampleSize")}</TableHead></TableRow></TableHeader>
                     <TableBody>
                       {filteredConstituents.map((row) => (
                         <TableRow key={row.security_code}>
@@ -434,20 +434,20 @@ function RiskIndicatorsPage() {
                 <Card>
                   <CardHeader>
                     <div className="flex items-center justify-between gap-3">
-                      <CardTitle className="text-base">VaR 三方法對比（99%，1日）</CardTitle>
+                      <CardTitle className="text-base">{t("investmentRisk.indicators.varTitle")}</CardTitle>
                       <div className="flex items-center gap-2">
-                        <Badge variant="secondary">最大 VaR {percent(varCompare.data.max_var_pct_nav, 4)}</Badge>
+                        <Badge variant="secondary">{t("investmentRisk.indicators.varMax", { value: percent(varCompare.data.max_var_pct_nav, 4) })}</Badge>
                         <SqlViewButton sqlIds={["SQL-VAR-01"]} />
                       </div>
                     </div>
                   </CardHeader>
                   <CardContent>
                     <Table>
-                      <TableHeader><TableRow><TableHead>方法</TableHead><TableHead className="text-right">VaR（HKD）</TableHead><TableHead className="text-right">VaR（% NAV）</TableHead><TableHead className="text-right">CVaR（HKD）</TableHead><TableHead className="text-right">樣本數</TableHead></TableRow></TableHeader>
+                      <TableHeader><TableRow><TableHead>{t("investmentRisk.indicators.method")}</TableHead><TableHead className="text-right">{t("investmentRisk.indicators.varHkd")}</TableHead><TableHead className="text-right">{t("investmentRisk.indicators.varPctNav")}</TableHead><TableHead className="text-right">{t("investmentRisk.indicators.cvarHkd")}</TableHead><TableHead className="text-right">{t("investmentRisk.indicators.sampleSize")}</TableHead></TableRow></TableHeader>
                       <TableBody>
                         {varCompare.data.results.map((row) => (
                           <TableRow key={row.method_requested ?? row.method}>
-                            <TableCell className="font-medium">{METHOD_LABELS[row.method_requested ?? ""] ?? row.method}</TableCell>
+                            <TableCell className="font-medium">{methodLabels[row.method_requested ?? ""] ?? row.method}</TableCell>
                             <TableCell className="text-right font-mono">{money(row.var_hkd)}</TableCell>
                             <TableCell className="text-right font-mono">{percent(row.var_pct_nav, 4)}</TableCell>
                             <TableCell className="text-right font-mono">{money(row.cvar_hkd)}</TableCell>
@@ -461,7 +461,7 @@ function RiskIndicatorsPage() {
               )}
             </>
           ) : (
-            <p className="text-muted-foreground text-sm">暫無風險指標數據。</p>
+            <p className="text-muted-foreground text-sm">{t("investmentRisk.indicators.noIndicators")}</p>
           )}
         </TabsContent>
 
@@ -497,5 +497,6 @@ function InfoBlock({ label, value }: { label: string; value: string }) {
 }
 
 function EmptyRow({ columns }: { columns: number }) {
-  return <TableRow><TableCell colSpan={columns} className="h-20 text-center text-muted-foreground">暫無數據</TableCell></TableRow>
+  const { t } = useTranslation()
+  return <TableRow><TableCell colSpan={columns} className="h-20 text-center text-muted-foreground">{t("investmentRisk.common.empty")}</TableCell></TableRow>
 }

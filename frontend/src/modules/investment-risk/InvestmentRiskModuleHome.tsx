@@ -13,6 +13,7 @@ import {
   Workflow,
 } from "lucide-react"
 import { useMemo, useState } from "react"
+import { useTranslation } from "react-i18next"
 
 import { FUNDS, lastTradeDate } from "@/components/FsiToolbar"
 import { DatePicker } from "@/components/DatePicker"
@@ -40,65 +41,76 @@ import { INVESTMENT_RISK_TOPICS, type InvestmentRiskTopic } from "@/modules/inve
 
 const integrationItems = [
   {
-    title: "2_processing（計算引擎層）",
-    description: "新增 inv-risk 專屬 API 路由，承載敏感度、壓測、風險預算等高頻計算任務。",
+    titleKey: "investmentRisk.module.integrationProcessingTitle",
+    descKey: "investmentRisk.module.integrationProcessingDesc",
     icon: Workflow,
   },
   {
-    title: "1_datastorage（存儲層）",
-    description: "擴充敏感度快照、壓測結果與因子暴露時序表，支持歷史回溯與審計。",
+    titleKey: "investmentRisk.module.integrationStorageTitle",
+    descKey: "investmentRisk.module.integrationStorageDesc",
     icon: Database,
   },
   {
-    title: "5_deploy & 4_mcp（Agent 擴展層）",
-    description: "部署 InvestmentRisk Subagent，將自然語言指令自動編排為底層風險計算鏈路。",
+    titleKey: "investmentRisk.module.integrationAgentTitle",
+    descKey: "investmentRisk.module.integrationAgentDesc",
     icon: BrainCircuit,
   },
 ]
 
 const riskTrend = [62, 68, 71, 66, 74, 81, 78]
+
+type RiskSeverity = "high" | "medium"
+
 const exposureMix = [
-  { label: "利率", value: 74 },
-  { label: "信用", value: 61 },
-  { label: "流動性", value: 58 },
-  { label: "因子", value: 49 },
+  { labelKey: "investmentRisk.module.exposureRates", value: 74 },
+  { labelKey: "investmentRisk.module.exposureCredit", value: 61 },
+  { labelKey: "investmentRisk.module.exposureLiquidity", value: 58 },
+  { labelKey: "investmentRisk.module.exposureFactor", value: 49 },
 ]
 
-const riskItems = [
+const riskItems: Array<{
+  id: string
+  nameKey: string
+  bucketKey: string
+  severity: RiskSeverity
+  score: number
+  statusKey: string
+  updatedAt: string
+}> = [
   {
     id: "R-1021",
-    name: "美元債信用利差擴張",
-    bucket: "信用",
-    severity: "高",
+    nameKey: "investmentRisk.module.riskName1",
+    bucketKey: "investmentRisk.module.exposureCredit",
+    severity: "high",
     score: 82,
-    status: "需要加強監控",
+    statusKey: "investmentRisk.module.riskStatus1",
     updatedAt: "2026-08-02",
   },
   {
     id: "R-1038",
-    name: "流動性覆蓋比下降",
-    bucket: "流動性",
-    severity: "中",
+    nameKey: "investmentRisk.module.riskName2",
+    bucketKey: "investmentRisk.module.exposureLiquidity",
+    severity: "medium",
     score: 67,
-    status: "保持觀察",
+    statusKey: "investmentRisk.module.riskStatus2",
     updatedAt: "2026-08-01",
   },
   {
     id: "R-1042",
-    name: "利率曲線陡度飄移",
-    bucket: "利率",
-    severity: "高",
+    nameKey: "investmentRisk.module.riskName3",
+    bucketKey: "investmentRisk.module.exposureRates",
+    severity: "high",
     score: 79,
-    status: "即時提醒",
+    statusKey: "investmentRisk.module.riskStatus3",
     updatedAt: "2026-08-02",
   },
   {
     id: "R-1051",
-    name: "擁擠度上升與風格漂移",
-    bucket: "因子",
-    severity: "中",
+    nameKey: "investmentRisk.module.riskName4",
+    bucketKey: "investmentRisk.module.exposureFactor",
+    severity: "medium",
     score: 61,
-    status: "可接受",
+    statusKey: "investmentRisk.module.riskStatus4",
     updatedAt: "2026-07-31",
   },
 ]
@@ -163,11 +175,12 @@ function buildLinePath(values: number[]) {
 }
 
 export function InvestmentRiskModuleHome() {
+  const { t } = useTranslation()
   const [selectedTopic, setSelectedTopic] = useState<InvestmentRiskTopic["id"]>(INVESTMENT_RISK_TOPICS[0].id)
   const [selectedFundId, setSelectedFundId] = useState(FUNDS[0].id)
   const [analysisDate, setAnalysisDate] = useState(lastTradeDate)
   const [searchQuery, setSearchQuery] = useState("")
-  const [severityFilter, setSeverityFilter] = useState("全部")
+  const [severityFilter, setSeverityFilter] = useState("all")
   const [timeWindow, setTimeWindow] = useState("30D")
 
   const selectedTopicMeta = INVESTMENT_RISK_TOPICS.find((topic) => topic.id === selectedTopic) ?? INVESTMENT_RISK_TOPICS[0]
@@ -188,15 +201,25 @@ export function InvestmentRiskModuleHome() {
 
   const trendLabels = useMemo(() => {
     const labels = dashboardData?.performance.map((item) => item.period) ?? []
-    return labels.length > 1 ? labels : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-  }, [dashboardData?.performance])
+    return labels.length > 1
+      ? labels
+      : [
+          t("investmentRisk.module.weekdayMon"),
+          t("investmentRisk.module.weekdayTue"),
+          t("investmentRisk.module.weekdayWed"),
+          t("investmentRisk.module.weekdayThu"),
+          t("investmentRisk.module.weekdayFri"),
+          t("investmentRisk.module.weekdaySat"),
+          t("investmentRisk.module.weekdaySun"),
+        ]
+  }, [dashboardData?.performance, t])
 
   const exposureMixData = useMemo(() => {
     const items = (dashboardData?.asset_allocation ?? [])
       .slice(0, 4)
       .map((item) => ({ label: item.asset_class, value: Math.max(0, Math.min(100, item.weight_pct)) }))
-    return items.length ? items : exposureMix
-  }, [dashboardData?.asset_allocation])
+    return items.length ? items : exposureMix.map((item) => ({ label: t(item.labelKey), value: item.value }))
+  }, [dashboardData?.asset_allocation, t])
 
   const dashboardRows = useMemo(() => {
     const dataDate = dashboardData?.portfolio.data_date ?? effectiveDate
@@ -204,34 +227,47 @@ export function InvestmentRiskModuleHome() {
     const dayReturnPct = dashboardData?.portfolio.day_return == null ? null : Number(dashboardData.portfolio.day_return) * 100
     return [
       {
-        metric: `淨資產（${dataDate}）`,
+        metric: t("investmentRisk.module.metricNetAsset", { date: dataDate }),
         value: money(dashboardData?.portfolio.net_asset, dashboardData?.portfolio.base_currency ?? "HKD"),
-        status: dashboardData ? "已更新" : "—",
+        status: dashboardData ? t("investmentRisk.module.statusUpdated") : "—",
       },
       {
-        metric: "當日收益",
+        metric: t("investmentRisk.module.metricDayReturn"),
         value: percent(dayReturnPct, 3),
-        status: dayReturnPct != null && dayReturnPct < 0 ? "波動" : "穩定",
+        status: dayReturnPct != null && dayReturnPct < 0 ? t("investmentRisk.module.statusVolatile") : t("investmentRisk.module.statusStable"),
       },
       {
-        metric: "前3重倉集中度",
+        metric: t("investmentRisk.module.metricTop3"),
         value: percent(top3Concentration, 2),
-        status: top3Concentration > 35 ? "待關注" : "正常",
+        status: top3Concentration > 35 ? t("investmentRisk.module.statusWatch") : t("investmentRisk.module.statusNormal"),
       },
     ]
-  }, [dashboardData, effectiveDate])
+  }, [dashboardData, effectiveDate, t])
+
+  const severityLabel = (severity: RiskSeverity) =>
+    severity === "high" ? t("investmentRisk.module.severityHigh") : t("investmentRisk.module.severityMedium")
 
   const filteredItems = useMemo(() => {
     return riskItems.filter((item) => {
-      const matchesSearch = `${item.id} ${item.name} ${item.bucket}`.toLowerCase().includes(searchQuery.toLowerCase())
-      const matchesSeverity = severityFilter === "全部" || item.severity === severityFilter
+      const name = t(item.nameKey)
+      const bucket = t(item.bucketKey)
+      const matchesSearch = `${item.id} ${name} ${bucket}`.toLowerCase().includes(searchQuery.toLowerCase())
+      const matchesSeverity = severityFilter === "all" || item.severity === severityFilter
       return matchesSearch && matchesSeverity
     })
-  }, [searchQuery, severityFilter])
+  }, [searchQuery, severityFilter, t])
 
   function handleExport() {
-    const header = ["風險ID", "名稱", "類別", "等級", "分數", "狀態", "更新日"]
-    const body = filteredItems.map((item) => [item.id, item.name, item.bucket, item.severity, item.score, item.status, item.updatedAt])
+    const header = [
+      t("investmentRisk.module.csvRiskId"),
+      t("investmentRisk.module.csvName"),
+      t("investmentRisk.module.csvCategory"),
+      t("investmentRisk.module.csvSeverity"),
+      t("investmentRisk.module.csvScore"),
+      t("investmentRisk.module.csvStatus"),
+      t("investmentRisk.module.csvUpdatedAt"),
+    ]
+    const body = filteredItems.map((item) => [item.id, t(item.nameKey), t(item.bucketKey), severityLabel(item.severity), item.score, t(item.statusKey), item.updatedAt])
     const csv = [header, ...body]
       .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
       .join("\n")
@@ -249,12 +285,12 @@ export function InvestmentRiskModuleHome() {
     <div className="space-y-6">
       <div className="space-y-2">
         <div className="flex items-center gap-2">
-          <Badge variant="outline">獨立模塊</Badge>
+          <Badge variant="outline">{t("investmentRisk.module.independentBadge")}</Badge>
           <Badge variant="secondary">Investment Risk</Badge>
         </div>
-        <h1 className="text-2xl font-bold tracking-tight">投資風險模塊</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{t("investmentRisk.module.title")}</h1>
         <p className="max-w-4xl text-sm text-muted-foreground">
-          將 ARISK 覆蓋範圍從中後台合規風控延伸到前中台投資決策支持。這個頁面已整合儀表盤、圖表視覺化與可檢索的審查表格，支援實戰式風控分析流程。
+          {t("investmentRisk.module.description")}
         </p>
       </div>
 
@@ -262,15 +298,15 @@ export function InvestmentRiskModuleHome() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Sparkles className="h-4 w-4" />
-            實戰風控儀表盤
+            {t("investmentRisk.module.dashboardTitle")}
           </CardTitle>
-          <CardDescription>覆蓋實時風險暴露、壓力情境與交易前置限額的雙視圖分析入口。</CardDescription>
+          <CardDescription>{t("investmentRisk.module.dashboardSubtitle")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="flex flex-wrap items-center gap-3">
             <Select value={selectedFundId} onValueChange={setSelectedFundId}>
               <SelectTrigger className="w-64">
-                <SelectValue placeholder="選擇基金" />
+                <SelectValue placeholder={t("investmentRisk.module.selectFund")} />
               </SelectTrigger>
               <SelectContent>
                 {FUNDS.map((fund) => (
@@ -281,26 +317,26 @@ export function InvestmentRiskModuleHome() {
               </SelectContent>
             </Select>
             <DatePicker value={analysisDate} onChange={setAnalysisDate} />
-            <Badge variant="outline">實際數據日：{effectiveDate}</Badge>
-            {fallbackUsed ? <Badge variant="secondary">已自動回退到最近有數據日</Badge> : null}
+            <Badge variant="outline">{t("investmentRisk.module.effectiveDate", { date: effectiveDate })}</Badge>
+            {fallbackUsed ? <Badge variant="secondary">{t("investmentRisk.module.autoFallback")}</Badge> : null}
           </div>
-          {dashboardQuery.isFetching ? <p className="text-sm text-muted-foreground">正在載入最新可用數據...</p> : null}
-          {dashboardQuery.isError ? <p className="text-sm text-destructive">無法載入該基金近一年可用數據，請切換基金或日期。</p> : null}
+          {dashboardQuery.isFetching ? <p className="text-sm text-muted-foreground">{t("investmentRisk.module.loadingLatest")}</p> : null}
+          {dashboardQuery.isError ? <p className="text-sm text-destructive">{t("investmentRisk.module.dashboardLoadError")}</p> : null}
           <div className="grid gap-4 md:grid-cols-3">
             <div className="rounded-lg border bg-background/80 p-4">
-              <p className="text-xs text-muted-foreground">當前風險暴露</p>
+              <p className="text-xs text-muted-foreground">{t("investmentRisk.module.currentExposure")}</p>
               <p className="mt-2 text-2xl font-semibold">{percent((dashboardData?.asset_allocation ?? []).slice(0, 2).reduce((sum, item) => sum + item.weight_pct, 0), 2)}</p>
-              <p className="mt-1 text-xs text-emerald-600">前兩大資產類別權重合計</p>
+              <p className="mt-1 text-xs text-emerald-600">{t("investmentRisk.module.currentExposureHint")}</p>
             </div>
             <div className="rounded-lg border bg-background/80 p-4">
-              <p className="text-xs text-muted-foreground">壓力測試覆蓋</p>
+              <p className="text-xs text-muted-foreground">{t("investmentRisk.module.stressCoverage")}</p>
               <p className="mt-2 text-2xl font-semibold">{dashboardData?.performance.length ?? 0}</p>
-              <p className="mt-1 text-xs text-muted-foreground">已加載業績區間數</p>
+              <p className="mt-1 text-xs text-muted-foreground">{t("investmentRisk.module.stressCoverageHint")}</p>
             </div>
             <div className="rounded-lg border bg-background/80 p-4">
-              <p className="text-xs text-muted-foreground">可用交易預算</p>
+              <p className="text-xs text-muted-foreground">{t("investmentRisk.module.tradeBudget")}</p>
               <p className="mt-2 text-2xl font-semibold">{money(dashboardData?.portfolio.net_asset, dashboardData?.portfolio.base_currency ?? "HKD")}</p>
-              <p className="mt-1 text-xs text-amber-600">基金資產規模（代理容量指標）</p>
+              <p className="mt-1 text-xs text-amber-600">{t("investmentRisk.module.tradeBudgetHint")}</p>
             </div>
           </div>
 
@@ -308,8 +344,8 @@ export function InvestmentRiskModuleHome() {
             <div className="rounded-lg border bg-background/70 p-4">
               <div className="mb-4 flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-semibold">風險趨勢圖</p>
-                  <p className="text-xs text-muted-foreground">近 7 個交易日的總體風險分數</p>
+                  <p className="text-sm font-semibold">{t("investmentRisk.module.riskTrendTitle")}</p>
+                  <p className="text-xs text-muted-foreground">{t("investmentRisk.module.riskTrendSubtitle")}</p>
                 </div>
                 <Badge variant="outline">{timeWindow}</Badge>
               </div>
@@ -338,12 +374,12 @@ export function InvestmentRiskModuleHome() {
             <div className="rounded-lg border bg-background/70 p-4">
               <div className="mb-4 flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-semibold">風險因子構成</p>
-                  <p className="text-xs text-muted-foreground">各類風險來源占比</p>
+                  <p className="text-sm font-semibold">{t("investmentRisk.module.riskFactorTitle")}</p>
+                  <p className="text-xs text-muted-foreground">{t("investmentRisk.module.riskFactorSubtitle")}</p>
                 </div>
                 <div className="flex items-center gap-1 text-sm text-muted-foreground">
                   <TrendingUp className="h-4 w-4" />
-                  更新中
+                  {t("investmentRisk.module.updating")}
                 </div>
               </div>
               <div className="space-y-3">
@@ -368,9 +404,9 @@ export function InvestmentRiskModuleHome() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <ShieldAlert className="h-4 w-4" />
-            完整分析清單
+            {t("investmentRisk.module.analysisListTitle")}
           </CardTitle>
-          <CardDescription>提供搜尋、分級篩選與報表下載，適配投研與風控雙角色審閱。</CardDescription>
+          <CardDescription>{t("investmentRisk.module.analysisListSubtitle")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
@@ -378,7 +414,7 @@ export function InvestmentRiskModuleHome() {
               <Search className="h-4 w-4 text-muted-foreground" />
               <Input
                 className="h-8 border-0 p-0 shadow-none focus-visible:ring-0"
-                placeholder="搜尋風險名稱或 ID"
+                placeholder={t("investmentRisk.module.searchRisk")}
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
               />
@@ -390,9 +426,9 @@ export function InvestmentRiskModuleHome() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="全部">全部</SelectItem>
-                  <SelectItem value="高">高</SelectItem>
-                  <SelectItem value="中">中</SelectItem>
+                  <SelectItem value="all">{t("investmentRisk.module.severityAll")}</SelectItem>
+                  <SelectItem value="high">{t("investmentRisk.module.severityHigh")}</SelectItem>
+                  <SelectItem value="medium">{t("investmentRisk.module.severityMedium")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -408,38 +444,38 @@ export function InvestmentRiskModuleHome() {
             </Select>
             <Button variant="outline" onClick={handleExport}>
               <Download className="mr-2 h-4 w-4" />
-              匯出 CSV
+              {t("investmentRisk.module.exportCsv")}
             </Button>
           </div>
 
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>風險ID</TableHead>
-                <TableHead>名稱</TableHead>
-                <TableHead>類別</TableHead>
-                <TableHead>等級</TableHead>
-                <TableHead>分數</TableHead>
-                <TableHead>狀態</TableHead>
-                <TableHead>更新日</TableHead>
+                <TableHead>{t("investmentRisk.module.colRiskId")}</TableHead>
+                <TableHead>{t("investmentRisk.module.colName")}</TableHead>
+                <TableHead>{t("investmentRisk.module.colCategory")}</TableHead>
+                <TableHead>{t("investmentRisk.module.colSeverity")}</TableHead>
+                <TableHead>{t("investmentRisk.module.colScore")}</TableHead>
+                <TableHead>{t("investmentRisk.module.colStatus")}</TableHead>
+                <TableHead>{t("investmentRisk.module.colUpdatedAt")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredItems.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell className="font-mono">{item.id}</TableCell>
-                  <TableCell>{item.name}</TableCell>
-                  <TableCell>{item.bucket}</TableCell>
-                  <TableCell>{item.severity}</TableCell>
+                  <TableCell>{t(item.nameKey)}</TableCell>
+                  <TableCell>{t(item.bucketKey)}</TableCell>
+                  <TableCell>{severityLabel(item.severity)}</TableCell>
                   <TableCell>{item.score}</TableCell>
-                  <TableCell>{item.status}</TableCell>
+                  <TableCell>{t(item.statusKey)}</TableCell>
                   <TableCell>{item.updatedAt}</TableCell>
                 </TableRow>
               ))}
               {!filteredItems.length && (
                 <TableRow>
                   <TableCell colSpan={7} className="h-16 text-center text-muted-foreground">
-                    暫無符合條件的風險項目。
+                    {t("investmentRisk.module.emptyItems")}
                   </TableCell>
                 </TableRow>
               )}
@@ -452,20 +488,20 @@ export function InvestmentRiskModuleHome() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Sparkles className="h-4 w-4" />
-            快速分析入口
+            {t("investmentRisk.module.quickEntryTitle")}
           </CardTitle>
-          <CardDescription>使用下拉選擇、日期控件與操作按鈕直接進入對應分析頁。</CardDescription>
+          <CardDescription>{t("investmentRisk.module.quickEntrySubtitle")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
             <Select value={selectedTopic} onValueChange={(value) => setSelectedTopic(value as InvestmentRiskTopic["id"])}>
               <SelectTrigger className="w-56">
-                <SelectValue placeholder="選擇分析主題" />
+                <SelectValue placeholder={t("investmentRisk.module.selectTopic")} />
               </SelectTrigger>
               <SelectContent>
                 {INVESTMENT_RISK_TOPICS.map((topic) => (
                   <SelectItem key={topic.id} value={topic.id}>
-                    {topic.title}
+                    {t(topic.titleKey)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -473,7 +509,7 @@ export function InvestmentRiskModuleHome() {
             <DatePicker value={analysisDate} onChange={setAnalysisDate} />
             <Button asChild>
               <Link to={`/investment-risk/${selectedTopicMeta.id}`}>
-                打開功能頁
+                {t("investmentRisk.module.openPage")}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
@@ -482,14 +518,14 @@ export function InvestmentRiskModuleHome() {
           <div className="rounded-lg border p-4">
             <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
               <ShieldAlert className="h-4 w-4" />
-              {selectedTopicMeta.title} · {effectiveDate}
+              {t(selectedTopicMeta.titleKey)} · {effectiveDate}
             </div>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>指标</TableHead>
-                  <TableHead>当前值</TableHead>
-                  <TableHead>狀態</TableHead>
+                  <TableHead>{t("investmentRisk.module.metricCol")}</TableHead>
+                  <TableHead>{t("investmentRisk.module.currentValueCol")}</TableHead>
+                  <TableHead>{t("investmentRisk.module.statusCol")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -507,43 +543,46 @@ export function InvestmentRiskModuleHome() {
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {INVESTMENT_RISK_TOPICS.map((topic) => (
-          <Card key={topic.id} className="h-full">
-            <CardHeader>
-              <CardTitle className="text-base">{topic.title}</CardTitle>
-              <CardDescription>{topic.subtitle}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground">{topic.summary}</p>
-              <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-                {topic.capabilities.slice(0, 3).map((capability) => (
-                  <li key={capability}>{capability}</li>
-                ))}
-              </ul>
-              <Button asChild variant="outline" size="sm">
-                <Link to={`/investment-risk/${topic.id}`}>
-                  打開功能頁
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
+        {INVESTMENT_RISK_TOPICS.map((topic) => {
+          const capabilities = t(topic.capabilitiesKey, { returnObjects: true }) as string[]
+          return (
+            <Card key={topic.id} className="h-full">
+              <CardHeader>
+                <CardTitle className="text-base">{t(topic.titleKey)}</CardTitle>
+                <CardDescription>{topic.subtitle}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">{t(topic.summaryKey)}</p>
+                <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                  {capabilities.slice(0, 3).map((capability) => (
+                    <li key={capability}>{capability}</li>
+                  ))}
+                </ul>
+                <Button asChild variant="outline" size="sm">
+                  <Link to={`/investment-risk/${topic.id}`}>
+                    {t("investmentRisk.module.openPage")}
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+          )
+        })}
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">系統架構整合與數據流</CardTitle>
-          <CardDescription>投資風險模塊融合非同步計算與 Agent 智能調度。</CardDescription>
+          <CardTitle className="text-base">{t("investmentRisk.module.integrationTitle")}</CardTitle>
+          <CardDescription>{t("investmentRisk.module.integrationSubtitle")}</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 lg:grid-cols-3">
           {integrationItems.map((item) => (
-            <div key={item.title} className="rounded-lg border p-4">
+            <div key={item.titleKey} className="rounded-lg border p-4">
               <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
                 <item.icon className="h-4 w-4" />
-                {item.title}
+                {t(item.titleKey)}
               </div>
-              <p className="text-sm text-muted-foreground">{item.description}</p>
+              <p className="text-sm text-muted-foreground">{t(item.descKey)}</p>
             </div>
           ))}
         </CardContent>

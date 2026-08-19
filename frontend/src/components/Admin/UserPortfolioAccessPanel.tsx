@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { BriefcaseBusiness, Eye, ShieldCheck } from "lucide-react"
+import { useTranslation } from "react-i18next"
 
 import type { UserPublic } from "@/client"
 import UserAccessDialog from "@/components/Admin/UserAccessDialog"
@@ -26,6 +27,7 @@ function toUserPublic(grant: UserAccessGrant): UserPublic {
 }
 
 function GrantRow({ grant }: { grant: UserAccessGrant }) {
+  const { t } = useTranslation()
   const manageCount = grant.portfolios.filter((p) => p.access_level === "MANAGE").length
   const viewCount = grant.portfolios.filter((p) => p.access_level === "VIEW").length
 
@@ -34,15 +36,15 @@ function GrantRow({ grant }: { grant: UserAccessGrant }) {
       <TableCell className="align-top">
         <div className="flex items-center gap-2">
           <span className="font-medium">{grant.full_name || grant.email}</span>
-          {grant.is_superuser ? <Badge variant="default">超级管理员</Badge> : null}
-          {!grant.is_active ? <Badge variant="outline">已停用</Badge> : null}
+          {grant.is_superuser ? <Badge variant="default">{t("admin.overview.superuser")}</Badge> : null}
+          {!grant.is_active ? <Badge variant="outline">{t("admin.overview.inactive")}</Badge> : null}
         </div>
         <p className="text-xs text-muted-foreground">{grant.email}</p>
       </TableCell>
 
       <TableCell className="align-top">
         {grant.roles.length === 0 ? (
-          <span className="text-xs text-muted-foreground">未分配角色</span>
+          <span className="text-xs text-muted-foreground">{t("admin.overview.noRoles")}</span>
         ) : (
           <div className="flex flex-wrap gap-1">
             {grant.roles.map((role) => (
@@ -58,14 +60,14 @@ function GrantRow({ grant }: { grant: UserAccessGrant }) {
         {grant.is_superuser ? (
           <Badge className="bg-orange-600 hover:bg-orange-600">
             <ShieldCheck className="mr-1 h-3 w-3" />
-            全部组合 · MANAGE
+            {t("admin.overview.allManage")}
           </Badge>
         ) : grant.portfolios.length === 0 ? (
-          <span className="text-xs text-muted-foreground">未授权任何组合</span>
+          <span className="text-xs text-muted-foreground">{t("admin.overview.noPortfolios")}</span>
         ) : (
           <div className="space-y-2">
             <div className="flex gap-2 text-xs text-muted-foreground">
-              <span>共 {grant.portfolios.length} 个组合</span>
+              <span>{t("admin.overview.portfolioCount", { count: grant.portfolios.length })}</span>
               {manageCount > 0 ? <span className="text-orange-700">MANAGE {manageCount}</span> : null}
               {viewCount > 0 ? <span>VIEW {viewCount}</span> : null}
             </div>
@@ -92,7 +94,7 @@ function GrantRow({ grant }: { grant: UserAccessGrant }) {
 
       <TableCell className="align-top text-right">
         {grant.is_superuser ? (
-          <span className="text-xs text-muted-foreground">系统内置</span>
+          <span className="text-xs text-muted-foreground">{t("admin.overview.builtin")}</span>
         ) : (
           <UserAccessDialog user={toUserPublic(grant)} triggerVariant="button" onSuccess={() => {}} />
         )}
@@ -102,6 +104,7 @@ function GrantRow({ grant }: { grant: UserAccessGrant }) {
 }
 
 export default function UserPortfolioAccessPanel() {
+  const { t } = useTranslation()
   const grantsQuery = useQuery({
     queryKey: ["access-control-grants"],
     queryFn: () => fsiApi.getAccessGrants().then((response) => response.data.grants),
@@ -113,26 +116,26 @@ export default function UserPortfolioAccessPanel() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <BriefcaseBusiness className="h-5 w-5 text-orange-600" />
-          用户 · 角色 · 组合授权总览
+          {t("admin.overview.title")}
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          集中查看每位用户的平台角色，以及其对具体组合的授权（VIEW 查看/监督，MANAGE 投资管理/交易）。点击「配置授权」即可调整。
+          {t("admin.overview.subtitle")}
         </p>
       </CardHeader>
       <CardContent>
         {grantsQuery.isLoading ? (
-          <p className="text-sm text-muted-foreground">正在加载授权总览...</p>
+          <p className="text-sm text-muted-foreground">{t("admin.overview.loading")}</p>
         ) : grantsQuery.isError ? (
-          <p className="text-sm text-destructive">加载授权总览失败，请刷新重试。</p>
+          <p className="text-sm text-destructive">{t("admin.overview.error")}</p>
         ) : (
           <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-64">用户</TableHead>
-                  <TableHead className="w-56">平台角色</TableHead>
-                  <TableHead>组合授权</TableHead>
-                  <TableHead className="w-32 text-right">操作</TableHead>
+                  <TableHead className="w-64">{t("admin.overview.colUser")}</TableHead>
+                  <TableHead className="w-56">{t("admin.overview.colRoles")}</TableHead>
+                  <TableHead>{t("admin.overview.colPortfolios")}</TableHead>
+                  <TableHead className="w-32 text-right">{t("admin.overview.colActions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

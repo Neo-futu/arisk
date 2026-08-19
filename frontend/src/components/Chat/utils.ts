@@ -5,7 +5,17 @@ export interface SessionGroup {
   items: ChatSessionRecord[]
 }
 
-export function groupSessionsByDate(sessions: ChatSessionRecord[]): SessionGroup[] {
+export interface SessionGroupLabels {
+  today:     string
+  yesterday: string
+  thisWeek:  string
+  older:     string
+}
+
+export function groupSessionsByDate(
+  sessions: ChatSessionRecord[],
+  labels: SessionGroupLabels,
+): SessionGroup[] {
   const now        = new Date()
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const yestStart  = new Date(todayStart); yestStart.setDate(yestStart.getDate() - 1)
@@ -18,10 +28,10 @@ export function groupSessionsByDate(sessions: ChatSessionRecord[]): SessionGroup
   const older     = sessions.filter(s => bucket(s) < weekStart)
 
   return [
-    ...(today.length     ? [{ label: "今天", items: today }]     : []),
-    ...(yesterday.length ? [{ label: "昨天", items: yesterday }] : []),
-    ...(thisWeek.length  ? [{ label: "本週", items: thisWeek }]  : []),
-    ...(older.length     ? [{ label: "更早", items: older }]     : []),
+    ...(today.length     ? [{ label: labels.today,     items: today }]     : []),
+    ...(yesterday.length ? [{ label: labels.yesterday, items: yesterday }] : []),
+    ...(thisWeek.length  ? [{ label: labels.thisWeek,  items: thisWeek }]  : []),
+    ...(older.length     ? [{ label: labels.older,     items: older }]     : []),
   ]
 }
 

@@ -4,6 +4,7 @@
 import { RefreshCw } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { useEffect, type ReactNode } from "react"
+import { useTranslation } from "react-i18next"
 
 import { DatePicker } from "@/components/DatePicker"
 import { Button } from "@/components/ui/button"
@@ -47,6 +48,7 @@ export function FsiToolbar({
   isFetching = false,
   extra,
 }: FsiToolbarProps) {
+  const { t } = useTranslation()
   const accessQuery = useQuery({
     queryKey: ["my-access-context"],
     queryFn: () => fsiApi.getMyAccessContext().then((response) => response.data),
@@ -69,7 +71,7 @@ export function FsiToolbar({
     <div className="flex flex-wrap items-center gap-3">
       <Select value={fundId} onValueChange={onFundChange}>
         <SelectTrigger className="w-56">
-          <SelectValue placeholder="選擇基金" />
+          <SelectValue placeholder={t("toolbar.selectFund")} />
         </SelectTrigger>
         <SelectContent>
           {funds.map((f) => (
@@ -87,7 +89,7 @@ export function FsiToolbar({
         size="icon"
         onClick={onRefresh}
         disabled={isFetching}
-        title="重新加載"
+        title={t("toolbar.reload")}
       >
         <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
       </Button>

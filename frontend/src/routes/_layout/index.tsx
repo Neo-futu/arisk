@@ -179,15 +179,15 @@ function AllPortfolioOverview({
                       <div className="mt-4 grid grid-cols-3 gap-3 text-xs">
                         <div>
                           <p className="text-muted-foreground">NAV</p>
-                          <p className="mt-1 font-mono font-medium">{((portfolio.total_nav_hkd ?? 0) / 1e8).toFixed(2)} 亿</p>
+                          <p className="mt-1 font-mono font-medium">{((portfolio.total_nav_hkd ?? 0) / 1e8).toFixed(2)} {t("dashboard.hundredMillion")}</p>
                         </div>
                         <div>
                           <p className="text-muted-foreground">WAM</p>
-                          <p className="mt-1 font-mono font-medium">{(portfolio.wam_days ?? 0).toFixed(1)} 天</p>
+                          <p className="mt-1 font-mono font-medium">{(portfolio.wam_days ?? 0).toFixed(1)} {t("dashboard.days")}</p>
                         </div>
                         <div>
                           <p className="text-muted-foreground">WAL</p>
-                          <p className="mt-1 font-mono font-medium">{(portfolio.wal_days ?? 0).toFixed(1)} 天</p>
+                          <p className="mt-1 font-mono font-medium">{(portfolio.wal_days ?? 0).toFixed(1)} {t("dashboard.days")}</p>
                         </div>
                       </div>
                       <div className="mt-4 flex items-center justify-between">
@@ -246,11 +246,11 @@ function ExposureDashboard({ data }: { data: ExposureResult }) {
 
   function formatCurrentValue(detail: (typeof complianceDetails)[number]) {
     if (detail.unit === "PCT") return `${detail.current_value.toFixed(2)}%`
-    return `${detail.current_value.toFixed(1)} 天`
+    return `${detail.current_value.toFixed(1)} ${t("dashboard.days")}`
   }
 
   function formatLimitValue(detail: (typeof complianceDetails)[number]) {
-    const val = detail.unit === "PCT" ? `${detail.limit_value}%` : `${detail.limit_value} 天`
+    const val = detail.unit === "PCT" ? `${detail.limit_value}%` : `${detail.limit_value} ${t("dashboard.days")}`
     return `${detail.operator} ${val}`
   }
 
@@ -266,7 +266,7 @@ function ExposureDashboard({ data }: { data: ExposureResult }) {
     if (detail.unit === "PCT") {
       return t("dashboard.exceedBy", { value: `${delta.toFixed(2)}%` })
     }
-    return t("dashboard.exceedBy", { value: `${delta.toFixed(1)} 天` })
+    return t("dashboard.exceedBy", { value: `${delta.toFixed(1)} ${t("dashboard.days")}` })
   }
 
   const sourceCounts = {
@@ -298,7 +298,7 @@ function ExposureDashboard({ data }: { data: ExposureResult }) {
   function renderLimit(breachCode: string, fallback: string) {
     const detail = detailMap.get(breachCode)
     if (!detail) return fallback
-    const val = detail.unit === "PCT" ? `${detail.limit_value}%` : `${detail.limit_value} 天`
+    const val = detail.unit === "PCT" ? `${detail.limit_value}%` : `${detail.limit_value} ${t("dashboard.days")}`
     return `${detail.operator} ${val}`
   }
 
@@ -306,7 +306,7 @@ function ExposureDashboard({ data }: { data: ExposureResult }) {
     const detail = detailMap.get(breachCode)
     if (!detail) return fallback
     if (detail.unit === "PCT") return `${detail.current_value.toFixed(2)}%`
-    return `${detail.current_value.toFixed(1)} 天`
+    return `${detail.current_value.toFixed(1)} ${t("dashboard.days")}`
   }
 
   function renderSource(breachCode: string) {
@@ -329,14 +329,14 @@ function ExposureDashboard({ data }: { data: ExposureResult }) {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           title={t("dashboard.totalNav")}
-          value={`HKD ${nav} 億`}
+          value={`HKD ${nav} ${t("dashboard.hundredMillion")}`}
           icon={Waves}
           status="ok"
         />
         <MetricCard
           title={t("dashboard.wam")}
-          value={renderValue("WAM_BREACH", `${data.wam_days.toFixed(1)} 天`)}
-          limit={t("dashboard.limit", { value: renderLimit("WAM_BREACH", "≤ 60 天") })}
+          value={renderValue("WAM_BREACH", `${data.wam_days.toFixed(1)} ${t("dashboard.days")}`)}
+          limit={t("dashboard.limit", { value: renderLimit("WAM_BREACH", `≤ 60 ${t("dashboard.days")}`) })}
           status={
             data.wam_days > 60 ? "breach" : data.wam_days > 50 ? "warn" : "ok"
           }
@@ -344,8 +344,8 @@ function ExposureDashboard({ data }: { data: ExposureResult }) {
         />
         <MetricCard
           title={t("dashboard.wal")}
-          value={renderValue("WAL_BREACH", `${data.wal_days.toFixed(1)} 天`)}
-          limit={t("dashboard.limit", { value: renderLimit("WAL_BREACH", "≤ 120 天") })}
+          value={renderValue("WAL_BREACH", `${data.wal_days.toFixed(1)} ${t("dashboard.days")}`)}
+          limit={t("dashboard.limit", { value: renderLimit("WAL_BREACH", `≤ 120 ${t("dashboard.days")}`) })}
           status={
             data.wal_days > 120
               ? "breach"

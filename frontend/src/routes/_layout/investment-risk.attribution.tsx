@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import { Download, Search } from "lucide-react"
 import { useMemo, useState } from "react"
+import { useTranslation } from "react-i18next"
 
 import { DatePicker } from "@/components/DatePicker"
 import { FUNDS, FsiToolbar, lastTradeDate } from "@/components/FsiToolbar"
@@ -22,7 +23,7 @@ import { exportCsv, TrendLineChart } from "@/modules/investment-risk/dashboard-k
 
 export const Route = createFileRoute("/_layout/investment-risk/attribution")({
   component: PerformanceAttributionPage,
-  head: () => ({ meta: [{ title: "績效歸因 — 投資風險分析 — ARISK" }] }),
+  head: () => ({ meta: [{ title: "Performance Attribution — Investment Risk — ARISK" }] }),
 })
 
 const ASSET_LABELS: Record<string, string> = {
@@ -59,6 +60,7 @@ function money(value: number | null | undefined) {
 }
 
 function PerformanceAttributionPage() {
+  const { t } = useTranslation()
   const [fundId, setFundId] = useState(FUNDS[0].id)
   const [startDate, setStartDate] = useState(defaultStartDate)
   const [endDate, setEndDate] = useState(lastTradeDate)
@@ -88,7 +90,14 @@ function PerformanceAttributionPage() {
     if (!data) return
     exportCsv(
       `investment-risk-attribution-holdings-${fundId}-${endDate}.csv`,
-      ["代碼", "名稱", "行業", "日均權重", "持倉日數", "區間損益"],
+      [
+        t("investmentRisk.attribution.csvCode"),
+        t("investmentRisk.attribution.csvName"),
+        t("investmentRisk.attribution.csvSector"),
+        t("investmentRisk.attribution.csvAvgWeight"),
+        t("investmentRisk.attribution.csvHoldingDays"),
+        t("investmentRisk.attribution.csvIntervalPnl"),
+      ],
       filteredTopHoldings.map((row) => [
         row.security_code,
         row.security_name,
@@ -102,7 +111,7 @@ function PerformanceAttributionPage() {
 
   const startPicker = (
     <div className="flex items-center gap-2">
-      <span className="text-muted-foreground text-xs">開始</span>
+      <span className="text-muted-foreground text-xs">{t("investmentRisk.attribution.start")}</span>
       <DatePicker value={startDate} onChange={setStartDate} />
     </div>
   )
@@ -111,12 +120,12 @@ function PerformanceAttributionPage() {
     <div className="space-y-6">
       <div>
         <div className="mb-1 flex items-center gap-2">
-          <Badge variant="outline">投資風險分析</Badge>
-          <span className="text-muted-foreground text-sm">績效歸因</span>
+          <Badge variant="outline">{t("investmentRisk.attribution.tag")}</Badge>
+          <span className="text-muted-foreground text-sm">{t("investmentRisk.attribution.breadcrumb")}</span>
         </div>
-        <h1 className="text-2xl font-bold tracking-tight">績效歸因</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{t("investmentRisk.attribution.title")}</h1>
         <p className="text-muted-foreground text-sm">
-          收益貢獻、行業配置收益、行業超配、個股損益排名及日均十大重倉
+          {t("investmentRisk.attribution.subtitle")}
         </p>
       </div>
 
@@ -130,12 +139,12 @@ function PerformanceAttributionPage() {
         extra={startPicker}
       />
 
-      {startDate > endDate && <p className="text-sm text-destructive">開始日期不得晚於結束日期。</p>}
-      {(isFetching || attributionSeries.isFetching) && <p className="text-muted-foreground animate-pulse text-sm">執行績效歸因中...</p>}
+      {startDate > endDate && <p className="text-sm text-destructive">{t("investmentRisk.attribution.dateRangeError")}</p>}
+      {(isFetching || attributionSeries.isFetching) && <p className="text-muted-foreground animate-pulse text-sm">{t("investmentRisk.attribution.calculating")}</p>}
       {(isError || attributionSeries.isError) && (
         <Card className="border-destructive">
           <CardContent className="pt-4 text-sm text-destructive">
-            無法載入績效歸因，請確認持倉、行情、損益及基準數據可用。
+            {t("investmentRisk.attribution.loadError")}
           </CardContent>
         </Card>
       )}
@@ -143,18 +152,18 @@ function PerformanceAttributionPage() {
       {data && (
         <>
           <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
-            <MetricCard label="組合收益" value={percent(data.summary.fund_return_pct)} />
-            <MetricCard label="基準收益" value={percent(data.summary.benchmark_return_pct)} detail={data.benchmark_id ?? "未配置基準"} />
-            <MetricCard label="超額收益" value={percent(data.summary.active_return_pct)} />
-            <MetricCard label="配置效應" value={percent(data.summary.allocation_effect_pct)} />
-            <MetricCard label="選股效應" value={percent(data.summary.selection_effect_pct)} />
-            <MetricCard label="交互效應" value={percent(data.summary.interaction_effect_pct)} />
+            <MetricCard label={t("investmentRisk.attribution.fundReturn")} value={percent(data.summary.fund_return_pct)} />
+            <MetricCard label={t("investmentRisk.attribution.benchmarkReturn")} value={percent(data.summary.benchmark_return_pct)} detail={data.benchmark_id ?? t("investmentRisk.attribution.benchmarkUnset")} />
+            <MetricCard label={t("investmentRisk.attribution.activeReturn")} value={percent(data.summary.active_return_pct)} />
+            <MetricCard label={t("investmentRisk.attribution.allocationEffect")} value={percent(data.summary.allocation_effect_pct)} />
+            <MetricCard label={t("investmentRisk.attribution.selectionEffect")} value={percent(data.summary.selection_effect_pct)} />
+            <MetricCard label={t("investmentRisk.attribution.interactionEffect")} value={percent(data.summary.interaction_effect_pct)} />
           </div>
 
           <div className="grid gap-6 xl:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">超額收益累積時序</CardTitle>
+                <CardTitle className="text-base">{t("investmentRisk.attribution.activeCumulativeTitle")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <TrendLineChart
@@ -168,7 +177,7 @@ function PerformanceAttributionPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">日度損益貢獻時序</CardTitle>
+                <CardTitle className="text-base">{t("investmentRisk.attribution.dailyContributionTitle")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <TrendLineChart
@@ -182,10 +191,10 @@ function PerformanceAttributionPage() {
           </div>
 
           <Card>
-            <CardHeader><CardTitle className="text-base">各類資產收益貢獻</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">{t("investmentRisk.attribution.assetContributionTitle")}</CardTitle></CardHeader>
             <CardContent>
               <Table>
-                <TableHeader><TableRow><TableHead>資產類別</TableHead><TableHead className="text-right">盯市損益</TableHead><TableHead className="text-right">利息/股息</TableHead><TableHead className="text-right">已實現</TableHead><TableHead className="text-right">外匯</TableHead><TableHead className="text-right">淨損益</TableHead><TableHead className="text-right">收益貢獻</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>{t("investmentRisk.attribution.colAssetClass")}</TableHead><TableHead className="text-right">{t("investmentRisk.attribution.colMtm")}</TableHead><TableHead className="text-right">{t("investmentRisk.attribution.colInterest")}</TableHead><TableHead className="text-right">{t("investmentRisk.attribution.colRealized")}</TableHead><TableHead className="text-right">{t("investmentRisk.attribution.colFx")}</TableHead><TableHead className="text-right">{t("investmentRisk.attribution.colNetPnl")}</TableHead><TableHead className="text-right">{t("investmentRisk.attribution.colContribution")}</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {data.asset_contribution.map((row) => (
                     <TableRow key={row.asset_class}>
@@ -205,10 +214,10 @@ function PerformanceAttributionPage() {
           </Card>
 
           <Card>
-            <CardHeader><CardTitle className="text-base">行業配置收益與超配情況（Brinson）</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">{t("investmentRisk.attribution.sectorTitle")}</CardTitle></CardHeader>
             <CardContent>
               <Table>
-                <TableHeader><TableRow><TableHead>行業</TableHead><TableHead className="text-right">組合權重</TableHead><TableHead className="text-right">基準權重</TableHead><TableHead className="text-right">超配</TableHead><TableHead className="text-right">配置效應</TableHead><TableHead className="text-right">選股效應</TableHead><TableHead className="text-right">交互效應</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>{t("investmentRisk.attribution.colSector")}</TableHead><TableHead className="text-right">{t("investmentRisk.attribution.colFundWeight")}</TableHead><TableHead className="text-right">{t("investmentRisk.attribution.colBenchmarkWeight")}</TableHead><TableHead className="text-right">{t("investmentRisk.attribution.colOverweight")}</TableHead><TableHead className="text-right">{t("investmentRisk.attribution.colAllocationEffect")}</TableHead><TableHead className="text-right">{t("investmentRisk.attribution.colSelectionEffect")}</TableHead><TableHead className="text-right">{t("investmentRisk.attribution.colInteractionEffect")}</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {data.sector_attribution.map((row) => (
                     <TableRow key={row.sector}>
@@ -228,34 +237,34 @@ function PerformanceAttributionPage() {
           </Card>
 
           <div className="grid gap-6 xl:grid-cols-2">
-            <PnlTable title="個股損益前十大" rows={data.top_winners} />
-            <PnlTable title="個股損益後十大" rows={data.top_losers} />
+            <PnlTable title={t("investmentRisk.attribution.topWinners")} rows={data.top_winners} />
+            <PnlTable title={t("investmentRisk.attribution.topLosers")} rows={data.top_losers} />
           </div>
 
           <Card>
             <CardHeader>
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <CardTitle className="text-base">日均十大重倉股</CardTitle>
+                <CardTitle className="text-base">{t("investmentRisk.attribution.topHoldingsTitle")}</CardTitle>
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="flex items-center gap-2 rounded-md border px-3 py-2">
                     <Search className="h-4 w-4 text-muted-foreground" />
                     <Input
                       className="h-8 w-56 border-0 p-0 shadow-none focus-visible:ring-0"
-                      placeholder="搜尋個股代碼、名稱或行業"
+                      placeholder={t("investmentRisk.attribution.searchHoldings")}
                       value={securityQuery}
                       onChange={(event) => setSecurityQuery(event.target.value)}
                     />
                   </div>
                   <Button variant="outline" size="sm" onClick={exportTopHoldings}>
                     <Download className="mr-2 h-4 w-4" />
-                    匯出
+                    {t("investmentRisk.attribution.export")}
                   </Button>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
               <Table>
-                <TableHeader><TableRow><TableHead>代碼</TableHead><TableHead>名稱</TableHead><TableHead>行業</TableHead><TableHead className="text-right">日均權重</TableHead><TableHead className="text-right">持倉日數</TableHead><TableHead className="text-right">區間損益</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>{t("investmentRisk.attribution.colCode")}</TableHead><TableHead>{t("investmentRisk.attribution.colName")}</TableHead><TableHead>{t("investmentRisk.attribution.colSector")}</TableHead><TableHead className="text-right">{t("investmentRisk.attribution.colAvgWeight")}</TableHead><TableHead className="text-right">{t("investmentRisk.attribution.colHoldingDays")}</TableHead><TableHead className="text-right">{t("investmentRisk.attribution.colIntervalPnl")}</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {filteredTopHoldings.map((row) => (
                     <TableRow key={row.security_code}>
@@ -291,12 +300,13 @@ function MetricCard({ label, value, detail }: { label: string; value: string; de
 }
 
 function PnlTable({ title, rows }: { title: string; rows: SecurityPnl[] }) {
+  const { t } = useTranslation()
   return (
     <Card>
       <CardHeader><CardTitle className="text-base">{title}</CardTitle></CardHeader>
       <CardContent>
         <Table>
-          <TableHeader><TableRow><TableHead>個股</TableHead><TableHead>行業</TableHead><TableHead className="text-right">損益</TableHead><TableHead className="text-right">貢獻</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>{t("investmentRisk.attribution.colSecurity")}</TableHead><TableHead>{t("investmentRisk.attribution.colSector")}</TableHead><TableHead className="text-right">{t("investmentRisk.attribution.colPnl")}</TableHead><TableHead className="text-right">{t("investmentRisk.attribution.colContribution")}</TableHead></TableRow></TableHeader>
           <TableBody>
             {rows.map((row, index) => (
               <TableRow key={`${row.security_code}-${index}`}>
@@ -315,5 +325,6 @@ function PnlTable({ title, rows }: { title: string; rows: SecurityPnl[] }) {
 }
 
 function EmptyRow({ columns }: { columns: number }) {
-  return <TableRow><TableCell colSpan={columns} className="h-20 text-center text-muted-foreground">暫無數據</TableCell></TableRow>
+  const { t } = useTranslation()
+  return <TableRow><TableCell colSpan={columns} className="h-20 text-center text-muted-foreground">{t("investmentRisk.attribution.noData")}</TableCell></TableRow>
 }

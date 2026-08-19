@@ -271,18 +271,18 @@ function RiskRulesPage() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["risk-rule-attachments"] })
       refresh()
-      toast.success("附件上传成功")
+      toast.success(t("riskRulesPage.attachmentUploadSuccess"))
     },
-    onError: () => toast.error("附件上传失败"),
+    onError: () => toast.error(t("riskRulesPage.attachmentUploadFailed")),
   })
   const deleteAttachment = useMutation({
     mutationFn: (attachmentId: number) => fsiApi.deleteRiskRuleAttachment(attachmentId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["risk-rule-attachments"] })
       refresh()
-      toast.success("附件已删除")
+      toast.success(t("riskRulesPage.attachmentDeleteSuccess"))
     },
-    onError: () => toast.error("附件删除失败"),
+    onError: () => toast.error(t("riskRulesPage.attachmentDeleteFailed")),
   })
 
   const cards = useMemo(() => (["regulatory", "contract", "internal"] as RiskRuleType[]).map((type) => ({
@@ -386,8 +386,8 @@ function RiskRulesPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">第一部分 · 规则库</CardTitle>
-          <p className="text-sm text-muted-foreground">添加和维护监管规则、合同规则、内部规则；规则保存后需在第二部分绑定应用场景才会生效。</p>
+          <CardTitle className="text-base">{t("riskRulesPage.section1Title")}</CardTitle>
+          <p className="text-sm text-muted-foreground">{t("riskRulesPage.section1Subtitle")}</p>
         </CardHeader>
         <CardContent className="space-y-4 pt-6">
           <Tabs value={ruleType} onValueChange={(value) => setRuleType(value as RuleFilter)}>
@@ -415,12 +415,12 @@ function RiskRulesPage() {
 
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>{t("riskRules.activeOfTotal", { active: rules.data?.items.length ?? 0, total: rules.data?.count ?? 0 })}</span>
-            {rules.isError ? <span className="text-destructive">规则列表加载失败，请检查后端服务</span> : null}
+            {rules.isError ? <span className="text-destructive">{t("riskRulesPage.listLoadError")}</span> : null}
           </div>
 
           <div className="max-h-[36vh] min-h-[240px] overflow-auto rounded-md border">
             <Table>
-              <TableHeader className="sticky top-0 z-10 bg-background"><TableRow><TableHead>{t("riskRules.type")}</TableHead><TableHead>{t("riskRules.codeName")}</TableHead><TableHead>{t("riskRules.fund")}</TableHead><TableHead>{t("riskRules.dimension")}</TableHead><TableHead>{t("riskRules.limit")}</TableHead><TableHead>附件</TableHead><TableHead>{t("riskRules.period")}</TableHead><TableHead>{t("riskRules.status")}</TableHead><TableHead className="text-right">{t("riskRules.actions")}</TableHead></TableRow></TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background"><TableRow><TableHead>{t("riskRules.type")}</TableHead><TableHead>{t("riskRules.codeName")}</TableHead><TableHead>{t("riskRules.fund")}</TableHead><TableHead>{t("riskRules.dimension")}</TableHead><TableHead>{t("riskRules.limit")}</TableHead><TableHead>{t("riskRulesPage.attachment")}</TableHead><TableHead>{t("riskRules.period")}</TableHead><TableHead>{t("riskRules.status")}</TableHead><TableHead className="text-right">{t("riskRules.actions")}</TableHead></TableRow></TableHeader>
               <TableBody>
                 {(rules.data?.items ?? []).map((rule) => (
                   <TableRow key={`${rule.rule_type}-${rule.id}`}>
@@ -591,14 +591,14 @@ function RuleDialog({
           </div>
           <div className="space-y-2 md:col-span-2"><Label>{t("riskRules.descriptionField")}</Label><Textarea value={form.description} onChange={(event) => set("description", event.target.value)} rows={3} /></div>
           <div className="space-y-2 md:col-span-2">
-            <Label>附件（可选，PDF/DOC/DOCX/TXT）</Label>
+            <Label>{t("riskRulesPage.attachmentFieldLabel")}</Label>
             <Input
               type="file"
               accept=".pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
               onChange={(event) => onFileChange(event.target.files?.[0] ?? null)}
             />
-            {pendingFile ? <p className="text-xs text-muted-foreground">已选择: {pendingFile.name}</p> : null}
-            <Input placeholder="附件说明（可选）" value={pendingFileNote} onChange={(event) => onFileNoteChange(event.target.value)} />
+            {pendingFile ? <p className="text-xs text-muted-foreground">{t("riskRulesPage.fileSelected", { name: pendingFile.name })}</p> : null}
+            <Input placeholder={t("riskRulesPage.attachmentNotePlaceholder")} value={pendingFileNote} onChange={(event) => onFileNoteChange(event.target.value)} />
           </div>
         </div>
         <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>{t("riskRules.cancel")}</Button><Button onClick={onSubmit} disabled={saving}>{saving ? t("riskRules.saving") : t("riskRules.save")}</Button></DialogFooter>
@@ -638,18 +638,19 @@ function AttachmentDialog({
   onDownload: (attachment: RiskRuleAttachment) => void
   onDelete: (attachment: RiskRuleAttachment) => void
 }) {
+  const { t } = useTranslation()
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>规则附件</DialogTitle>
+          <DialogTitle>{t("riskRulesPage.attachmentDialogTitle")}</DialogTitle>
           <DialogDescription>{rule ? `${displayRuleName(rule)} (${rule.code})` : ""}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="rounded-md border p-3">
             <div className="grid gap-3 md:grid-cols-[1fr_220px_auto] md:items-end">
               <div className="space-y-2">
-                <Label>上传文件</Label>
+                <Label>{t("riskRulesPage.uploadFile")}</Label>
                 <Input
                   type="file"
                   accept=".pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
@@ -657,10 +658,10 @@ function AttachmentDialog({
                 />
               </div>
               <div className="space-y-2">
-                <Label>说明</Label>
-                <Input value={note} onChange={(event) => onNoteChange(event.target.value)} placeholder="可选" />
+                <Label>{t("riskRulesPage.note")}</Label>
+                <Input value={note} onChange={(event) => onNoteChange(event.target.value)} placeholder={t("riskRulesPage.optional")} />
               </div>
-              <Button onClick={onUpload} disabled={!file || uploadPending}><Upload className="mr-1 h-4 w-4" />上传</Button>
+              <Button onClick={onUpload} disabled={!file || uploadPending}><Upload className="mr-1 h-4 w-4" />{t("riskRulesPage.upload")}</Button>
             </div>
           </div>
 
@@ -668,11 +669,11 @@ function AttachmentDialog({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>文件名</TableHead>
-                  <TableHead>大小</TableHead>
-                  <TableHead>说明</TableHead>
-                  <TableHead>上传时间</TableHead>
-                  <TableHead className="text-right">操作</TableHead>
+                  <TableHead>{t("riskRulesPage.colFileName")}</TableHead>
+                  <TableHead>{t("riskRulesPage.colSize")}</TableHead>
+                  <TableHead>{t("riskRulesPage.colNote")}</TableHead>
+                  <TableHead>{t("riskRulesPage.colUploadedAt")}</TableHead>
+                  <TableHead className="text-right">{t("riskRulesPage.colActions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -684,13 +685,13 @@ function AttachmentDialog({
                     <TableCell className="text-xs text-muted-foreground">{String(attachment.created_at).slice(0, 19).replace("T", " ")}</TableCell>
                     <TableCell>
                       <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => onDownload(attachment)} title="下载"><Download className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" onClick={() => onDelete(attachment)} disabled={deletePending} title="删除"><Trash2 className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => onDownload(attachment)} title={t("riskRulesPage.download")}><Download className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => onDelete(attachment)} disabled={deletePending} title={t("riskRulesPage.delete")}><Trash2 className="h-4 w-4" /></Button>
                       </div>
                     </TableCell>
                   </TableRow>
                 ))}
-                {!loading && items.length === 0 ? <TableRow><TableCell colSpan={5} className="h-20 text-center text-muted-foreground">暂无附件</TableCell></TableRow> : null}
+                {!loading && items.length === 0 ? <TableRow><TableCell colSpan={5} className="h-20 text-center text-muted-foreground">{t("riskRulesPage.noAttachments")}</TableCell></TableRow> : null}
               </TableBody>
             </Table>
           </div>

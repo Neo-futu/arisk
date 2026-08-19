@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 import { useEffect, useRef, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { fsiApi } from "@/fsiClient"
 import type { ChatSessionRecord } from "@/fsiClient"
 import { FALLBACK_AGENTS, FALLBACK_MODELS } from "./constants"
@@ -7,6 +8,7 @@ import { parseToolCalls } from "./utils"
 import type { ChatMessage, SSEEvent, ToolCallRecord } from "./types"
 
 export function useChatSession() {
+  const { t } = useTranslation()
   const [sessions,          setSessions]          = useState<ChatSessionRecord[]>([])
   const [currentSessionId,  setCurrentSessionId]  = useState<string | null>(null)
   const [messages,          setMessages]          = useState<ChatMessage[]>([])
@@ -44,9 +46,18 @@ export function useChatSession() {
   }, [])
 
   // 拉取 Agent / 模型列表
-  const { data: agentList  } = useQuery({ queryKey: ["agents-list"],  queryFn: () => fsiApi.listAgents().then(r => r.data),  staleTime: 60_000 })
+  const { data: agentListRaw } = useQuery({ queryKey: ["agents-list"],  queryFn: () => fsiApi.listAgents().then(r => r.data),  staleTime: 60_000 })
   const { data: modelListRaw } = useQuery({ queryKey: ["models-list"], queryFn: () => fsiApi.listModels().then(r => r.data), staleTime: 60_000 })
-  const modelList = modelListRaw ?? FALLBACK_MODELS
+
+  // Agent 列表：API 返回 { id, name } 直接用；無數據時用 fallback 的 nameKey 翻譯
+  const agentList = agentListRaw ?? FALLBACK_AGENTS.map(a => ({ id: a.id, name: t(a.nameKey) }))
+  // 模型列表：API 返回 { id, label, provider, default } 直接用；無數據時用 fallback，把 tagKey 拼接到 label
+  const modelList = modelListRaw ?? FALLBACK_MODELS.map(m => ({
+    id: m.id,
+    label: m.tagKey ? `${m.baseLabel}（${t(m.tagKey)}）` : m.baseLabel,
+    provider: m.provider,
+    default: m.default,
+  }))
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }) }, [messages])
 
@@ -147,7 +158,7 @@ export function useChatSession() {
       )
       if (!response.ok) {
         const err = await response.text()
-        updateLastAssistant(m => ({ ...m, isStreaming: false, error: `請求失敗 (${response.status})：${err.slice(0, 200)}` }))
+        updateLastAssistant(m => ({ ...m, isStreaming: false, error: t("chat.requestFailed", { status: response.status, detail: err.slice(0, 200) }) }))
         return
       }
       const reader = response.body!.getReader()
@@ -174,7 +185,7 @@ export function useChatSession() {
             if (idx >= 0) assistantToolCalls[idx] = { ...assistantToolCalls[idx], result: ev.result, done: true }
             updateLastAssistant(m => ({ ...m, toolCalls: m.toolCalls.map(t => t.id === ev.id ? { ...t, result: ev.result, done: true } : t) }))
           } else if (ev.type === "error") {
-            updateLastAssistant(m => ({ ...m, isStreaming: false, error: ev.message ?? "Agent 執行錯誤" }))
+            updateLastAssistant(m => ({ ...m, isStreaming: false, error: ev.message ?? t("chat.agentError") }))
           } else if (ev.type === "done") {
             updateLastAssistant(m => ({ ...m, isStreaming: false }))
           }
@@ -192,7 +203,7 @@ export function useChatSession() {
         }).catch(() => {})
       }
     } catch (err) {
-      updateLastAssistant(m => ({ ...m, isStreaming: false, error: err instanceof Error ? err.message : "網絡請求失敗" }))
+      updateLastAssistant(m => ({ ...m, isStreaming: false, error: err instanceof Error ? err.message : t("chat.networkError") }))
     } finally {
       setStreaming(false)
     }
@@ -201,7 +212,7 @@ export function useChatSession() {
   return {
     sessions, currentSessionId, messages, streaming,
     input, setInput, agentId, setAgentId, modelId, setModelId,
-    agentList: agentList ?? FALLBACK_AGENTS,
+    agentList,
     modelList,
     sendMessage, newChat, loadSession, deleteSession,
     bottomRef, inputRef,

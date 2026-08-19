@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router"
 import { CheckCircle2, XCircle } from "lucide-react"
 import { useMemo } from "react"
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 
 import { FUNDS, FsiToolbar, lastTradeDate } from "@/components/FsiToolbar"
 import { Badge } from "@/components/ui/badge"
@@ -84,6 +85,7 @@ function RuleRow({
   breach: boolean
   source?: string
 }) {
+  const { t } = useTranslation()
   return (
     <div className="flex items-center justify-between py-3 border-b last:border-0">
       <div className="flex items-center gap-3">
@@ -102,7 +104,7 @@ function RuleRow({
           variant={breach ? "destructive" : "outline"}
           className="w-14 justify-center text-xs"
         >
-          {breach ? "違規" : "合規"}
+          {breach ? t("compliance.breach") : t("compliance.compliant")}
         </Badge>
       </div>
     </div>
@@ -110,6 +112,7 @@ function RuleRow({
 }
 
 function CompliancePage() {
+  const { t } = useTranslation()
   const [fundId, setFundId] = useState(FUNDS[0].id)
   const [asOfDate, setAsOfDate] = useState(lastTradeDate)
 
@@ -127,10 +130,10 @@ function CompliancePage() {
       return data.compliance_details.map((detail) => {
         const value = detail.unit === "PCT"
           ? `${detail.current_value.toFixed(2)}%`
-          : `${detail.current_value.toFixed(1)} 天`
+          : t("compliance.dayUnit", { value: detail.current_value.toFixed(1) })
         const limitValue = detail.unit === "PCT"
           ? `${detail.limit_value}%`
-          : `${detail.limit_value} 天`
+          : t("compliance.dayUnit", { value: detail.limit_value })
         const trace = data.rule_trace?.[detail.rule_code]
         const source = trace
           ? `${trace.used_default ? "Default" : "Config"} (R:${trace.regulatory}/C:${trace.contract}/I:${trace.internal})`
@@ -154,14 +157,14 @@ function CompliancePage() {
       breach: data.breach_flags.includes(rule.code),
       source: undefined,
     }))
-  }, [data])
+  }, [data, t])
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">SFC 合規核查</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{t("compliance.title")}</h1>
         <p className="text-muted-foreground text-sm">
-          《單位信託及互惠基金守則》第 8.2 章 — 貨幣市場基金合規要求
+          {t("compliance.subtitle")}
         </p>
       </div>
 
@@ -171,11 +174,11 @@ function CompliancePage() {
         onRefresh={() => refetch()} isFetching={isFetching}
       />
 
-      {isFetching && <p className="text-muted-foreground text-sm animate-pulse">載入中...</p>}
+      {isFetching && <p className="text-muted-foreground text-sm animate-pulse">{t("compliance.loading")}</p>}
       {isError && (
         <Card className="border-destructive">
           <CardContent className="pt-4 text-sm text-destructive">
-            無法載入合規數據。請確認 Processing API 已啟動。
+            {t("compliance.loadError")}
           </CardContent>
         </Card>
       )}
@@ -189,15 +192,17 @@ function CompliancePage() {
                 : <XCircle className="h-8 w-8 text-destructive" />}
               <div>
                 <p className="font-semibold text-lg">
-                  {data.is_compliant ? "全部合規" : `${data.breach_flags.length} 項守則違規`}
+                  {data.is_compliant
+                    ? t("compliance.allCompliant")
+                    : t("compliance.breachCount", { count: data.breach_flags.length })}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  {data.fund_id} · {String(data.as_of_date)} · 總 NAV HKD{" "}
-                  {(data.total_nav_hkd / 1e8).toFixed(2)} 億
+                  {data.fund_id} · {String(data.as_of_date)} ·{" "}
+                  {t("compliance.navSummary", { value: (data.total_nav_hkd / 1e8).toFixed(2) })}
                 </p>
                 {!data.is_compliant && (
                   <p className="text-sm text-destructive mt-1">
-                    違規項：{data.breach_flags.join("、")}
+                    {t("compliance.breachItems", { items: data.breach_flags.join("、") })}
                   </p>
                 )}
               </div>
@@ -206,7 +211,7 @@ function CompliancePage() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">第 8.2 章守則逐項核查（含通過項）</CardTitle>
+              <CardTitle className="text-base">{t("compliance.checklistTitle")}</CardTitle>
             </CardHeader>
             <CardContent>
               {renderedRules.map((rule) => (

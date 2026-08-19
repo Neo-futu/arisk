@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next"
+
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -27,37 +29,41 @@ export function InvestmentRiskTopicPage({
 }: {
   topicId: InvestmentRiskTopic["id"]
 }) {
+  const { t } = useTranslation()
   const topic = getInvestmentRiskTopic(topicId)
 
   if (!topic) {
     return (
       <Card className="border-destructive">
         <CardContent className="pt-4 text-sm text-destructive">
-          無法找到對應的投資風險功能頁。
+          {t("investmentRisk.module.topicPageNotFound")}
         </CardContent>
       </Card>
     )
   }
 
+  const capabilities = t(topic.capabilitiesKey, { returnObjects: true }) as string[]
+  const agentIntegration = t(topic.agentIntegrationKey, { returnObjects: true }) as string[]
+
   return (
     <div className="space-y-6">
       <div className="space-y-2">
         <div className="flex items-center gap-2">
-          <Badge variant="outline">投資風險模塊</Badge>
+          <Badge variant="outline">{t("investmentRisk.module.tag")}</Badge>
           <Badge variant="secondary">{topic.subtitle}</Badge>
         </div>
-        <h1 className="text-2xl font-bold tracking-tight">{topic.title}</h1>
-        <p className="max-w-4xl text-sm text-muted-foreground">{topic.summary}</p>
+        <h1 className="text-2xl font-bold tracking-tight">{t(topic.titleKey)}</h1>
+        <p className="max-w-4xl text-sm text-muted-foreground">{t(topic.summaryKey)}</p>
       </div>
 
-      <TopicList title="核心能力" items={topic.capabilities} />
+      <TopicList title={t("investmentRisk.module.coreCapabilities")} items={capabilities} />
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <TopicList title="2_processing 建議路由" items={topic.processingRoutes} />
-        <TopicList title="1_datastorage 建議表" items={topic.storageTables} />
+        <TopicList title={t("investmentRisk.module.processingRoutes")} items={topic.processingRoutes} />
+        <TopicList title={t("investmentRisk.module.storageTables")} items={topic.storageTables} />
       </div>
 
-      <TopicList title="Agent / MCP 集成" items={topic.agentIntegration} />
+      <TopicList title={t("investmentRisk.module.agentIntegration")} items={agentIntegration} />
     </div>
   )
 }
