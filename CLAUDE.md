@@ -56,6 +56,7 @@ backend/           FastAPI（JWT 認證 + /api/v1/fsi/* 統一代理）
 - **技能來源**：所有 SKILL.md 在 `3_skills/skills/` 修改，禁止直接改 agent bundle 副本
 - **SQL 修改**：schema 變更走 `1_datastorage/postgres/migrations/`，不直接改 schema 文件
 - **計算引擎**：`2_processing/tools/risk/` 和 `2_processing/tools/performance/`（不在 backend/）
+- **連庫（本地/雲）**：本地用靜態密碼 + localhost；雲上設 `POSTGRES_IAM_AUTH=true` 走 **RDS IAM token**（連接時刷新、`sslmode=require`），**雲端不存靜態庫密碼**。連庫層在 `backend/app/core/{config,db,db_auth}.py` 與 `alembic/env.py`，勿在雲上硬編密碼
 
 ### 前置條件（本機安裝，無需 Docker）
 

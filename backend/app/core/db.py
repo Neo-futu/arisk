@@ -1,11 +1,35 @@
-from sqlalchemy import text
+from sqlalchemy import event, text
 from sqlmodel import Session, create_engine, select
 
 from app import crud
 from app.core.config import settings
+from app.core.db_auth import generate_iam_token
 from app.models import User, UserCreate
 
-engine = create_engine(str(settings.SQLALCHEMY_DATABASE_URI))
+# 本地：静态密码 + localhost（默认）。云上：POSTGRES_IAM_AUTH=true 时，
+# 每次新建连接注入新鲜的 RDS IAM token 作口令（token 约 15 分钟过期），
+# 并强制 SSL。POSTGRES_SSLMODE 未显式设置且开启 IAM 时默认 require。
+_connect_args: dict[str, str] = {}
+if settings.POSTGRES_SSLMODE:
+    _connect_args["sslmode"] = settings.POSTGRES_SSLMODE
+elif settings.POSTGRES_IAM_AUTH:
+    _connect_args["sslmode"] = "require"
+
+engine = create_engine(
+    str(settings.SQLALCHEMY_DATABASE_URI),
+    connect_args=_connect_args,
+)
+
+if settings.POSTGRES_IAM_AUTH:
+
+    @event.listens_for(engine, "do_connect")
+    def _provide_iam_token(dialect, conn_rec, cargs, cparams):  # type: ignore[no-untyped-def]
+        cparams["password"] = generate_iam_token(
+            host=settings.POSTGRES_SERVER,
+            port=settings.POSTGRES_PORT,
+            user=settings.POSTGRES_USER,
+            region=settings.AWS_REGION,
+        )
 
 
 # make sure all SQLModel models are imported (app.models) before initializing DB

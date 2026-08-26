@@ -2,10 +2,11 @@
 
 # AGENTS.md — arisk（派生自 app-template）
 
-> **本仓派生自平台 golden-path 脚手架 `app-template`**：`app_name=arisk` / `repo_pascal=Arisk`。
-> 当前处于「先接治理面」阶段——已接入平台对接/发布面（本 `AGENTS.md`、`iac/` 只读 SSM 对接、`.github/` CI/CD、PR 模板、`.claude/`、`.envrc`、`scripts/protect-main-branch.sh`）。
-> 根 `app/`（`handler.py`）与 `iac/`（lambda-deploy）目前是**脚手架占位骨架**，尚未映射到 arisk 的真实多服务形态；真实业务代码在既有目录：`1_datastorage`…`6_entry`、`backend/`、`frontend/`、`aiagent/` 等。
-> arisk 是多服务应用（frontend + backend + `2_processing` + `6_entry` + agents），真实部署形态（ECS / 静态前端 / 多形态组合，可参考 `templates/monorepo-ecs`）待后续单独派生落地。日常迭代**只读 SSM 对接现有基础设施、不碰 infra 实质 IaC 与 ADR**。
+> **本仓是平台 golden-path 脚手架 `app-template` 的完整派生应用**：`app_name=arisk` / `repo_pascal=Arisk`。
+> **忠实保留 app-template 全套脚手架**（本 `AGENTS.md`、`app/`+`iac/`+`tests/` 的 lambda golden-path 默认形态、`.github/` CI/CD、PR 模板、`templates/` 六形态样例、`.claude/`、`.envrc`、`scripts/protect-main-branch.sh`），以保证后续团队的一致性；**并与 arisk 既有业务代码并存**——真实业务在 `1_datastorage`…`6_entry`、`backend/`、`frontend/`、`aiagent/` 等目录。
+> arisk 是多服务应用（frontend + backend + `2_processing` + `6_entry` + agents）；真实部署形态（ECS / 静态前端 / 多形态组合，参考 `templates/monorepo-ecs`）后续单独派生落地。日常迭代**只读 SSM 对接现有基础设施、不碰 infra 实质 IaC 与 ADR**。
+>
+> **PostgreSQL 本地/云双模**：连库层（`backend/app/core/{config,db,db_auth}.py`、`backend/app/alembic/env.py`）本地默认用静态密码 + localhost；云上设 `POSTGRES_IAM_AUTH=true` 即改用 **RDS IAM token**（连接时自动刷新、`sslmode=require`），**云端不存静态库密码**。变量见 `.env.example`。
 
 以下为 app-template 的脚手架约定，派生仓沿用；协助研发同事在本仓迭代时遵循。
 

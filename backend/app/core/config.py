@@ -56,13 +56,23 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str = ""
     POSTGRES_DB: str = ""
 
+    # ── Cloud (AWS RDS) 连库 ──────────────────────────────────
+    # 本地默认关闭：用静态 POSTGRES_PASSWORD + localhost（行为不变）。
+    # 云上开启 POSTGRES_IAM_AUTH：用 RDS IAM token 代替静态密码（连接时刷新），
+    # 并设 POSTGRES_SSLMODE=require。见 app/core/db.py 与 db_auth.py。
+    POSTGRES_IAM_AUTH: bool = False
+    POSTGRES_SSLMODE: str | None = None
+    AWS_REGION: str = "ap-east-1"
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> PostgresDsn:
+        # IAM 认证模式下不写静态密码；实际口令由连接时生成的 RDS IAM token 注入
+        # （db.py 的 do_connect 事件 / alembic env.py）。
         return PostgresDsn.build(
             scheme="postgresql+psycopg",
             username=self.POSTGRES_USER,
-            password=self.POSTGRES_PASSWORD,
+            password=None if self.POSTGRES_IAM_AUTH else self.POSTGRES_PASSWORD,
             host=self.POSTGRES_SERVER,
             port=self.POSTGRES_PORT,
             path=self.POSTGRES_DB,
