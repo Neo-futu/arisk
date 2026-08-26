@@ -1,0 +1,2 @@
+# 测试依赖。handler 本身仅用标准库；如应用引入运行时依赖，另建 app/requirements.txt。
+pytest>=8,<9

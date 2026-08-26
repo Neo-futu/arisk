@@ -1,0 +1,132 @@
+# 可复用 ECS 单环境部署：OIDC → build/push ECR → tofu apply → ECS force-new-deployment
+# 镜像 tag 使用 app/ 目录内容哈希，应用代码未变则跳过构建和推送，IaC 变更不触发无意义重建
+name: _deploy-ecs-env
+
+on:
+  workflow_call:
+    inputs:
+      env:
+        required: true
+        type: string
+      env_pascal:
+        required: true
+        type: string
+      gh_environment:
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.gh_environment }}
+    env:
+      APP_NAME:       ${{ vars.APP_NAME }}
+      REPO_PASCAL:    ${{ vars.REPO_PASCAL }}
+      AWS_REGION:     ${{ vars.AWS_REGION || 'ap-east-1' }}
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Configure AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v6.1.3
+        with:
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/AppDeployRole-${{ env.REPO_PASCAL }}-${{ inputs.env_pascal }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: ${{ env.APP_NAME }}-${{ inputs.env }}-gha
+          role-duration-seconds: 1800
+
+      - name: Compute image tag
+        id: tag
+        run: |
+          # app/ 目录内容哈希：代码未变则 tag 不变，IaC 变更不触发重建
+          APP_HASH=$(git ls-tree -r HEAD app/ | sha1sum | cut -c1-40)
+          echo "value=${APP_HASH}" >> "$GITHUB_OUTPUT"
+
+      - name: Build & push image
+        id: image
+        run: |
+          set -euo pipefail
+          REGISTRY=$(aws ssm get-parameter \
+            --name "/infra/bl/${{ inputs.env }}/ap-east-1/ecr/registry-url" \
+            --query Parameter.Value --output text)
+          REGISTRY_ID="${REGISTRY%%.*}"
+          IMAGE="${REGISTRY}/app-${APP_NAME}:${{ steps.tag.outputs.value }}"
+
+          # 幂等：内容哈希 tag 未变则跳过构建和推送
+          if aws ecr describe-images \
+               --registry-id "${REGISTRY_ID}" \
+               --repository-name "app-${APP_NAME}" \
+               --image-ids imageTag="${{ steps.tag.outputs.value }}" \
+               --region "${AWS_REGION}" >/dev/null 2>&1; then
+            echo "镜像已存在（tag=${{ steps.tag.outputs.value }}）— 跳过构建"
+          else
+            aws ecr get-login-password --region "${AWS_REGION}" | \
+              docker login --username AWS --password-stdin "${REGISTRY}"
+            docker buildx build \
+              --cache-from "type=gha,scope=${APP_NAME}" \
+              --cache-to "type=gha,mode=max,scope=${APP_NAME}" \
+              --tag "${IMAGE}" \
+              --push \
+              app/
+          fi
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+
+      - uses: opentofu/setup-opentofu@v2
+        with:
+          tofu_version: "1.12.1"
+
+      - name: Resolve deploy role ARN
+        id: ssm
+        run: |
+          ROLE_ARN=$(aws ssm get-parameter \
+            --name "/infra/bl/${{ inputs.env }}/ap-east-1/platform/role-app-deploy-${REPO_PASCAL}-${{ inputs.env_pascal }}-arn" \
+            --query Parameter.Value --output text)
+          echo "deploy_role_arn=${ROLE_ARN}" >> "$GITHUB_OUTPUT"
+
+      - name: Write backend config
+        run: |
+          cat > iac/backend.${{ inputs.env }}.hcl <<EOF
+          bucket               = "balance-tf-state-${{ inputs.env }}-ap-east-1"
+          key                  = "app/${APP_NAME}/${{ inputs.env }}/terraform.tfstate"
+          workspace_key_prefix = "app/${APP_NAME}/${{ inputs.env }}/workspaces"
+          region               = "ap-east-1"
+          dynamodb_table       = "balance-tf-locks-${{ inputs.env }}-ap-east-1"
+          encrypt              = true
+          EOF
+
+      - name: Tofu init
+        working-directory: iac
+        run: tofu init -backend-config=backend.${{ inputs.env }}.hcl
+
+      - name: Tofu apply
+        working-directory: iac
+        run: |
+          tofu apply -input=false -auto-approve \
+            -var="app_name=${APP_NAME}" \
+            -var="repo_pascal=${REPO_PASCAL}" \
+            -var="env=${{ inputs.env }}" \
+            -var="region=${AWS_REGION}" \
+            -var="deploy_role_arn=${{ steps.ssm.outputs.deploy_role_arn }}" \
+            -var="image_tag=${{ steps.tag.outputs.value }}"
+
+      - name: Force new ECS deployment
+        run: |
+          aws ecs update-service \
+            --cluster "${APP_NAME}-${{ inputs.env }}" \
+            --service "${APP_NAME}-${{ inputs.env }}" \
+            --force-new-deployment \
+            --region "${AWS_REGION}"
+
+      - name: Wait for ECS service stable
+        run: |
+          aws ecs wait services-stable \
+            --cluster "${APP_NAME}-${{ inputs.env }}" \
+            --services "${APP_NAME}-${{ inputs.env }}" \
+            --region "${AWS_REGION}"

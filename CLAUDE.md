@@ -1,3 +1,10 @@
+# CLAUDE.md — arisk
+
+> Claude Code 兼容入口。完整 AI 协作上下文见 [AGENTS.md](AGENTS.md)。
+> 本仓派生自平台脚手架 `app-template`。开始任何改动前先读取 `AGENTS.md`，遵循其中的 app↔infra 边界、SSM 对接契约与发布约定；以下为本应用的开发说明。
+
+---
+
 # ARISK
 
 六層核心架構 + 現代 Web 前後端的基金風控與業績分析平台，支援 Agent 模式與非 Agent 直接查詢模式。

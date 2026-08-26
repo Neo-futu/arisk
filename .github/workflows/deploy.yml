@@ -1,0 +1,56 @@
+# 发布：打 tag v* 后逐环境 dev -> staging -> prod 发布。
+# 每个环境：经 GitHub OIDC 假设 AppDeployRole-<RepoPascal>-<EnvPascal>
+#   -> 从 SSM 读部署角色 ARN -> 生成 partial backend config -> tofu init/plan/apply。
+# prod 绑定 GitHub Environment（production-app），由 app-ops 审批后才执行。
+#
+# 派生仓接入清单（一次性）：
+#   1) 仓库 Variables：APP_NAME（如 echopoc）、REPO_PASCAL（如 Echopoc）、AWS_REGION（默认 ap-east-1，可省）。
+#   2) 三个 GitHub Environment：development / staging / production-app；prod 配 required reviewers（app-ops）。
+#   3) 已在 app-registry/access-surface/apps.yaml 登记本仓 identity/capabilities，
+#      平台控制面已供给 AppDeployRole-* 与 SSM 出参。
+name: deploy
+
+# 运行标题标出 ref(tag/分支) 与触发人，避免 Actions 列表里手动触发的运行都叫 "deploy"。
+# 本工作流单次 run 顺序部署 dev→staging→prod，故标题以 ref 区分而非单一环境。
+run-name: "deploy ${{ github.ref_name }} (by ${{ github.actor }})"
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # OIDC 假设角色必需
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'ap-east-1' }}
+  APP_NAME: ${{ vars.APP_NAME }}
+  REPO_PASCAL: ${{ vars.REPO_PASCAL }}
+
+jobs:
+  dev:
+    uses: ./.github/workflows/_deploy-env.yml
+    with:
+      env: dev
+      env_pascal: Development
+      gh_environment: development
+    secrets: inherit
+
+  staging:
+    needs: dev
+    uses: ./.github/workflows/_deploy-env.yml
+    with:
+      env: staging
+      env_pascal: Staging
+      gh_environment: staging
+    secrets: inherit
+
+  prod:
+    needs: staging
+    uses: ./.github/workflows/_deploy-env.yml
+    with:
+      env: prod
+      env_pascal: Production
+      gh_environment: production-app   # 该 Environment 配 required reviewers 审批
+    secrets: inherit

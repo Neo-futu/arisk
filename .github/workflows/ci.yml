@@ -1,0 +1,61 @@
+# CI：PR 阶段跑应用测试 + OpenTofu 静态校验，作为合入门槛。
+name: ci
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - uses: opentofu/setup-opentofu@v2
+        with:
+          tofu_version: "1.6.2"
+
+      - name: Install test deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r tests/requirements-dev.txt
+          # 应用如有运行时依赖（app/requirements.txt）也一并装上，保证 import 可用。
+          if [ -f app/requirements.txt ]; then pip install -r app/requirements.txt; fi
+
+      - name: Run pytest
+        run: pytest tests/ -q
+
+      - name: Check OpenTofu format
+        working-directory: iac
+        run: tofu fmt -check
+
+      - name: Validate OpenTofu
+        working-directory: iac
+        run: |
+          tofu init -backend=false
+          tofu validate
+
+      - name: Check template OpenTofu format
+        run: tofu fmt -check -recursive templates
+
+      - name: Validate template OpenTofu
+        run: |
+          set -euo pipefail
+          for dir in \
+            templates/dev-server/iac \
+            templates/ecs-deploy/iac \
+            templates/futu-adapter/iac \
+            templates/monorepo-ecs/dns/app-iac \
+            templates/monorepo-ecs/shared/iac \
+            templates/monorepo-ecs/subprojects/svc-a/iac \
+            templates/static-deploy/iac
+          do
+            echo "::group::${dir}"
+            TF_DATA_DIR="${RUNNER_TEMP}/tfdata-${dir//\//-}" tofu -chdir="${dir}" init -backend=false -input=false
+            TF_DATA_DIR="${RUNNER_TEMP}/tfdata-${dir//\//-}" tofu -chdir="${dir}" validate
+            echo "::endgroup::"
+          done

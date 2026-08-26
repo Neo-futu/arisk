@@ -1,0 +1,65 @@
+#!/bin/bash
+# EC2 userdata：部署 gateway.py 并以 systemd 服务运行
+# gateway.py 零依赖纯标准库（partner SG 阻断 TCP 443，无法 pip install）
+set -euo pipefail
+
+# ── 安装目录 ──────────────────────────────────────────────────────────────────
+mkdir -p /opt/fdoc-gateway /etc/fdoc-gateway /var/log/fdoc-gateway
+
+# ── 写入 gateway.py（内嵌，不从外部下载）─────────────────────────────────────
+cat > /opt/fdoc-gateway/gateway.py << 'GATEWAY_PY'
+${gateway_py}
+GATEWAY_PY
+
+# ── 写入环境变量文件 ───────────────────────────────────────────────────────────
+cat > /etc/fdoc-gateway/env << 'ENVFILE'
+LISTEN_ADDR=0.0.0.0:${listen_port}
+UPSTREAM_URL=${upstream_url_csv}
+REQUEST_TIMEOUT=${request_timeout}
+ENVFILE
+
+# ── 写入 systemd unit ─────────────────────────────────────────────────────────
+cat > /etc/systemd/system/gateway.service << 'UNIT'
+[Unit]
+Description=FUTU Gateway Proxy
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/fdoc-gateway/env
+ExecStart=/usr/bin/python3 /opt/fdoc-gateway/gateway.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/var/log/fdoc-gateway/gateway.log
+StandardError=append:/var/log/fdoc-gateway/gateway.log
+NoNewPrivileges=true
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable --now gateway.service
+
+# ── 启动自检（输出到 console，可用 ec2:GetConsoleOutput 读取）────────────────
+sleep 3
+echo "=== gateway startup self-check ===" > /dev/console
+
+# 检查进程
+if systemctl is-active --quiet gateway.service; then
+  echo "OK: gateway.service is active" > /dev/console
+else
+  echo "FAIL: gateway.service not active" > /dev/console
+  journalctl -u gateway.service -n 20 > /dev/console
+  exit 1
+fi
+
+# healthz 探测
+if curl -sf http://127.0.0.1:${listen_port}/healthz > /dev/null 2>&1; then
+  echo "OK: healthz responded" > /dev/console
+else
+  echo "WARN: healthz did not respond (upstream may be unreachable, check FUTU whitelist)" > /dev/console
+fi
+
+echo "=== gateway deployed: ${listen_port} → ${upstream_url_csv} ===" > /dev/console

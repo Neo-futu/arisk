@@ -1,0 +1,219 @@
+# 可复用：ECS Fargate 跑 DB migration，migration role 有 DDL 权限，运行时 role 没有。
+# 支持停服模式（stop_service: true，用于有破坏性 schema 变更的 migration）。
+name: _deploy-ecs-db-migrate
+
+on:
+  workflow_call:
+    inputs:
+      env:
+        required: true
+        type: string
+      env_pascal:
+        required: true
+        type: string
+      gh_environment:
+        required: true
+        type: string
+      subproject:
+        required: true
+        type: string
+      stop_service:
+        required: false
+        type: boolean
+        default: false
+        description: "migration 前是否停服（持续写入型服务用 true，HTTP API 用 false）"
+      migration_image:
+        required: false
+        type: string
+        default: ""
+        description: "保留兼容字段；默认使用本子项目内容哈希镜像执行 migration。"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.gh_environment }}
+    env:
+      APP_NAME:       ${{ vars.APP_NAME }}
+      REPO_PASCAL:    ${{ vars.REPO_PASCAL }}
+      AWS_REGION:     ${{ vars.AWS_REGION || 'ap-east-1' }}
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      SUBPROJECT:     ${{ inputs.subproject }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Configure AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v6.1.3
+        with:
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/AppDeployRole-${{ env.REPO_PASCAL }}-${{ inputs.env_pascal }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: ${{ env.APP_NAME }}-${{ inputs.subproject }}-migrate-${{ inputs.env }}-gha
+          role-duration-seconds: 1800
+
+      - name: Compute image tag
+        id: tag
+        run: |
+          APP_HASH=$(git ls-tree -r HEAD subprojects/${SUBPROJECT}/app/ | sha1sum | cut -c1-40)
+          echo "value=${APP_HASH}" >> "$GITHUB_OUTPUT"
+
+      - name: Build & push image
+        run: |
+          set -euo pipefail
+          REGISTRY=$(aws ssm get-parameter \
+            --name "/infra/bl/${{ inputs.env }}/ap-east-1/ecr/registry-url" \
+            --query Parameter.Value --output text)
+          REGISTRY_ID="${REGISTRY%%.*}"
+          REPO="app-${APP_NAME}-${SUBPROJECT}"
+          IMAGE="${REGISTRY}/${REPO}:${{ steps.tag.outputs.value }}"
+
+          if aws ecr describe-images \
+               --registry-id "${REGISTRY_ID}" \
+               --repository-name "${REPO}" \
+               --image-ids imageTag="${{ steps.tag.outputs.value }}" \
+               --region "${AWS_REGION}" >/dev/null 2>&1; then
+            echo "镜像已存在（tag=${{ steps.tag.outputs.value }}）— 跳过构建"
+          else
+            aws ecr get-login-password --region "${AWS_REGION}" | \
+              docker login --username AWS --password-stdin "${REGISTRY}"
+            docker buildx build \
+              --cache-from "type=gha,scope=${APP_NAME}-${SUBPROJECT}" \
+              --cache-to "type=gha,mode=max,scope=${APP_NAME}-${SUBPROJECT}" \
+              --tag "${IMAGE}" \
+              --push \
+              subprojects/${SUBPROJECT}/app/
+          fi
+
+      - uses: opentofu/setup-opentofu@v2
+        with:
+          tofu_version: "1.12.1"
+
+      - name: Resolve deploy role ARN
+        id: ssm
+        run: |
+          ROLE_ARN=$(aws ssm get-parameter \
+            --name "/infra/bl/${{ inputs.env }}/ap-east-1/platform/role-app-deploy-${REPO_PASCAL}-${{ inputs.env_pascal }}-arn" \
+            --query Parameter.Value --output text)
+          echo "deploy_role_arn=${ROLE_ARN}" >> "$GITHUB_OUTPUT"
+
+      - name: Write backend config
+        run: |
+          cat > subprojects/${SUBPROJECT}/iac/backend.${{ inputs.env }}.hcl <<EOF
+          bucket         = "balance-tf-state-${{ inputs.env }}-ap-east-1"
+          key            = "app/${APP_NAME}/${SUBPROJECT}/${{ inputs.env }}/terraform.tfstate"
+          region         = "ap-east-1"
+          dynamodb_table = "balance-tf-locks-${{ inputs.env }}-ap-east-1"
+          encrypt        = true
+          EOF
+
+      - name: Prepare ECS migration resources
+        working-directory: subprojects/${{ inputs.subproject }}/iac
+        run: |
+          tofu init -backend-config=backend.${{ inputs.env }}.hcl
+          tofu apply -input=false -auto-approve \
+            -target=aws_ecs_cluster.main \
+            -target=aws_security_group.service \
+            -target=aws_cloudwatch_log_group.app \
+            -target=aws_iam_role.db_owner_exec \
+            -target=aws_iam_role.db_owner_task \
+            -target=aws_iam_role_policy.db_owner_rds_iam \
+            -target=aws_ecs_task_definition.migrate \
+            -var="app_name=${APP_NAME}" \
+            -var="repo_pascal=${REPO_PASCAL}" \
+            -var="env=${{ inputs.env }}" \
+            -var="region=${AWS_REGION}" \
+            -var="deploy_role_arn=${{ steps.ssm.outputs.deploy_role_arn }}" \
+            -var="image_tag=${{ steps.tag.outputs.value }}"
+
+      - name: Resolve ECS network configuration
+        id: network
+        run: |
+          set -euo pipefail
+          SVC="${APP_NAME}-${SUBPROJECT}-${{ inputs.env }}"
+          VPC_ID=$(aws ssm get-parameter \
+            --name "/infra/bl/${{ inputs.env }}/ap-east-1/network/vpc-id" \
+            --query Parameter.Value --output text)
+          SUBNETS=$(aws ssm get-parameter \
+            --name "/infra/bl/${{ inputs.env }}/ap-east-1/network/subnet-ids/priv" \
+            --query Parameter.Value --output text)
+          SECURITY_GROUPS=$(aws ec2 describe-security-groups \
+            --filters "Name=vpc-id,Values=${VPC_ID}" "Name=group-name,Values=${SVC}-svc" \
+            --query 'SecurityGroups[0].GroupId' \
+            --output text \
+            --region "${AWS_REGION}")
+          echo "subnets=${SUBNETS}" >> "$GITHUB_OUTPUT"
+          echo "security_groups=${SECURITY_GROUPS}" >> "$GITHUB_OUTPUT"
+          echo "assign_public_ip=DISABLED" >> "$GITHUB_OUTPUT"
+
+      - name: Precheck — any pending migrations?
+        id: check
+        run: |
+          # 预检：--check 返回 exit 0（无 pending）则跳过 migration
+          # 修改此命令以适配实际 migration 工具（alembic / golang-migrate / flyway 等）
+          CLUSTER="${APP_NAME}-${SUBPROJECT}-${{ inputs.env }}"
+          TASK_DEF="${APP_NAME}-${SUBPROJECT}-${{ inputs.env }}-migrate"
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "${CLUSTER}" \
+            --task-definition "${TASK_DEF}" \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[${{ steps.network.outputs.subnets }}],securityGroups=[${{ steps.network.outputs.security_groups }}],assignPublicIp=${{ steps.network.outputs.assign_public_ip }}}" \
+            --overrides '{"containerOverrides":[{"name":"migrate","command":["python","migrate.py","--check"]}]}' \
+            --region "${AWS_REGION}" \
+            --query 'tasks[0].taskArn' \
+            --output text)
+          aws ecs wait tasks-stopped \
+            --cluster "${CLUSTER}" --tasks "${TASK_ARN}" --region "${AWS_REGION}"
+          EXIT_CODE=$(aws ecs describe-tasks \
+            --cluster "${CLUSTER}" --tasks "${TASK_ARN}" \
+            --query 'tasks[0].containers[0].exitCode' --output text)
+          echo "has_pending=$([ "$EXIT_CODE" = "0" ] && echo false || echo true)" >> "$GITHUB_OUTPUT"
+
+      - name: Stop service before migration
+        id: stop
+        if: inputs.stop_service && steps.check.outputs.has_pending == 'true'
+        run: |
+          SVC="${APP_NAME}-${SUBPROJECT}-${{ inputs.env }}"
+          DESIRED=$(aws ecs describe-services \
+            --cluster "${SVC}" --services "${SVC}" \
+            --query 'services[0].desiredCount' --output text)
+          echo "original_count=${DESIRED}" >> "$GITHUB_OUTPUT"
+          aws ecs update-service --cluster "${SVC}" --service "${SVC}" --desired-count 0
+          aws ecs wait services-stable --cluster "${SVC}" --services "${SVC}" --region "${AWS_REGION}"
+
+      - name: Run migration
+        if: steps.check.outputs.has_pending == 'true'
+        run: |
+          # migration job 使用 db_owner_task role（有 DDL），与运行时 task role 严格分离
+          CLUSTER="${APP_NAME}-${SUBPROJECT}-${{ inputs.env }}"
+          TASK_DEF="${APP_NAME}-${SUBPROJECT}-${{ inputs.env }}-migrate"
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "${CLUSTER}" \
+            --task-definition "${TASK_DEF}" \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[${{ steps.network.outputs.subnets }}],securityGroups=[${{ steps.network.outputs.security_groups }}],assignPublicIp=${{ steps.network.outputs.assign_public_ip }}}" \
+            --region "${AWS_REGION}" \
+            --query 'tasks[0].taskArn' \
+            --output text)
+          aws ecs wait tasks-stopped \
+            --cluster "${CLUSTER}" --tasks "${TASK_ARN}" --region "${AWS_REGION}"
+          EXIT_CODE=$(aws ecs describe-tasks \
+            --cluster "${CLUSTER}" --tasks "${TASK_ARN}" \
+            --query 'tasks[0].containers[0].exitCode' --output text)
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "Migration task failed (exit code: ${EXIT_CODE})"
+            exit 1
+          fi
+
+      - name: Restore service after migration
+        # always() 保证 migration 失败时服务也能恢复（不永久停在 0）
+        if: always() && inputs.stop_service && steps.stop.outputs.original_count != ''
+        run: |
+          SVC="${APP_NAME}-${SUBPROJECT}-${{ inputs.env }}"
+          aws ecs update-service \
+            --cluster "${SVC}" --service "${SVC}" \
+            --desired-count ${{ steps.stop.outputs.original_count }}

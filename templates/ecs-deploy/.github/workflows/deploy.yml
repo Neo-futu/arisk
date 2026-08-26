@@ -1,0 +1,40 @@
+name: deploy
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  dev:
+    uses: ./.github/workflows/_deploy-ecs-env.yml
+    with:
+      env: dev
+      env_pascal: Development
+      gh_environment: development
+    secrets: inherit
+
+  staging:
+    needs: dev
+    uses: ./.github/workflows/_deploy-ecs-env.yml
+    with:
+      env: staging
+      env_pascal: Staging
+      gh_environment: staging
+    secrets: inherit
+
+  prod:
+    needs: staging
+    uses: ./.github/workflows/_deploy-ecs-env.yml
+    with:
+      env: prod
+      env_pascal: Production
+      gh_environment: production-app
+    secrets: inherit
