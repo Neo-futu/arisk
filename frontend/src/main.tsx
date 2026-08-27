@@ -29,7 +29,9 @@ window.addEventListener("unhandledrejection", (ev) => {
   logger.error("window", "unhandled_rejection", { reason: String(ev.reason) })
 })
 
-OpenAPI.BASE = import.meta.env.VITE_API_URL
+// 未设 VITE_API_URL 时退回相对路径（走 vite 的 /api 代理 → backend:8000）；
+// 否则 BASE=undefined 会生成 /undefined/api/v1/... 404。与 fsiClient / logger 一致。
+OpenAPI.BASE = (import.meta.env.VITE_API_URL as string) || ""
 OpenAPI.TOKEN = async () => {
   return localStorage.getItem("access_token") || ""
 }
