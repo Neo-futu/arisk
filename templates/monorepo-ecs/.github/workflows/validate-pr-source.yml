@@ -1,0 +1,28 @@
+# 分支线性保护：staging PR 只接受来自 main，prod tag 只能打在 main HEAD。
+# 防止绕过 dev → main → staging → prod 的线性发布路径。
+name: validate-pr-source
+
+on:
+  pull_request:
+    branches: [staging, prod]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR source branch
+        run: |
+          TARGET="${{ github.base_ref }}"
+          SOURCE="${{ github.head_ref }}"
+
+          if [ "$TARGET" = "staging" ] && [ "$SOURCE" != "main" ]; then
+            echo "Error: staging PR must come from main (got: ${SOURCE})"
+            exit 1
+          fi
+
+          if [ "$TARGET" = "prod" ] && [ "$SOURCE" != "staging" ]; then
+            echo "Error: prod PR must come from staging (got: ${SOURCE})"
+            exit 1
+          fi
+
+          echo "OK: ${SOURCE} → ${TARGET}"

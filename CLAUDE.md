@@ -1,3 +1,26 @@
+# CLAUDE.md — arisk
+
+> Claude Code 兼容入口。完整 AI 协作上下文见 [AGENTS.md](AGENTS.md)。
+> 本仓派生自平台脚手架 `app-template`（参照已上线的 `ideclare` 结构）。开始任何改动前先读取 `AGENTS.md`，遵循其中的 app↔infra 边界、SSM 对接契约与发布约定；以下为本应用的开发说明。
+
+## Development Commands
+- 多进程本地开发：`python scripts/dev.py`（`--profile web/agent/full`）。
+- 单进程对外（对齐 ideclare 单 ECS 任务）：`python scripts/dev.py --parts backend-unified`（`uvicorn app.unified:app`，挂载 processing/entry/mcp/autorisk）。
+- 初始化：`python scripts/setup_db.py` → `cd backend && alembic upgrade head && python app/initial_data.py`；`cd frontend && npm install`。
+
+## Environment
+- 根 `.env`（`cp .env.example .env`）。backend 必填 `PROJECT_NAME`/`POSTGRES_SERVER`/`POSTGRES_USER`/`FIRST_SUPERUSER`/`FIRST_SUPERUSER_PASSWORD`；`POSTGRES_HOST` 与 `POSTGRES_SERVER` 同值。
+- 云上连库：`POSTGRES_IAM_AUTH=true` 走 **RDS IAM token**（自有 RDS，非共享 Aurora），**不存静态库密码**。
+
+## Architecture（速览）
+- 统一入口 `backend/app/unified.py`：一个 FastAPI 挂载各服务为模块（`/processing`、`/entry`、`/mcp`、`/autorisk`）。
+- 连库双模 `backend/app/core/{config,db,db_auth}.py`；数据库 `iam`(Alembic)+`fsi`(SQL) 见 [`docs/database-schema.md`](docs/database-schema.md)。
+
+## Deployment
+- 蓝图见 [`docs/aws-deployment.md`](docs/aws-deployment.md)：arisk 自有 RDS + ECS 单任务（frontend + 统一 backend）；iac/workflows 待上线阶段落地。
+
+---
+
 # ARISK
 
 六層核心架構 + 現代 Web 前後端的基金風控與業績分析平台，支援 Agent 模式與非 Agent 直接查詢模式。
@@ -49,6 +72,7 @@ backend/           FastAPI（JWT 認證 + /api/v1/fsi/* 統一代理）
 - **技能來源**：所有 SKILL.md 在 `3_skills/skills/` 修改，禁止直接改 agent bundle 副本
 - **SQL 修改**：schema 變更走 `1_datastorage/postgres/migrations/`，不直接改 schema 文件
 - **計算引擎**：`2_processing/tools/risk/` 和 `2_processing/tools/performance/`（不在 backend/）
+- **連庫（本地/雲）**：本地用靜態密碼 + localhost；雲上設 `POSTGRES_IAM_AUTH=true` 走 **RDS IAM token**（連接時刷新、`sslmode=require`），**雲端不存靜態庫密碼**。連庫層在 `backend/app/core/{config,db,db_auth}.py` 與 `alembic/env.py`，勿在雲上硬編密碼
 
 ### 前置條件（本機安裝，無需 Docker）
 

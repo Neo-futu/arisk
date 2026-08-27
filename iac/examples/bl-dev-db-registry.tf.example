@@ -1,0 +1,66 @@
+# Example: publish application-owned DB targets for bl-dev.
+#
+# Copy the relevant parts into your app IaC when the app owns a dev database.
+# This file is an example only; it is not loaded by OpenTofu.
+
+locals {
+  bl_dev_db_targets = {
+    databases = [
+      {
+        # Developers use: bl-dev(<app>)> db psql --name default
+        name = "default"
+
+        # Prefer SSM indirection for endpoint/port so the registry stays stable
+        # when the RDS endpoint changes.
+        endpointParameter = "/app/${var.app_name}/${var.env}/db/default/endpoint"
+        portParameter     = "/app/${var.app_name}/${var.env}/db/default/port"
+
+        # PostgreSQL database and IAM DB user.
+        # RDS IAM auth still needs a fixed DB user; the IAM token replaces only
+        # the password.
+        database = "app_${replace(var.app_name, "-", "_")}"
+        user     = "app_${replace(var.app_name, "-", "_")}"
+
+        # Let bl-dev use this app's own ECS service as the SSM port-forward
+        # landing point. The database security group can then allow only the
+        # app task security group instead of a shared relay.
+        relay = {
+          ecsCluster = aws_ecs_cluster.this.name
+          ecsService = aws_ecs_service.this.name
+        }
+      }
+    ]
+  }
+}
+
+resource "aws_ssm_parameter" "bl_dev_db_registry" {
+  count = var.env == "dev" ? 1 : 0
+
+  name        = "/app/${var.app_name}/${var.env}/bl-dev/databases"
+  description = "bl-dev database target registry for ${var.app_name} ${var.env}"
+  type        = "String"
+  value       = jsonencode(local.bl_dev_db_targets)
+
+  tags = {
+    App       = var.app_name
+    Env       = var.env
+    ManagedBy = "tofu"
+    Purpose   = "bl-dev-db-registry"
+  }
+}
+
+# If endpoint/port are not already published by the DB module, publish them too:
+#
+# resource "aws_ssm_parameter" "db_endpoint" {
+#   count = var.env == "dev" ? 1 : 0
+#   name  = "/app/${var.app_name}/${var.env}/db/default/endpoint"
+#   type  = "String"
+#   value = aws_db_instance.this.address
+# }
+#
+# resource "aws_ssm_parameter" "db_port" {
+#   count = var.env == "dev" ? 1 : 0
+#   name  = "/app/${var.app_name}/${var.env}/db/default/port"
+#   type  = "String"
+#   value = tostring(aws_db_instance.this.port)
+# }

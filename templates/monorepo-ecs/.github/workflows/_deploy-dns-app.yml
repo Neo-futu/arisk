@@ -1,0 +1,127 @@
+# 可复用：部署 dns/app-iac（cert + 专用公网 ALB + TG），并把 ACM 验证 CNAME
+# 与 leaf A 记录 UPSERT 到公网 Hosted Zone。
+#
+# 简化假设：公网 Hosted Zone 与应用资源在同一账号，本 workflow 用 AppDeployRole
+# 直接写 Route53（需该 role 具备 route53:ChangeResourceRecordSets 权限）。
+#
+# 若公网 Zone 在独立账号（如集中托管在 prod / DNS 账号），改为：
+#   tofu output dns_handoffs → 写跨账号 SSM → assume 一个 handoff role → 在目标账号
+#   route53 UPSERT。即把下方 "Upsert Route53 records" step 拆成「中继 + 跨账号写」两段，
+#   role 与 SSM 路径用变量占位。参考实现见 AGENTS.md「Route53 记录管理」一节。
+name: _deploy-dns-app
+
+on:
+  workflow_call:
+    inputs:
+      env:
+        required: true
+        type: string
+      env_pascal:
+        required: true
+        type: string
+      gh_environment:
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.gh_environment }}
+    env:
+      APP_NAME:        ${{ vars.APP_NAME }}
+      REPO_PASCAL:     ${{ vars.REPO_PASCAL }}
+      AWS_REGION:      ${{ vars.AWS_REGION || 'ap-east-1' }}
+      AWS_ACCOUNT_ID:  ${{ vars.AWS_ACCOUNT_ID }}
+      DOMAIN:          ${{ vars.DOMAIN }}
+      PUBLIC_ZONE_ID:  ${{ vars.PUBLIC_HOSTED_ZONE_ID }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Configure AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v6.1.3
+        with:
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/AppDeployRole-${{ env.REPO_PASCAL }}-${{ inputs.env_pascal }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: ${{ env.APP_NAME }}-dns-app-${{ inputs.env }}-gha
+          role-duration-seconds: 1800
+
+      - uses: opentofu/setup-opentofu@v2
+        with:
+          tofu_version: "1.12.1"
+
+      - name: Resolve deploy role ARN
+        id: ssm
+        run: |
+          ROLE_ARN=$(aws ssm get-parameter \
+            --name "/infra/bl/${{ inputs.env }}/ap-east-1/platform/role-app-deploy-${REPO_PASCAL}-${{ inputs.env_pascal }}-arn" \
+            --query Parameter.Value --output text)
+          echo "deploy_role_arn=${ROLE_ARN}" >> "$GITHUB_OUTPUT"
+
+      - name: Write backend config
+        run: |
+          cat > dns/app-iac/backend.${{ inputs.env }}.hcl <<EOF
+          bucket         = "balance-tf-state-${{ inputs.env }}-ap-east-1"
+          key            = "app/${APP_NAME}/dns-app/${{ inputs.env }}/terraform.tfstate"
+          region         = "ap-east-1"
+          dynamodb_table = "balance-tf-locks-${{ inputs.env }}-ap-east-1"
+          encrypt        = true
+          EOF
+
+      - name: Tofu init
+        working-directory: dns/app-iac
+        run: tofu init -backend-config=backend.${{ inputs.env }}.hcl
+
+      - name: Tofu apply
+        working-directory: dns/app-iac
+        run: |
+          tofu apply -input=false -auto-approve \
+            -var="app_name=${APP_NAME}" \
+            -var="env=${{ inputs.env }}" \
+            -var="region=${AWS_REGION}" \
+            -var="domain=${DOMAIN}" \
+            -var="deploy_role_arn=${{ steps.ssm.outputs.deploy_role_arn }}"
+
+      - name: Read dns_handoffs output
+        id: handoffs
+        working-directory: dns/app-iac
+        run: |
+          echo "json=$(tofu output -json dns_handoffs | base64 -w0)" >> "$GITHUB_OUTPUT"
+
+      # 同账号 UPSERT：ACM 验证 CNAME（按 name 去重）+ leaf A alias（按 domain 去重）。
+      # 去重可避免多服务/多证书共用同一 DVO 时的 InvalidChangeBatch。
+      - name: Upsert Route53 records
+        env:
+          HANDOFFS_B64: ${{ steps.handoffs.outputs.json }}
+        run: |
+          set -euo pipefail
+          if [ -z "${PUBLIC_ZONE_ID:-}" ]; then
+            echo "PUBLIC_HOSTED_ZONE_ID 未配置，跳过 Route53 写入。" \
+                 "（仅内网/无公网域名时正常；否则在 Environment 变量补该值）"
+            exit 0
+          fi
+          HANDOFFS=$(printf '%s' "$HANDOFFS_B64" | base64 -d)
+
+          CHANGES=$(echo "$HANDOFFS" | jq -c '
+            [ .[].acm_validation[] ] | unique_by(.name)
+              | map({"Action":"UPSERT","ResourceRecordSet":{
+                  "Name":.name,"Type":.type,"TTL":300,
+                  "ResourceRecords":[{"Value":.value}]}})
+            +
+            ([ .[].leaf_records[] ] | unique_by(.domain)
+              | map({"Action":"UPSERT","ResourceRecordSet":{
+                  "Name":.domain,"Type":"A",
+                  "AliasTarget":{"HostedZoneId":.alb_zone_id,"DNSName":.alb_dns_name,"EvaluateTargetHealth":true}}}))
+          ')
+
+          COUNT=$(echo "$CHANGES" | jq 'length')
+          if [ "$COUNT" -eq 0 ]; then
+            echo "无 DNS 记录需写入。"; exit 0
+          fi
+          echo "UPSERT ${COUNT} 条 DNS 记录到 zone ${PUBLIC_ZONE_ID}"
+          aws route53 change-resource-record-sets \
+            --hosted-zone-id "$PUBLIC_ZONE_ID" \
+            --change-batch "$(jq -n --argjson c "$CHANGES" '{"Changes":$c}')"

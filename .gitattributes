@@ -1,0 +1,4 @@
+# 自动生成的 TS 文件固定用 LF，避免 Windows(core.autocrlf=true) 下反复出现
+# "LF will be replaced by CRLF" 提示与行尾抖动。
+/frontend/src/routeTree.gen.ts text eol=lf
+*.gen.ts text eol=lf

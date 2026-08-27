@@ -128,6 +128,31 @@ def build_processes() -> dict[str, dict]:
             "url": "http://localhost:8000/docs",
             "kind": "service",
         },
+        "backend-unified": {
+            # 單進程對外形態（對齊 ideclare）：一個 backend 掛載 processing/entry/mcp/autorisk
+            # 子應用，見 backend/app/unified.py。用於容器/ECS；本地日常仍可用上面的多進程 parts。
+            "cmd": [
+                sys.executable, "-m", "uvicorn",
+                "app.unified:app",
+                "--host", "0.0.0.0",
+                "--port", "8000",
+                "--reload",
+            ],
+            "cwd": ROOT / "backend",
+            "env_extra": {"PYTHONPATH": str(ROOT)},
+            "env_defaults": {
+                # 单端口自足：backend 的 FSI 代理与 entry 子应用都指回本进程挂载的子路径，
+                # 不再依赖独立的 :8001/:8010（对齐 ideclare 单任务）。
+                "PROCESSING_API_URL": "http://localhost:8000/processing",
+                "ENTRY_API_URL": "http://localhost:8000/entry",
+                "PROCESSING_API_KEY": DEFAULTS["PROCESSING_API_KEY"],
+                "DATABASE_URL": DEFAULTS["DATABASE_URL"],
+                "REDIS_URL": DEFAULTS["REDIS_URL"],
+            },
+            "ready_msg": "Application startup complete",
+            "url": "http://localhost:8000/unified/health",
+            "kind": "service",
+        },
         "frontend": {
             "cmd": _frontend_cmd(),
             "cwd": ROOT / "frontend",
@@ -355,11 +380,18 @@ def main() -> None:
         cfg = PROCESSES[name]
         print(f"  {COLORS.get(name, '')}●{reset} {name:12s}  {cfg['url']}  [{cfg['kind']}]")
 
-    print("\n端口約定：")
-    print("  frontend   : 5173")
-    print("  backend    : 8000")
-    print("  6_entry    : 8010")
-    print("  processing : 8001")
+    # 只列出「本次實際啟動」的服務端口（避免誤導）
+    print("\n端口（本次啟動）：")
+    if "backend-unified" in targets:
+        print("  backend-unified : 8000（單進程；挂載 /processing /entry /mcp /autorisk）")
+    if "frontend" in targets:
+        print("  frontend   : 5173")
+    if "backend" in targets:
+        print("  backend    : 8000")
+    if "entry" in targets:
+        print("  6_entry    : 8010")
+    if "processing" in targets:
+        print("  processing : 8001")
     if "autorisk" in targets:
         print("  autorisk   : 8100")
     if "mcp-gateway" in targets:

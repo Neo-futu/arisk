@@ -1,0 +1,50 @@
+# dev 分支所有 workflow 全部成功后，自动 fast-forward merge 到 main。
+# 开发者只需推送到 dev，不需要手动操作 main 分支。
+name: sync-dev-to-main
+
+on:
+  workflow_run:
+    workflows: [deploy-dev]
+    types: [completed]
+    branches: [dev]
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Wait for all workflows on this commit
+        timeout-minutes: 10
+        run: |
+          SHA="${{ github.event.workflow_run.head_sha }}"
+          while true; do
+            PENDING=$(gh api /repos/${{ github.repository }}/commits/${SHA}/check-runs \
+              --jq '[.check_runs[] | select(.status != "completed")] | length')
+            [ "$PENDING" = "0" ] && break
+            echo "${PENDING} workflow(s) still running, waiting 15s..."
+            sleep 15
+          done
+          FAILED=$(gh api /repos/${{ github.repository }}/commits/${SHA}/check-runs \
+            --jq '[.check_runs[] | select(.conclusion != "success" and .conclusion != "skipped")] | length')
+          if [ "$FAILED" != "0" ]; then
+            echo "Some checks failed, skipping merge to main"
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fast-forward merge dev → main
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout main
+          git merge --ff-only origin/dev
+          git push origin main

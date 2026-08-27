@@ -1,0 +1,73 @@
+# staging 分支 push 或 v* tag → 全量部署所有组件（staging / prod）
+# staging/prod 不做路径检测，始终全量部署，保证环境与代码完全一致。
+name: deploy-all
+
+on:
+  push:
+    branches: [staging]
+    tags: ["v*"]
+
+concurrency:
+  group: deploy-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  set-env:
+    runs-on: ubuntu-latest
+    outputs:
+      env:        ${{ steps.resolve.outputs.env }}
+      env_pascal: ${{ steps.resolve.outputs.env_pascal }}
+      gh_env:     ${{ steps.resolve.outputs.gh_env }}
+    steps:
+      - id: resolve
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "env=prod"        >> "$GITHUB_OUTPUT"
+            echo "env_pascal=Production" >> "$GITHUB_OUTPUT"
+            echo "gh_env=production-app" >> "$GITHUB_OUTPUT"
+          else
+            echo "env=staging"     >> "$GITHUB_OUTPUT"
+            echo "env_pascal=Staging" >> "$GITHUB_OUTPUT"
+            echo "gh_env=staging"  >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy-shared:
+    needs: set-env
+    uses: ./.github/workflows/_deploy-shared-env.yml
+    with:
+      env:            ${{ needs.set-env.outputs.env }}
+      env_pascal:     ${{ needs.set-env.outputs.env_pascal }}
+      gh_environment: ${{ needs.set-env.outputs.gh_env }}
+    secrets: inherit
+
+  # 公网入口（cert + 公网 ALB + TG），须先于子项目部署
+  deploy-dns-app:
+    needs: [set-env, deploy-shared]
+    uses: ./.github/workflows/_deploy-dns-app.yml
+    with:
+      env:            ${{ needs.set-env.outputs.env }}
+      env_pascal:     ${{ needs.set-env.outputs.env_pascal }}
+      gh_environment: ${{ needs.set-env.outputs.gh_env }}
+    secrets: inherit
+
+  migrate-svc-a:
+    needs: [set-env, deploy-dns-app]
+    uses: ./.github/workflows/_deploy-ecs-db-migrate.yml
+    with:
+      env:            ${{ needs.set-env.outputs.env }}
+      env_pascal:     ${{ needs.set-env.outputs.env_pascal }}
+      gh_environment: ${{ needs.set-env.outputs.gh_env }}
+      subproject: svc-a
+      stop_service: false
+      migration_image: ""
+    secrets: inherit
+
+  deploy-svc-a:
+    needs: [set-env, deploy-dns-app, migrate-svc-a]
+    uses: ./.github/workflows/_deploy-ecs-env.yml
+    with:
+      env:            ${{ needs.set-env.outputs.env }}
+      env_pascal:     ${{ needs.set-env.outputs.env_pascal }}
+      gh_environment: ${{ needs.set-env.outputs.gh_env }}
+      subproject: svc-a
+    secrets: inherit

@@ -1,0 +1,17 @@
+{
+  "function_url_health": {
+    "version": "2.0",
+    "rawPath": "/health",
+    "requestContext": { "http": { "method": "GET", "path": "/health" } }
+  },
+  "function_url_root": {
+    "version": "2.0",
+    "rawPath": "/",
+    "requestContext": { "http": { "method": "GET", "path": "/" } }
+  },
+  "rest_api_health": {
+    "path": "/health",
+    "httpMethod": "GET"
+  },
+  "direct_invoke_empty": {}
+}

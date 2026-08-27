@@ -1,0 +1,6 @@
+# 复制为 dev.tfvars，按你的应用填值。staging/prod 同理（env 改 staging/prod，env_pascal 自动派生）。
+# deploy_role_arn 由 CI 从 SSM 读出注入；本地手动 plan 时填实际 ARN。
+app_name        = "arisk"
+repo_pascal     = "Arisk"
+env             = "dev"
+# deploy_role_arn = "arn:aws:iam::<dev-account-id>:role/AppDeployRole-Arisk-Development"

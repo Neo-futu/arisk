@@ -1,0 +1,33 @@
+# 校验 deploy-dev.yml 和 deploy-all.yml 对所有子项目都有部署覆盖。
+# 新增子项目时，若漏更新编排 workflow，PR CI 报红，无法合入。
+name: lint-deploy-workflows
+
+on:
+  pull_request:
+    branches: [dev, main, staging]
+    paths:
+      - "subprojects/**"
+      - ".github/workflows/deploy-dev.yml"
+      - ".github/workflows/deploy-all.yml"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check all subprojects are covered
+        run: |
+          FAILED=0
+          for dir in subprojects/*/; do
+            NAME=$(basename "$dir")
+            for wf in .github/workflows/deploy-dev.yml .github/workflows/deploy-all.yml; do
+              if ! grep -q "subproject: ${NAME}" "$wf" 2>/dev/null && \
+                 ! grep -q "subprojects/${NAME}/" "$wf" 2>/dev/null; then
+                echo "FAIL: ${wf} has no entry for subproject '${NAME}'"
+                FAILED=1
+              fi
+            done
+          done
+          [ "$FAILED" = "0" ] || exit 1
+          echo "All subprojects covered."

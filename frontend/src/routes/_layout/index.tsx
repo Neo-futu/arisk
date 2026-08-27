@@ -115,6 +115,13 @@ function AllPortfolioOverview({
 }) {
   const { t } = useTranslation()
 
+  // 空数据兜底：接口返回不完整（空库 / 上游 404 被 SPA fallback 成 HTML）时，
+  // 降级为空组合而非崩溃白屏。
+  const portfolios = Array.isArray(data?.portfolios) ? data.portfolios : []
+  const total = data?.total ?? portfolios.length
+  const compliant = data?.compliant ?? 0
+  const breached = data?.breached ?? 0
+
   return (
     <Card>
       <CardHeader className="gap-3">
@@ -127,22 +134,22 @@ function AllPortfolioOverview({
             <p className="mt-1 text-sm text-muted-foreground">{t("dashboard.authorizedPortfolioHint")}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Badge variant="outline">{t("dashboard.portfolioTotal", { count: data.total })}</Badge>
-            <Badge className="bg-green-600 hover:bg-green-600">{t("dashboard.portfolioCompliant", { count: data.compliant })}</Badge>
-            <Badge variant={data.breached > 0 ? "destructive" : "secondary"}>
-              {t("dashboard.portfolioBreached", { count: data.breached })}
+            <Badge variant="outline">{t("dashboard.portfolioTotal", { count: total })}</Badge>
+            <Badge className="bg-green-600 hover:bg-green-600">{t("dashboard.portfolioCompliant", { count: compliant })}</Badge>
+            <Badge variant={breached > 0 ? "destructive" : "secondary"}>
+              {t("dashboard.portfolioBreached", { count: breached })}
             </Badge>
           </div>
         </div>
       </CardHeader>
       <CardContent>
-        {data.portfolios.length === 0 ? (
+        {portfolios.length === 0 ? (
           <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
             {t("dashboard.noAuthorizedPortfolios")}
           </div>
         ) : (
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {data.portfolios.map((portfolio) => {
+            {portfolios.map((portfolio) => {
               const selected = portfolio.port_id === selectedFundId
               const hasData = portfolio.status === "ok"
               return (

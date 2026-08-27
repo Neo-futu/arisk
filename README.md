@@ -2,6 +2,9 @@
 
 **阿雷斯 · 智能風控和投資分析系統**
 
+> 本仓库是平台脚手架 `app-template` 的**完整派生应用**（`app_name=arisk` / `repo_pascal=Arisk`），忠实保留全套脚手架并与业务代码并存。平台对接、SSM 契约、app↔infra 边界与发布约定见 [`AGENTS.md`](AGENTS.md)；基础设施只读 SSM 对接见 [`iac/`](iac/)。
+> **PostgreSQL 支持本地 + AWS 云**：本地用静态密码 + localhost；云上设 `POSTGRES_IAM_AUTH=true` 改用 RDS IAM token（连接时刷新、`sslmode=require`），变量见 [`.env.example`](.env.example)。以下为本应用业务说明。
+
 面向香港認可基金（以貨幣市場基金為核心場景）的數據監控與風險分析平台，採用「分層能力平台 + 統一前後端產品入口」架構，支援 Web、Chat、Agent 模式與直接查詢模式。
 
 版本：1.0.0 · 更新：2026-07-07

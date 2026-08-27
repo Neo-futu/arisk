@@ -1,0 +1,86 @@
+# dev 分支 push → 路径检测 → 有序按需部署
+# 部署顺序：shared → dns-app → migrate-svc-a → svc-a
+# 公网入口（cert + 公网 ALB + TG）集中在 dns/app-iac，svc-a 部署前须先就绪。
+# 只有变更的组件才会部署，未变更的组件直接跳过（job 不跳过，但任务内检测后 skip）。
+name: deploy-dev
+
+on:
+  push:
+    branches: [dev]
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      shared: ${{ steps.diff.outputs.shared }}
+      dns:    ${{ steps.diff.outputs.dns }}
+      svc_a:  ${{ steps.diff.outputs.svc_a }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+      - name: Detect changed paths
+        id: diff
+        run: |
+          # 与上一次 push 对比（首次 push / force-push 时全量部署）
+          if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            echo "shared=true"  >> "$GITHUB_OUTPUT"
+            echo "dns=true"     >> "$GITHUB_OUTPUT"
+            echo "svc_a=true"   >> "$GITHUB_OUTPUT"
+          else
+            CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
+            echo "shared=$(echo "$CHANGED" | grep -q '^shared/' && echo true || echo false)" >> "$GITHUB_OUTPUT"
+            echo "dns=$(echo "$CHANGED" | grep -q '^dns/' && echo true || echo false)" >> "$GITHUB_OUTPUT"
+            echo "svc_a=$(echo "$CHANGED" | grep -q '^subprojects/svc-a/' && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy-shared:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.shared == 'true'
+    uses: ./.github/workflows/_deploy-shared-env.yml
+    with:
+      env: dev
+      env_pascal: Development
+      gh_environment: development
+    secrets: inherit
+
+  # 公网入口：dns/ 或子项目（公网域名声明）变动时执行。svc-a 部署依赖它先就绪。
+  deploy-dns-app:
+    needs: [detect-changes, deploy-shared]
+    if: always() && !failure() && !cancelled() && (needs.detect-changes.outputs.dns == 'true' || needs.detect-changes.outputs.svc_a == 'true')
+    uses: ./.github/workflows/_deploy-dns-app.yml
+    with:
+      env: dev
+      env_pascal: Development
+      gh_environment: development
+    secrets: inherit
+
+  migrate-svc-a:
+    needs: [detect-changes, deploy-dns-app]
+    # always() + 条件：即使 deploy-shared 跳过（if 为 false）也要继续
+    if: always() && !failure() && !cancelled() && needs.detect-changes.outputs.svc_a == 'true'
+    uses: ./.github/workflows/_deploy-ecs-db-migrate.yml
+    with:
+      env: dev
+      env_pascal: Development
+      gh_environment: development
+      subproject: svc-a
+      stop_service: false
+      migration_image: ""
+    secrets: inherit
+
+  deploy-svc-a:
+    needs: [detect-changes, deploy-dns-app, migrate-svc-a]
+    # dns 变更时 svc-a 也重部署，以重新从 SSM 读取最新 public-tg-arn
+    if: always() && !failure() && !cancelled() && (needs.detect-changes.outputs.svc_a == 'true' || needs.detect-changes.outputs.dns == 'true')
+    uses: ./.github/workflows/_deploy-ecs-env.yml
+    with:
+      env: dev
+      env_pascal: Development
+      gh_environment: development
+      subproject: svc-a
+    secrets: inherit

@@ -69,10 +69,29 @@ def run_migrations_online():
     configuration = config.get_section(config.config_ini_section)
     assert configuration is not None
     configuration["sqlalchemy.url"] = get_url()
+
+    # 云上（POSTGRES_IAM_AUTH）：迁移是短任务，用一次性 RDS IAM token 作口令，
+    # 并强制 SSL；本地默认不进入此分支，行为不变。
+    connect_args: dict[str, str] = {}
+    if settings.POSTGRES_IAM_AUTH:
+        from app.core.db_auth import generate_iam_token
+
+        # psycopg 接受 password 连接参数；token 经 connect_args 注入，避免放进 URL 再转义。
+        connect_args["password"] = generate_iam_token(
+            host=settings.POSTGRES_SERVER,
+            port=settings.POSTGRES_PORT,
+            user=settings.POSTGRES_USER,
+            region=settings.AWS_REGION,
+        )
+        connect_args["sslmode"] = settings.POSTGRES_SSLMODE or "require"
+    elif settings.POSTGRES_SSLMODE:
+        connect_args["sslmode"] = settings.POSTGRES_SSLMODE
+
     connectable = engine_from_config(
         configuration,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args=connect_args,
     )
 
     with connectable.connect() as connection:

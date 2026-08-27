@@ -18,3 +18,15 @@ artefacts/
 *.pdf
 !tests/fixtures/*.xlsx
 !2_processing/sql/mmf/**/Template.xlsx
+
+# OpenTofu / Terraform（派生自 app-template）
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+# Partial backend config（含账号级路径，CI 生成或本地手填，勿入仓）
+iac/backend.*.hcl
+# 打包产物
+iac/.build/
+# tfvars 可能含环境差异值（如需共享请显式去掉忽略）
+*.auto.tfvars
