@@ -141,8 +141,10 @@ def build_processes() -> dict[str, dict]:
             "cwd": ROOT / "backend",
             "env_extra": {"PYTHONPATH": str(ROOT)},
             "env_defaults": {
-                "ENTRY_API_URL": DEFAULTS["ENTRY_API_URL"],
-                "PROCESSING_API_URL": DEFAULTS["PROCESSING_API_URL"],
+                # 单端口自足：backend 的 FSI 代理与 entry 子应用都指回本进程挂载的子路径，
+                # 不再依赖独立的 :8001/:8010（对齐 ideclare 单任务）。
+                "PROCESSING_API_URL": "http://localhost:8000/processing",
+                "ENTRY_API_URL": "http://localhost:8000/entry",
                 "PROCESSING_API_KEY": DEFAULTS["PROCESSING_API_KEY"],
                 "DATABASE_URL": DEFAULTS["DATABASE_URL"],
                 "REDIS_URL": DEFAULTS["REDIS_URL"],

@@ -138,7 +138,30 @@ cd frontend && npm install && cd ..
 
 `scripts/dev.py`（跨平台）與 `scripts/dev.ps1`（PowerShell 包裝）支持完全相同的一組參數。
 
-#### 3.4.1 Profile（服務組合）
+#### 3.4.0 兩種運行模式（先看這裡）
+
+arisk 有兩種本地運行形態，**端口數不同是有意為之**：
+
+| 模式 | 命令 | 端口 | 何時用 |
+|---|---|---|---|
+| **① ideclare 式單端口（unified）** | `python scripts/dev.py --parts backend-unified frontend` | backend `:8000`（挂 `/processing`,`/entry`,`/mcp`,`/autorisk`）+ 前端 `:5173` | 想要「一個 backend 對外」= ideclare 單 ECS 任務的形態；上線即此形態（nginx:80 + backend:8000） |
+| **② 多進程開發（分端口）** | `python scripts/dev.py`（profile web）或顯式 `--parts processing entry backend frontend ...` | 每個服務各自端口（8001/8010/8000/5173/8002/8100…） | 想單獨調試/熱重載某個服務時；**你顯式列了 8 個 part，它就起 8 個**——這是預期行為 |
+
+> **為什麼 `--parts processing entry backend frontend autorisk mcp-gateway internal-mcp wind-mcp` 起了這麼多服務？** 因為該命令**逐個點名**了 8 個 part（模式②的全量調試）。要「同一個端口」用**模式①的 `backend-unified`**。
+>
+> **單端口自足**：`backend-unified` 下 `PROCESSING_API_URL`/`ENTRY_API_URL` 已指回本進程的 `:8000/processing`、`:8000/entry`（見 `scripts/dev.py`），backend 的 FSI 代理與 entry 子應用都回環到自己，不需要獨立的 8001/8010。
+>
+> 子應用掛在子路徑：processing 路由變為 `/processing/...`、entry 為 `/entry/...`；`GET :8000/unified/health` 查看掛載結果。
+
+```bash
+# 模式① ideclare 式單端口（推薦驗證「融合成一個 backend」）
+python scripts/dev.py --parts backend-unified frontend
+```
+```powershell
+./scripts/dev.ps1 -Parts backend-unified,frontend
+```
+
+#### 3.4.1 Profile（服務組合，模式②多進程）
 
 | Profile | 包含服務 | 適用場景 |
 |---|---|---|
@@ -188,7 +211,7 @@ python scripts/dev.py --profile full --with-wind-mcp       # 完整環境 + Wind
 ```bash
 python scripts/dev.py --list-parts                                     # 列出所有 parts 與 profiles
 python scripts/dev.py --parts processing entry backend frontend        # 顯式最清楚
-python scripts/dev.py --parts processing entry backend frontend autorisk mcp-gateway internal-mcp wind-mcp   # 全量
+python scripts/dev.py --parts processing entry backend frontend autorisk mcp-gateway internal-mcp wind-mcp   # 模式②全量多進程（各服務獨立端口，調試用；非單端口）
 python scripts/dev.py --parts autorisk                                 # 只補啟 AutoRisk（基礎服務已在跑時）
 python scripts/dev.py --parts processing backend frontend --no-entry   # 跳過 6_entry（Chat 不可用）
 python scripts/dev.py --profile web --dry-run                          # 只打印計劃，不真正啟動
