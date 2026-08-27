@@ -48,6 +48,14 @@ cp .env.example .env        # bash
 ### 2.1 本地模式（默認）
 
 ```ini
+# App / Backend（必填！缺任一項 backend 啟動即報 "5 validation errors"）
+PROJECT_NAME=ARISK
+SECRET_KEY=dev-secret-change-me
+FIRST_SUPERUSER=admin@fsi.com
+FIRST_SUPERUSER_PASSWORD=admin12345
+ENVIRONMENT=local
+
+# Database（本地）
 POSTGRES_SERVER=localhost      # backend 讀這個
 POSTGRES_HOST=localhost        # 1_datastorage / 2_processing 讀這個（保持與上同值）
 POSTGRES_PORT=5432
@@ -59,6 +67,8 @@ POSTGRES_IAM_AUTH=false         # 關閉 → 走靜態密碼（本地）
 POSTGRES_SSLMODE=
 AWS_REGION=ap-east-1
 ```
+
+> ⚠️ **backend 沒有 `.env` 或缺上面必填項就會崩**（`pydantic ValidationError: PROJECT_NAME / POSTGRES_SERVER / POSTGRES_USER / FIRST_SUPERUSER / FIRST_SUPERUSER_PASSWORD`）。`.env.example` 已含這些字段，`cp .env.example .env` 後按需改密碼即可。
 
 ### 2.2 AWS 雲模式（RDS + IAM 認證，**不存靜態庫密碼**）
 
@@ -118,9 +128,11 @@ alembic upgrade head            # iam schema（Alembic）
 python app/initial_data.py      # 建 admin@fsi.com 超級用戶
 cd ..
 
-# 前端
-cd frontend && bun install && cd ..
+# 前端（本倉鎖文件是 package-lock.json → 用 npm；dev.py 也是 npm run dev）
+cd frontend && npm install && cd ..
 ```
+
+> `frontend/node_modules` 未安裝時 `dev.py` 會報 `'vite' is not recognized`——先在 `frontend/` 跑一次 `npm install`。
 
 ### 3.4 一鍵啟動（完整參數）
 
@@ -310,6 +322,75 @@ bl-dev(arisk)> db psql                     # 一次性 CLI
 
 ---
 
-## 7. 一句話記憶
+## 7. 如何驗證「app-template 完全派生架構」與 arisk 融合
+
+> **先講清楚一件事**：app-template 派生架構是**倉庫結構 + 治理 + CI/CD + IaC 契約層**，
+> **不是一個會啟動的運行時服務，也沒有自己的 UI**。你在瀏覽器看到的界面（`:5173`）
+> 是 **arisk 自己的產品前端**；「派生」不新增界面，而是**包裹/規範** arisk 的真實服務。
+> 所以「驗證派生」= 看**結構是否齊全 + 契約是否可校驗 + CI 是否綠**，不是去點某個頁面。
+
+### 7.1 派生架構由哪些模塊組成（arisk 現在都有）
+
+| 派生模塊 | 路徑 | 角色 | 運行時？ |
+|---|---|---|---|
+| 平台 AI 上下文/契約 | `AGENTS.md` | app↔infra 邊界、SSM 契約、發布約定 | 否（文檔） |
+| Golden-path 應用樣例 | `app/handler.py`、`tests/test_handler.py` | app-template 默認 lambda 形態樣例 | 否（樣例，非 arisk 服務） |
+| 只讀對接 IaC | `iac/`（`data.tf` SSM 讀取、`examples/bl-dev-db-registry.tf.example`） | 對接雲資源、發布 bl-dev registry | 否（IaC，CI 時 apply） |
+| CI / CD | `.github/workflows/{ci.yml,deploy.yml,_deploy-env.yml}`、`.github/pull_request_template.md` | PR 門檻 + tag 逐環境發布（OIDC） | 否（GitHub Actions） |
+| 部署形態樣例庫 | `templates/`（lambda / ecs / monorepo-ecs / static / dev-server / futu-adapter） | 後續真實形態的參考骨架 | 否 |
+| AI / 本地工具 | `.claude/settings.json`、`.envrc` | Claude Code 設定、目錄環境 | 否 |
+| 分支保護 | `scripts/protect-main-branch.sh` | 一鍵設 main 保護 | 否 |
+| 兼容入口指針 | `CLAUDE.md` 頂部塊 → `AGENTS.md` | 讓 AI 先讀契約 | 否 |
+| **業務代碼（arisk）** | `1_datastorage`…`6_entry`、`backend/`、`frontend/`、`aiagent/` … | 真實運行時服務 | **是** |
+
+「融合」= 上表**派生層與業務層並存於同一倉**：派生層規範/發布，業務層照常運行，互不侵入。
+
+### 7.2 結構驗證（一條命令看齊不齊）
+
+```bash
+cd D:/vsproject/ai-balance/arisk
+for p in AGENTS.md app/handler.py tests/test_handler.py iac/data.tf \
+  .github/workflows/ci.yml .github/workflows/deploy.yml templates/monorepo-ecs \
+  .claude/settings.json .envrc scripts/protect-main-branch.sh; do
+  [ -e "$p" ] && echo "OK   $p" || echo "MISS $p"
+done
+# 業務層仍在（融合證據）
+for p in backend/app 1_datastorage/postgres 2_processing/sql frontend/src aiagent; do
+  [ -e "$p" ] && echo "OK   $p" || echo "MISS $p"; done
+```
+
+全部 `OK` 即代表：派生脚手架齊全 **且** arisk 業務代碼並存 = 完全派生 + 融合。
+
+### 7.3 契約 / 質量驗證（離線，無需雲憑證）
+
+```bash
+# app-template CI 門檻樣例（lambda handler）
+pytest tests/ -q                                   # 期望 8 passed
+
+# 只讀對接 IaC 可校驗
+cd iac && tofu init -backend=false -input=false && tofu validate && cd ..   # Success!
+
+# 派生留痕（兩輪提交 + PR）
+git log --oneline -3
+```
+
+### 7.4 CI 驗證（GitHub 界面）
+
+打開 PR（本分支 `feat/derive-from-app-template` → PR #1）：`ci.yml` 的 `pytest tests/` 作為合入門檻運行；`pull_request_template.md` 的架構 checklist 出現在 PR 描述——這是「派生」在**協作界面**上的可見證據。
+
+### 7.5 融合的「界面」驗證（arisk 自己的 UI）
+
+派生層本身沒有界面；要在界面上確認「派生沒有破壞 arisk、二者融合正常」，就是**正常啟動 arisk 前端並訪問**（需先完成 §3 的 `.env` + `npm install` + DB 初始化）：
+
+- http://localhost:5173 —— arisk Dashboard / Chat（業務 UI）
+- http://localhost:8000/docs —— backend（連庫層即 §1 的 postgres 本地/雲雙模）
+- http://localhost:8100/autorisk 或 http://localhost:5173/autorisk —— AutoRisk 融合入口
+
+PostgreSQL 雙模的「看得見」證據（§4.2 已給命令）：本地連接串帶靜態口令、雲上不帶（走 IAM token）。
+
+---
+
+## 8. 一句話記憶
 
 `frontend` 展示 → `backend` 認證（連庫：本地靜態密碼 / 雲 RDS IAM token）→ `6_entry` 思考（LLM）→ `processing` 計算 → `PostgreSQL` 取數。
+派生層（`AGENTS.md`/`iac`/CI/`templates`）在**倉庫與協作面**規範這一切，不在運行時露臉。
