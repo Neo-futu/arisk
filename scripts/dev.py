@@ -380,11 +380,18 @@ def main() -> None:
         cfg = PROCESSES[name]
         print(f"  {COLORS.get(name, '')}●{reset} {name:12s}  {cfg['url']}  [{cfg['kind']}]")
 
-    print("\n端口約定：")
-    print("  frontend   : 5173")
-    print("  backend    : 8000")
-    print("  6_entry    : 8010")
-    print("  processing : 8001")
+    # 只列出「本次實際啟動」的服務端口（避免誤導）
+    print("\n端口（本次啟動）：")
+    if "backend-unified" in targets:
+        print("  backend-unified : 8000（單進程；挂載 /processing /entry /mcp /autorisk）")
+    if "frontend" in targets:
+        print("  frontend   : 5173")
+    if "backend" in targets:
+        print("  backend    : 8000")
+    if "entry" in targets:
+        print("  6_entry    : 8010")
+    if "processing" in targets:
+        print("  processing : 8001")
     if "autorisk" in targets:
         print("  autorisk   : 8100")
     if "mcp-gateway" in targets:
