@@ -343,6 +343,7 @@ bl-dev(arisk)> db psql                     # 一次性 CLI
 | `tofu validate` 失敗 | 在 `iac/` 目錄運行；本地無需雲憑證（`-backend=false`） |
 | Chat 報 `httpx.ConnectError` | 6_entry(8010) 未啟動，見 [`startup_commands_and_roles.md`](startup_commands_and_roles.md) §2 |
 | Dashboard 白屏 `Cannot read properties of undefined (reading 'length')` / `/api/v1/logs/batch 404` | 前端 `/api` 未代理到 backend。已在 `frontend/vite.config.ts` 配 `server.proxy['/api'] → http://localhost:8000`；若改了後端地址，設 `VITE_API_URL`。（GET 會被 vite SPA fallback 成 HTML 導致該崩潰，POST 則 404） |
+| `/api/v1/access-control/me` **500** + 後端日誌 `permission denied for table ...` | 應用用戶（`POSTGRES_USER`，默認 `fsi_user`）對部分 `iam`/`fsi` 表無權限（這些表由 `postgres` 超級用戶建、未授權）。以 postgres 超級用戶跑 `python scripts/fix_db_grants.py`（授 iam+fsi 讀寫 + 默認權限），刷新前端即可。 |
 
 ---
 
