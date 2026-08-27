@@ -128,6 +128,29 @@ def build_processes() -> dict[str, dict]:
             "url": "http://localhost:8000/docs",
             "kind": "service",
         },
+        "backend-unified": {
+            # 單進程對外形態（對齊 ideclare）：一個 backend 掛載 processing/entry/mcp/autorisk
+            # 子應用，見 backend/app/unified.py。用於容器/ECS；本地日常仍可用上面的多進程 parts。
+            "cmd": [
+                sys.executable, "-m", "uvicorn",
+                "app.unified:app",
+                "--host", "0.0.0.0",
+                "--port", "8000",
+                "--reload",
+            ],
+            "cwd": ROOT / "backend",
+            "env_extra": {"PYTHONPATH": str(ROOT)},
+            "env_defaults": {
+                "ENTRY_API_URL": DEFAULTS["ENTRY_API_URL"],
+                "PROCESSING_API_URL": DEFAULTS["PROCESSING_API_URL"],
+                "PROCESSING_API_KEY": DEFAULTS["PROCESSING_API_KEY"],
+                "DATABASE_URL": DEFAULTS["DATABASE_URL"],
+                "REDIS_URL": DEFAULTS["REDIS_URL"],
+            },
+            "ready_msg": "Application startup complete",
+            "url": "http://localhost:8000/unified/health",
+            "kind": "service",
+        },
         "frontend": {
             "cmd": _frontend_cmd(),
             "cwd": ROOT / "frontend",

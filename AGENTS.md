@@ -1,4 +1,4 @@
-<!-- 更新时间：2026-08-26（北京时间）｜生成模型：Claude Opus 4.8 -->
+<!-- 更新时间：2026-08-27（北京时间）｜生成模型：Claude Opus 4.8 -->
 
 # AGENTS.md — arisk（派生自 app-template）
 
@@ -7,6 +7,43 @@
 > arisk 是多服务应用（frontend + backend + `2_processing` + `6_entry` + agents）；真实部署形态（ECS / 静态前端 / 多形态组合，参考 `templates/monorepo-ecs`）后续单独派生落地。日常迭代**只读 SSM 对接现有基础设施、不碰 infra 实质 IaC 与 ADR**。
 >
 > **PostgreSQL 本地/云双模**：连库层（`backend/app/core/{config,db,db_auth}.py`、`backend/app/alembic/env.py`）本地默认用静态密码 + localhost；云上设 `POSTGRES_IAM_AUTH=true` 即改用 **RDS IAM token**（连接时自动刷新、`sslmode=require`），**云端不存静态库密码**。变量见 `.env.example`。
+
+---
+
+# arisk 应用上下文（参照 ideclare 结构）
+
+> 本节按已上线派生应用 `ideclare` 的分节组织 arisk 的应用侧上下文；**arisk 用自有库和自有服务，不消费平台共享 Aurora**。云上 iac/workflows 待上线阶段（见 [`docs/aws-deployment.md`](docs/aws-deployment.md)）。
+
+## Project Overview
+
+arisk（阿雷斯）：面向香港认可基金（以货币市场基金为核心）的数据监控与风险/投研分析平台。前端 React + Vite，后端 FastAPI，分层能力平台（`1_datastorage`…`6_entry`）+ 统一前后端产品入口。业务说明见 [`README.md`](README.md) / [`CLAUDE.md`](CLAUDE.md)。
+
+## Development Commands
+
+- 本地多进程（日常开发）：`python scripts/dev.py`（profile `web`/`agent`/`full`，见 [`docs/startup_app_template_derived.md`](docs/startup_app_template_derived.md)）。
+- **单进程对外（对齐 ideclare 单 ECS 任务）**：`python scripts/dev.py --parts backend-unified`（跑 `uvicorn app.unified:app`），一个 backend 挂载全部子应用。
+- 首次初始化：`python scripts/setup_db.py` → `cd backend && alembic upgrade head && python app/initial_data.py`；前端 `cd frontend && npm install`。
+
+## Git Workflow
+
+feature 分支 → PR → CI → 合入 `main`。上线阶段：push `main` 自动部署 dev、`workflow_dispatch` 手动 staging/prod（参照 ideclare `deploy.yml`，待落地）。
+
+## Environment Setup
+
+变量在根 `.env`（`cp .env.example .env`）。backend 读 `POSTGRES_SERVER` 与 App/Backend 必填项（`PROJECT_NAME`/`FIRST_SUPERUSER`/`FIRST_SUPERUSER_PASSWORD`）；`1_datastorage`/`2_processing` 读 `POSTGRES_HOST`（与 `POSTGRES_SERVER` 同值）。
+
+## Dev Cloud Debug Access
+
+dev 联调 arisk 自有云库：`scripts/bl-dev.sh`（`bl-dev shell arisk` → `db serve`/`db psql`，零入口端口转发 + RDS IAM token）。旧库迁移到自有 RDS：`scripts/migrate-db.sh`。**不自建跳板机。**
+
+## Architecture
+
+- **统一 backend 单进程**（`backend/app/unified.py`）：一个 FastAPI 挂载各服务子应用为模块——`/processing`(`2_processing`)、`/entry`(`6_entry`)、`/mcp`(`4_mcp` gateway)、`/autorisk`(`autorisk`)；`/unified/health` 汇报挂载。Redis/TimescaleDB/Celery 为外部依赖不挂载。
+- **连库双模**（自有库）：`backend/app/core/{config,db,db_auth}.py` + `alembic/env.py`。本地静态密码 + localhost；云上 `POSTGRES_IAM_AUTH=true` → RDS IAM token（连接刷新、`sslmode=require`），**不存静态库密码**。arisk 用**自有 RDS**，非共享 Aurora。
+- **数据库**：单实例 `fsi_risk`，`iam` schema（Alembic）+ `fsi` schema（`1_datastorage/postgres/schema` + `2_processing/sql`）。概览见 [`docs/database-schema.md`](docs/database-schema.md)。
+- **云部署蓝图**：[`docs/aws-deployment.md`](docs/aws-deployment.md)（自有 RDS + ECS 单任务 frontend+统一 backend；iac/workflows 待上线阶段）。
+
+---
 
 以下为 app-template 的脚手架约定，派生仓沿用；协助研发同事在本仓迭代时遵循。
 
