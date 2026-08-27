@@ -342,6 +342,7 @@ bl-dev(arisk)> db psql                     # 一次性 CLI
 | 雲模式連接被拒 / 超時 | RDS SG 未放行、未開 IAM 認證、或 DB 用戶未 `GRANT rds_iam` |
 | `tofu validate` 失敗 | 在 `iac/` 目錄運行；本地無需雲憑證（`-backend=false`） |
 | Chat 報 `httpx.ConnectError` | 6_entry(8010) 未啟動，見 [`startup_commands_and_roles.md`](startup_commands_and_roles.md) §2 |
+| Dashboard 白屏 `Cannot read properties of undefined (reading 'length')` / `/api/v1/logs/batch 404` | 前端 `/api` 未代理到 backend。已在 `frontend/vite.config.ts` 配 `server.proxy['/api'] → http://localhost:8000`；若改了後端地址，設 `VITE_API_URL`。（GET 會被 vite SPA fallback 成 HTML 導致該崩潰，POST 則 404） |
 
 ---
 
