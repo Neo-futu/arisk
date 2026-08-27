@@ -122,22 +122,95 @@ cd ..
 cd frontend && bun install && cd ..
 ```
 
-### 3.4 一鍵啟動全部服務
+### 3.4 一鍵啟動（完整參數）
+
+`scripts/dev.py`（跨平台）與 `scripts/dev.ps1`（PowerShell 包裝）支持完全相同的一組參數。
+
+#### 3.4.1 Profile（服務組合）
+
+| Profile | 包含服務 | 適用場景 |
+|---|---|---|
+| `web`（默認） | processing + **entry** + backend + frontend | 日常前後端開發 |
+| `agent` | processing + **entry** | 只調試 Agent/LLM，不啟前端 |
+| `full` | processing + entry + backend + frontend + **mcp-gateway + internal-mcp + wind-mcp** | 含 MCP 全套的完整環境 |
 
 ```bash
-python scripts/dev.py                 # 默認 profile=web：processing+entry+backend+frontend
-# 或
-./scripts/dev.ps1 -Profile web        # PowerShell
+python scripts/dev.py                     # 默認 profile=web
+python scripts/dev.py --profile agent     # 只 processing+entry
+python scripts/dev.py --profile full      # web + MCP 全套
+```
+```powershell
+./scripts/dev.ps1 -Profile web
+./scripts/dev.ps1 -Profile agent
+./scripts/dev.ps1 -Profile full
 ```
 
-啟動後：
+啟動後訪問：前端 http://localhost:5173 ｜ Backend http://localhost:8000/docs ｜ 6_entry http://localhost:8010/docs ｜ Processing http://localhost:8001/docs
 
-- 前端 UI：http://localhost:5173
-- Backend API：http://localhost:8000/docs
-- 6_entry：http://localhost:8010/docs
-- Processing：http://localhost:8001/docs
+#### 3.4.2 附加模塊開關（疊加到當前 profile）
 
-> profile / parts 詳解、MCP、AutoRisk(8100) 見 [`startup_commands_and_roles.md`](startup_commands_and_roles.md) §3。
+| bash 旗標 | PowerShell | 作用 | 端口 |
+|---|---|---|---|
+| `--with-mcp` | `-WithMcp` | MCP 全套（gateway + internal + wind） | 8002 + stdio |
+| `--with-mcp-gateway` | `-WithMcpGateway` | 只加 MCP Gateway | 8002 |
+| `--with-internal-mcp` | `-WithInternalMcp` | 只加 internal MCP | stdio |
+| `--with-wind-mcp` | `-WithWindMcp` | 只加 Wind 行情 MCP | stdio |
+| `--with-autorisk` | `-WithAutorisk` | AutoRisk 模塊 | 8100 |
+
+```bash
+python scripts/dev.py --profile web --with-mcp-gateway     # AI 走統一 MCP 入口（推薦調試）
+python scripts/dev.py --profile web --with-mcp             # MCP 全套
+python scripts/dev.py --profile web --with-autorisk        # 前端 /autorisk 入口需要（8100）
+python scripts/dev.py --profile full --with-wind-mcp       # 完整環境 + Wind 行情
+```
+```powershell
+./scripts/dev.ps1 -Profile web -WithMcpGateway
+./scripts/dev.ps1 -Profile web -WithMcp
+./scripts/dev.ps1 -Profile web -WithAutorisk
+```
+
+#### 3.4.3 顯式 parts / 排除服務 / 乾跑
+
+`--parts` 直接指定要啟的部分（**覆蓋** profile）；可用部分：`processing entry backend frontend autorisk mcp-gateway internal-mcp wind-mcp`。
+
+```bash
+python scripts/dev.py --list-parts                                     # 列出所有 parts 與 profiles
+python scripts/dev.py --parts processing entry backend frontend        # 顯式最清楚
+python scripts/dev.py --parts processing entry backend frontend autorisk mcp-gateway internal-mcp wind-mcp   # 全量
+python scripts/dev.py --parts autorisk                                 # 只補啟 AutoRisk（基礎服務已在跑時）
+python scripts/dev.py --parts processing backend frontend --no-entry   # 跳過 6_entry（Chat 不可用）
+python scripts/dev.py --profile web --dry-run                          # 只打印計劃，不真正啟動
+```
+```powershell
+./scripts/dev.ps1 -ListParts
+./scripts/dev.ps1 -Parts processing,entry,backend,frontend
+./scripts/dev.ps1 -Parts processing,entry,backend,frontend,autorisk,mcp-gateway,internal-mcp,wind-mcp
+./scripts/dev.ps1 -Only entry                                          # 只啟單個服務
+./scripts/dev.ps1 -Parts processing,backend,frontend -DryRun
+```
+
+其它排除開關：`--no-frontend` / `--no-backend` / `--no-entry` / `--no-processing`（PowerShell：`-NoFrontend` / `-NoBackend` / `-NoEntry` / `-NoProcessing`）。
+
+#### 3.4.4 常用整套命令（直接複製）
+
+```bash
+# A. Web + MCP 全套（gateway + internal + wind）
+python scripts/dev.py --profile web --with-mcp
+# B. 完整 profile（已含 mcp-gateway/internal/wind）
+python scripts/dev.py --profile full
+# C. 顯式 parts，含 AutoRisk + MCP 全套（最清楚）
+python scripts/dev.py --parts processing entry backend frontend autorisk mcp-gateway internal-mcp wind-mcp
+```
+```powershell
+./scripts/dev.ps1 -Profile web -WithMcp
+./scripts/dev.ps1 -Profile full
+./scripts/dev.ps1 -Parts processing,entry,backend,frontend,autorisk,mcp-gateway,internal-mcp,wind-mcp
+```
+
+啟動 `mcp-gateway` 時本地應有：`MCP_GATEWAY_URL=http://127.0.0.1:8002`，健康檢查 `http://127.0.0.1:8002/health`，工具列表 `http://127.0.0.1:8002/tools`。
+AutoRisk 起後：前端整合入口 http://localhost:5173/autorisk ｜ 演示頁 http://localhost:8100/demo ｜ API http://localhost:8100/docs。
+
+> 各服務職責、6_entry 為何不可省、MCP/審批鏈路冒煙等背景見 [`startup_commands_and_roles.md`](startup_commands_and_roles.md)。
 
 ---
 
