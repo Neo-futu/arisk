@@ -14,7 +14,6 @@ migrate.py  ARISK — Schema Migration Runner
 """
 
 import os
-import sys
 import hashlib
 import argparse
 from datetime import datetime, timezone
@@ -37,7 +36,16 @@ CREATE TABLE IF NOT EXISTS fsi.schema_migration (
     status        VARCHAR(16)  NOT NULL DEFAULT 'OK',  -- OK / ERROR
     error_msg     TEXT
 );
-COMMENT ON TABLE fsi.schema_migration IS 'Schema 遷移版本記錄：追蹤每個 SQL 文件的執行狀態';
+DO $$
+BEGIN
+    IF pg_get_userbyid(
+        (SELECT relowner FROM pg_class
+         WHERE oid = 'fsi.schema_migration'::regclass)
+    ) = CURRENT_USER THEN
+        COMMENT ON TABLE fsi.schema_migration IS
+            'Schema 遷移版本記錄：追蹤每個 SQL 文件的執行狀態';
+    END IF;
+END $$;
 """
 
 

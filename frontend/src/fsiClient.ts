@@ -90,8 +90,310 @@ export interface MyAccessContext {
   permission_codes: string[]
   menu_codes: string[]
   menu_paths: string[]
+  menu_stages: Record<string, string>
   portfolios: AuthorizedPortfolio[]
   can_manage_access: boolean
+  can_manage_system: boolean
+}
+
+export interface IndicatorDef {
+  indicator_id: string
+  indicator_name: string
+  indicator_name_en?: string | null
+  category: string
+  country: string
+  unit: string
+  frequency: string
+  data_source: string
+  description?: string | null
+  point_count?: number
+}
+
+export interface IndicatorCatalog {
+  indicators: IndicatorDef[]
+  countries: string[]
+  categories: string[]
+  sources: string[]
+}
+
+export interface IndicatorPoint {
+  obs_date: string
+  value: number
+}
+
+export interface IndicatorSeries {
+  indicator_id: string
+  name: string
+  name_en?: string | null
+  category: string
+  country: string
+  unit: string
+  points: IndicatorPoint[]
+}
+
+export interface IndicatorObservationPayload {
+  obs_date: string
+  value: number
+  data_source?: string
+}
+
+export interface IndicatorDefPayload {
+  indicator_id: string
+  indicator_name: string
+  indicator_name_en?: string | null
+  category: string
+  country: string
+  unit: string
+  frequency?: string
+  data_source?: string
+  description?: string | null
+}
+
+export interface ValuationSubject {
+  subject_code: string
+  subject_name: string
+  currency: string
+  quantity: number | null
+  unit_price: number | null
+  cost: number | null
+  market_value: number
+  weight_pct: number | null
+  unrealized_pnl: number | null
+  return_pct: number | null
+  data_source?: string | null
+  memo?: string | null
+}
+
+export interface ValuationReport {
+  fund_id: string
+  as_of_date: string
+  subjects: ValuationSubject[]
+  totals: {
+    total_market_value: number
+    total_cost: number
+    total_unrealized_pnl: number
+    subject_count: number
+  }
+  nav_summary: {
+    currency: string
+    net_asset: number | null
+    unit_nav: number | null
+    acc_unit_nav: number | null
+    day_return: number | null
+    total_asset: number | null
+    total_liability: number | null
+  } | null
+  available_dates: string[]
+}
+
+export interface PnlSummary {
+  days: number
+  net_asset_start: number
+  net_asset_end: number
+  net_asset_change: number
+  cumulative_return_pct: number
+  annualized_return_pct: number
+  avg_daily_return_pct: number
+  volatility_pct: number
+  max_drawdown_pct: number
+  best_day_pct: number
+  worst_day_pct: number
+  positive_day_ratio: number
+  unit_nav_start: number | null
+  unit_nav_end: number | null
+  currency: string
+}
+
+export interface PnlPoint {
+  date: string
+  net_asset: number | null
+  unit_nav: number | null
+  cum_return_pct: number
+}
+
+export interface PnlAttributionItem {
+  subject_code: string
+  subject_name: string
+  contribution: number
+  mv_start?: number | null
+  mv_end?: number | null
+  market_value?: number | null
+  cost?: number | null
+}
+
+export interface PnlAnalysis {
+  fund_id: string
+  start: string
+  end: string
+  summary: PnlSummary
+  timeseries: PnlPoint[]
+  attribution: {
+    mode: "period" | "unrealized"
+    start_date?: string
+    end_date?: string
+    snapshot_date?: string | null
+    items: PnlAttributionItem[]
+  }
+}
+
+export interface OptimizeRequest {
+  universe: string[]
+  data_source: "synthetic" | "db" | "yfinance" | "openbb"
+  lookback_days: number
+  start_date?: string | null
+  end_date?: string | null
+  risk_free_rate: number
+  weight_bounds: [number, number]
+  return_model: "historical_mean" | "real_cagr" | "capm" | "black_litterman"
+  target_return?: number | null
+  custom_weights?: Record<string, number>
+  benchmark_weights?: Record<string, number>
+  market_caps?: Record<string, number>
+  bl_views?: Record<string, number>
+}
+
+export interface OptReturnModelRow {
+  asset: string
+  historical_mean: number
+  real_cagr: number
+  capm: number
+  black_litterman: number
+  period_total_return: number
+}
+
+export interface OptPortfolioRef {
+  port_id: string
+  port_name: string
+  port_type: string
+  is_active: boolean
+}
+
+export interface OptHoldings {
+  port_id: string
+  universe: string[]
+  weights: Record<string, number>
+  names: Record<string, string>
+}
+
+export interface RiskFreeOption {
+  key: string
+  label: string
+  value: number
+}
+
+export interface OptAssetMetric {
+  asset: string
+  expected_return: number
+  volatility: number
+  sharpe: number
+  max_drawdown: number
+  var_95: number
+  cvar_95: number
+}
+
+export interface OptMetrics {
+  expected_return: number
+  volatility: number
+  sharpe: number
+  max_drawdown: number
+  var_95: number
+  cvar_95: number
+}
+
+export interface OptProfile {
+  weights: Record<string, number>
+  metrics: OptMetrics
+}
+
+export interface OptimizeResult {
+  universe: string[]
+  return_model: string
+  return_models: OptReturnModelRow[]
+  asset_metrics: OptAssetMetric[]
+  profiles: Record<string, OptProfile>
+  efficiency: { alpha_loss: number | null; excess_vol: number | null } | null
+  tangency: { volatility: number; expected_return: number } | null
+  risk_free_rate: number
+  frontier: Array<{ volatility: number; expected_return: number }>
+  asset_points: Array<{ asset: string; volatility: number; expected_return: number }>
+  correlation: { assets: string[]; matrix: number[][] }
+}
+
+export interface EvaluateResult {
+  weights: Record<string, number>
+  metrics: OptMetrics
+  point: { volatility: number; expected_return: number }
+}
+
+export interface PortfolioCockpitItem {
+  port_id: string
+  port_name: string
+  port_name_en?: string | null
+  port_type: string
+  base_currency: string
+  is_mmf: boolean
+  inception_date?: string | null
+  sfc_code?: string | null
+  mgmt_fee_bps?: number | null
+  as_of_date?: string | null
+  net_asset: number | null
+  unit_nav: number | null
+  acc_unit_nav: number | null
+  day_return: number | null
+  return_rate_7d: number | null
+  wam_days: number | null
+  wal_days: number | null
+  wam_limit_days: number | null
+  wal_limit_days: number | null
+  nav_deviation: number | null
+  income_per_10k: number | null
+  status: "ok" | "warn" | "breach"
+  has_data: boolean
+  sparkline: number[]
+}
+
+export interface PortfolioCockpitOverview {
+  as_of_date: string | null
+  summary: {
+    total_portfolios: number
+    with_data: number
+    mmf_count: number
+    breached: number
+    warned: number
+    by_type: Record<string, number>
+    total_aum: Record<string, number>
+  }
+  portfolios: PortfolioCockpitItem[]
+}
+
+export interface SqlAsset {
+  id: string
+  filename: string
+  group: string
+  category: string
+  title: string
+  description: string
+  line_count: number
+  sql?: string
+}
+
+export interface SqlAssetCatalog {
+  items: SqlAsset[]
+  count: number
+  groups: string[]
+  categories: string[]
+}
+
+export type MenuReleaseStage = "GA" | "BETA" | "HIDDEN"
+
+export interface MenuRelease {
+  id: string
+  name: string
+  code: string
+  path?: string | null
+  sort_order: number
+  is_active: boolean
+  release_stage: MenuReleaseStage
 }
 
 export interface AccessRole extends AccessRoleSummary {
@@ -115,6 +417,7 @@ export interface AccessMenu {
   path?: string | null
   sort_order: number
   is_active: boolean
+  release_stage: MenuReleaseStage
 }
 
 export interface PortfolioCatalogItem extends Omit<AuthorizedPortfolio, "access_level"> {
@@ -650,6 +953,143 @@ export interface PositionsResponse {
   positions: Position[]
 }
 
+export interface DataListResponse<T> {
+  items: T[]
+  count: number
+}
+
+export interface EditablePosition {
+  evaluate_date: string
+  port_id: string
+  subject_code: string
+  subject_name: string
+  currency: string
+  quantity: number | null
+  unit_price: number | null
+  cost: number | null
+  market_value: number | null
+  weight_pct: number | null
+  data_source: string | null
+  memo: string | null
+  loaded_at: string
+}
+
+export interface EditablePositionPayload {
+  subject_code?: string
+  subject_name: string
+  currency: string
+  quantity: number | null
+  unit_price: number | null
+  cost: number | null
+  market_value: number | null
+  weight_pct: number | null
+  data_source: string
+  memo: string | null
+}
+
+export interface MarketQuote {
+  price_date: string
+  security_code: string
+  market_id: string
+  price_type: string
+  open_price: number | null
+  high_price: number | null
+  low_price: number | null
+  close_price: number
+  prev_close: number | null
+  price_change_pct: number | null
+  volume: number | null
+  turnover: number | null
+  data_source: string
+  loaded_at?: string
+}
+
+export type MarketQuotePayload = Omit<MarketQuote, "price_change_pct" | "loaded_at">
+
+export type SimulatedOrderStatus = "DRAFT" | "VALIDATED" | "WARNING" | "BLOCKED" | "CANCELLED"
+
+export interface SimulatedOrder {
+  order_id: string
+  port_id: string
+  as_of_date: string
+  trade_date: string
+  trade_side: "BUY" | "SELL"
+  asset_class: string
+  security_code: string
+  security_name: string | null
+  issuer_name: string | null
+  currency: string
+  quantity: number | null
+  price: number | null
+  trade_amount: number
+  duration_years: number
+  status: SimulatedOrderStatus
+  decision: "ALLOW" | "ALLOW_WITH_WARNING" | "BLOCK" | null
+  breach_flags: string[]
+  validation_result: PretradeRiskResult | null
+  notes: string | null
+  created_by: string
+  updated_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface SimulatedOrderPayload {
+  as_of_date: string
+  trade_date: string
+  trade_side: "BUY" | "SELL"
+  asset_class: string
+  security_code: string
+  security_name: string | null
+  issuer_name: string | null
+  currency: string
+  quantity: number | null
+  price: number | null
+  trade_amount: number | null
+  duration_years: number
+  notes: string | null
+}
+
+export type PortfolioMasterType =
+  | "MMF" | "BOND" | "EQUITY" | "BALANCED" | "INDEX" | "ETF"
+  | "HEDGE" | "PRIVATE" | "PENSION" | "MANDATE" | "SMA" | "OTHER"
+
+export const PORTFOLIO_TYPES: PortfolioMasterType[] = [
+  "MMF", "BOND", "EQUITY", "BALANCED", "INDEX", "ETF",
+  "HEDGE", "PRIVATE", "PENSION", "MANDATE", "SMA", "OTHER",
+]
+
+export interface PortfolioMaster {
+  port_id: string
+  port_name: string
+  port_name_en: string | null
+  port_type: PortfolioMasterType
+  base_currency: string
+  inception_date: string | null
+  is_active: boolean
+  is_mmf: boolean
+  sfc_code: string | null
+  mmf_wam_limit_days: number | null
+  mmf_wal_limit_days: number | null
+  mgmt_fee_bps: number | null
+  updated_at?: string
+}
+
+export interface PortfolioMasterPayload {
+  port_id?: string
+  port_name?: string
+  port_name_en?: string | null
+  port_type?: PortfolioMasterType
+  base_currency?: string
+  inception_date?: string
+  is_active?: boolean
+  is_mmf?: boolean
+  sfc_code?: string | null
+  mmf_wam_limit_days?: number | null
+  mmf_wal_limit_days?: number | null
+  mgmt_fee_bps?: number | null
+}
+
 export interface AgentTaskRequest {
   task: string
   fund_id?: string
@@ -978,6 +1418,153 @@ export const fsiApi = {
     return axios.delete<{ message: string }>(`${BASE}/api/v1/access-control/roles/${roleId}`, { headers: authHeaders() })
   },
 
+  /** 系統配置：模塊灰度發布狀態列表 */
+  listMenuReleases() {
+    return axios.get<{ menus: MenuRelease[]; stages: MenuReleaseStage[] }>(
+      `${BASE}/api/v1/access-control/menu-releases`,
+      { headers: authHeaders() },
+    )
+  },
+
+  /** 系統配置：更新單個模塊的灰度發布狀態與啟用開關 */
+  updateMenuRelease(menuId: string, data: { release_stage: MenuReleaseStage; is_active: boolean }) {
+    return axios.put<MenuRelease>(
+      `${BASE}/api/v1/access-control/menu-releases/${menuId}`,
+      data,
+      { headers: authHeaders() },
+    )
+  },
+
+  // ── 指標探索（DataJungle） ──────────────────────────────
+  getIndicatorCatalog(params?: { category?: string; country?: string }) {
+    return axios.get<IndicatorCatalog>(`${BASE}/api/v1/fsi/indicator-explorer/catalog`, {
+      params,
+      headers: authHeaders(),
+    })
+  },
+
+  getIndicatorSeries(indicatorIds: string[], opts?: { period?: string; start?: string; end?: string }) {
+    return axios.get<{ series: IndicatorSeries[]; count: number }>(
+      `${BASE}/api/v1/fsi/indicator-explorer/series`,
+      { params: { indicator_ids: indicatorIds.join(","), ...opts }, headers: authHeaders() },
+    )
+  },
+
+  exportIndicatorSeries(indicatorIds: string[], opts?: { period?: string; start?: string; end?: string }) {
+    return axios.get<string>(`${BASE}/api/v1/fsi/indicator-explorer/series/export`, {
+      params: { indicator_ids: indicatorIds.join(","), ...opts },
+      headers: authHeaders(),
+      responseType: "text",
+    })
+  },
+
+  createIndicatorDef(payload: IndicatorDefPayload) {
+    return axios.post<IndicatorDef>(`${BASE}/api/v1/fsi/indicator-explorer/defs`, payload, {
+      headers: authHeaders(),
+    })
+  },
+
+  upsertIndicatorObservation(indicatorId: string, payload: IndicatorObservationPayload) {
+    return axios.post(`${BASE}/api/v1/fsi/indicator-explorer/${indicatorId}/observations`, payload, {
+      headers: authHeaders(),
+    })
+  },
+
+  updateIndicatorObservation(indicatorId: string, obsDate: string, payload: { value: number; data_source?: string }) {
+    return axios.patch(
+      `${BASE}/api/v1/fsi/indicator-explorer/${indicatorId}/observations/${obsDate}`,
+      payload,
+      { headers: authHeaders() },
+    )
+  },
+
+  deleteIndicatorObservation(indicatorId: string, obsDate: string) {
+    return axios.delete(
+      `${BASE}/api/v1/fsi/indicator-explorer/${indicatorId}/observations/${obsDate}`,
+      { headers: authHeaders() },
+    )
+  },
+
+  // ── 组合估值与损益（Module 4） ──────────────────────────
+  getValuationReport(fundId: string, asOfDate: string) {
+    return axios.get<ValuationReport>(`${BASE}/api/v1/fsi/valuation/report/${fundId}`, {
+      params: { as_of_date: asOfDate },
+      headers: authHeaders(),
+    })
+  },
+
+  getPnlAnalysis(fundId: string, opts?: { start?: string; end?: string }) {
+    return axios.get<PnlAnalysis>(`${BASE}/api/v1/fsi/valuation/pnl/${fundId}`, {
+      params: opts,
+      headers: authHeaders(),
+    })
+  },
+
+  // ── 组合优化（PyPortfolioOpt） ─────────────────────────
+  getOptUniverse() {
+    return axios.get<{ default: string[]; db_tickers: string[] }>(
+      `${BASE}/api/v1/fsi/portfolio-opt/universe`,
+      { headers: authHeaders() },
+    )
+  },
+
+  analyzePortfolio(req: OptimizeRequest) {
+    return axios.post<OptimizeResult>(`${BASE}/api/v1/fsi/portfolio-opt/analyze`, req, { headers: authHeaders() })
+  },
+
+  listOptPortfolios() {
+    return axios.get<{ portfolios: OptPortfolioRef[] }>(`${BASE}/api/v1/fsi/portfolio-opt/portfolios`, { headers: authHeaders() })
+  },
+
+  getOptHoldings(portId: string) {
+    return axios.get<OptHoldings>(`${BASE}/api/v1/fsi/portfolio-opt/holdings/${portId}`, { headers: authHeaders() })
+  },
+
+  getRiskFreeOptions() {
+    return axios.get<{ options: RiskFreeOption[] }>(`${BASE}/api/v1/fsi/portfolio-opt/risk-free-options`, { headers: authHeaders() })
+  },
+
+  evaluatePortfolio(req: OptimizeRequest) {
+    return axios.post<EvaluateResult>(`${BASE}/api/v1/fsi/portfolio-opt/evaluate`, req, { headers: authHeaders() })
+  },
+
+  optChartBlob(name: string, req: OptimizeRequest) {
+    return axios.post<Blob>(`${BASE}/api/v1/fsi/portfolio-opt/chart/${name}`, req, {
+      headers: authHeaders(),
+      responseType: "blob",
+    })
+  },
+
+  // ── 组合驾驶舱（Module 2.1） ────────────────────────────
+  getPortfolioCockpit(opts?: { asOfDate?: string }) {
+    return axios.get<PortfolioCockpitOverview>(`${BASE}/api/v1/fsi/portfolio-cockpit/overview`, {
+      params: opts?.asOfDate ? { as_of_date: opts.asOfDate } : undefined,
+      headers: authHeaders(),
+    })
+  },
+
+  // ── SQL 资产库（SQL 资产化） ────────────────────────────
+  getSqlAssetCatalog(params?: { group?: string; category?: string; search?: string }) {
+    return axios.get<SqlAssetCatalog>(`${BASE}/api/v1/fsi/sql-assets/catalog`, {
+      params,
+      headers: authHeaders(),
+    })
+  },
+
+  getSqlAsset(id: string) {
+    return axios.get<SqlAsset>(`${BASE}/api/v1/fsi/sql-assets/asset`, {
+      params: { id },
+      headers: authHeaders(),
+    })
+  },
+
+  getSqlAssetContext(params?: { group?: string; category?: string }) {
+    return axios.get<{ markdown: string; asset_count: number; truncated: boolean }>(
+      `${BASE}/api/v1/fsi/sql-assets/context`,
+      { params, headers: authHeaders() },
+    )
+  },
+
   getDashboardOverview(asOfDate: string) {
     return axios.get<PortfolioDashboardOverview>(`${BASE}/api/v1/fsi/risk/dashboard-overview`, {
       params: { as_of_date: asOfDate },
@@ -1185,6 +1772,139 @@ export const fsiApi = {
         headers: authHeaders(),
       },
     )
+  },
+
+  // ── 數據管理中心 ──────────────────────────────────────────────
+  listEditablePositions(fundId: string, asOfDate: string, search?: string) {
+    return axios.get<DataListResponse<EditablePosition>>(
+      `${BASE}/api/v1/fsi/data-management/positions/${fundId}`,
+      { params: { as_of_date: asOfDate, search }, headers: authHeaders() },
+    )
+  },
+
+  createEditablePosition(fundId: string, asOfDate: string, data: EditablePositionPayload) {
+    return axios.post<EditablePosition>(
+      `${BASE}/api/v1/fsi/data-management/positions/${fundId}`,
+      data,
+      { params: { as_of_date: asOfDate }, headers: authHeaders() },
+    )
+  },
+
+  updateEditablePosition(
+    fundId: string,
+    asOfDate: string,
+    subjectCode: string,
+    data: EditablePositionPayload,
+  ) {
+    const { subject_code: _subjectCode, ...changes } = data
+    return axios.patch<EditablePosition>(
+      `${BASE}/api/v1/fsi/data-management/positions/${fundId}/${encodeURIComponent(subjectCode)}`,
+      changes,
+      { params: { as_of_date: asOfDate }, headers: authHeaders() },
+    )
+  },
+
+  deleteEditablePosition(fundId: string, asOfDate: string, subjectCode: string) {
+    return axios.delete<{ message: string }>(
+      `${BASE}/api/v1/fsi/data-management/positions/${fundId}/${encodeURIComponent(subjectCode)}`,
+      { params: { as_of_date: asOfDate }, headers: authHeaders() },
+    )
+  },
+
+  listMarketQuotes(priceDate: string, search?: string, marketId?: string) {
+    return axios.get<DataListResponse<MarketQuote>>(
+      `${BASE}/api/v1/fsi/data-management/market-quotes`,
+      { params: { price_date: priceDate, search, market_id: marketId }, headers: authHeaders() },
+    )
+  },
+
+  getMarketQuoteHistory(securityCode: string, start: string, end: string, priceType = "CLOSE") {
+    return axios.get<DataListResponse<MarketQuote>>(
+      `${BASE}/api/v1/fsi/data-management/market-quotes/history/${encodeURIComponent(securityCode)}`,
+      { params: { start, end, price_type: priceType }, headers: authHeaders() },
+    )
+  },
+
+  createMarketQuote(data: MarketQuotePayload) {
+    return axios.post<MarketQuote>(
+      `${BASE}/api/v1/fsi/data-management/market-quotes`,
+      data,
+      { headers: authHeaders() },
+    )
+  },
+
+  updateMarketQuote(quote: MarketQuote, data: MarketQuotePayload) {
+    const { price_date: _date, security_code: _code, price_type: _type, ...changes } = data
+    return axios.patch<MarketQuote>(
+      `${BASE}/api/v1/fsi/data-management/market-quotes/${quote.price_date}/${encodeURIComponent(quote.security_code)}/${quote.price_type}`,
+      changes,
+      { headers: authHeaders() },
+    )
+  },
+
+  deleteMarketQuote(quote: MarketQuote) {
+    return axios.delete<{ message: string }>(
+      `${BASE}/api/v1/fsi/data-management/market-quotes/${quote.price_date}/${encodeURIComponent(quote.security_code)}/${quote.price_type}`,
+      { headers: authHeaders() },
+    )
+  },
+
+  listSimulatedOrders(fundId: string, asOfDate?: string) {
+    return axios.get<DataListResponse<SimulatedOrder>>(
+      `${BASE}/api/v1/fsi/data-management/simulated-orders/${fundId}`,
+      { params: { as_of_date: asOfDate }, headers: authHeaders() },
+    )
+  },
+
+  createSimulatedOrder(fundId: string, data: SimulatedOrderPayload) {
+    return axios.post<SimulatedOrder>(
+      `${BASE}/api/v1/fsi/data-management/simulated-orders/${fundId}`,
+      data,
+      { headers: authHeaders() },
+    )
+  },
+
+  updateSimulatedOrder(fundId: string, orderId: string, data: SimulatedOrderPayload) {
+    return axios.patch<SimulatedOrder>(
+      `${BASE}/api/v1/fsi/data-management/simulated-orders/${fundId}/${orderId}`,
+      data,
+      { headers: authHeaders() },
+    )
+  },
+
+  validateSimulatedOrder(fundId: string, orderId: string) {
+    return axios.post<SimulatedOrder>(
+      `${BASE}/api/v1/fsi/data-management/simulated-orders/${fundId}/${orderId}/validate`,
+      undefined,
+      { headers: authHeaders() },
+    )
+  },
+
+  cancelSimulatedOrder(fundId: string, orderId: string) {
+    return axios.delete<SimulatedOrder>(
+      `${BASE}/api/v1/fsi/data-management/simulated-orders/${fundId}/${orderId}`,
+      { headers: authHeaders() },
+    )
+  },
+
+  // ── 組合主數據 CRUD（para_portfolio） ─────────────────────────
+  listPortfolios(params?: { search?: string; includeInactive?: boolean }) {
+    return axios.get<{ items: PortfolioMaster[]; count: number }>(
+      `${BASE}/api/v1/fsi/data-management/portfolios`,
+      { params: { search: params?.search, include_inactive: params?.includeInactive ?? true }, headers: authHeaders() },
+    )
+  },
+
+  createPortfolio(payload: PortfolioMasterPayload) {
+    return axios.post<PortfolioMaster>(`${BASE}/api/v1/fsi/data-management/portfolios`, payload, { headers: authHeaders() })
+  },
+
+  updatePortfolio(portId: string, payload: PortfolioMasterPayload) {
+    return axios.patch<PortfolioMaster>(`${BASE}/api/v1/fsi/data-management/portfolios/${portId}`, payload, { headers: authHeaders() })
+  },
+
+  deletePortfolio(portId: string) {
+    return axios.delete<{ message: string }>(`${BASE}/api/v1/fsi/data-management/portfolios/${portId}`, { headers: authHeaders() })
   },
 
   // ── 風控規則配置 API ──────────────────────────────────────────

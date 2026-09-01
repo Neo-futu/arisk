@@ -76,7 +76,13 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        # Token/API key maps to a removed user: treat as auth failure so UI can
+        # trigger the existing 401/403 re-login flow instead of retrying on 404.
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication subject not found",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
     return user

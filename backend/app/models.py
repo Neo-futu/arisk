@@ -149,6 +149,8 @@ class Menu(SQLModel, table=True):
     )
     sort_order: int = 0
     is_active: bool = True
+    # Gray-release stage: GA=released, BETA=superuser preview, HIDDEN=taken down.
+    release_stage: str = Field(default="GA", max_length=8)
     created_at: datetime | None = Field(
         default_factory=get_datetime_utc,
         sa_type=DateTime(timezone=True),  # type: ignore

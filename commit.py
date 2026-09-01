@@ -17,17 +17,36 @@ def run(cmd: list[str]) -> int:
     return result.returncode
 
 
+def current_branch() -> str | None:
+    result = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return None
+    branch = result.stdout.strip()
+    if not branch or branch == "HEAD":
+        return None
+    return branch
+
+
 def main():
     if len(sys.argv) < 2:
         print('Usage: python commit.py "commit message"')
         sys.exit(1)
 
     message = sys.argv[1]
+    branch = current_branch()
+    if not branch:
+        print("Failed: cannot detect current branch (detached HEAD or git error)")
+        sys.exit(1)
 
     steps = [
         (["git", "add", "."],               "Stage all"),
         (["git", "commit", "-m", message],  "Commit"),
-        (["git", "push", "origin", "main"], "Push"),
+        (["git", "push", "origin", branch], "Push"),
     ]
 
     for cmd, label in steps:

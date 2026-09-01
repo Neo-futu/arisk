@@ -1,4 +1,5 @@
 import uuid
+from datetime import timedelta
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -6,7 +7,7 @@ from sqlmodel import Session, select
 
 from app import crud
 from app.core.config import settings
-from app.core.security import verify_password
+from app.core.security import create_access_token, verify_password
 from app.models import User, UserCreate
 from tests.utils.user import create_random_user
 from tests.utils.utils import random_email, random_lower_string
@@ -32,6 +33,24 @@ def test_get_users_normal_user_me(
     assert current_user["is_active"] is True
     assert current_user["is_superuser"] is False
     assert current_user["email"] == settings.EMAIL_TEST_USER
+
+
+def test_get_users_me_deleted_subject_returns_401(
+    client: TestClient,
+    db: Session,
+) -> None:
+    username = random_email()
+    password = random_lower_string()
+    user = crud.create_user(session=db, user_create=UserCreate(email=username, password=password))
+    token = create_access_token(user.id, timedelta(minutes=5))
+    headers = {"Authorization": f"Bearer {token}"}
+
+    db.delete(user)
+    db.commit()
+
+    r = client.get(f"{settings.API_V1_STR}/users/me", headers=headers)
+    assert r.status_code == 401
+    assert r.json() == {"detail": "Authentication subject not found"}
 
 
 def test_create_user_new_email(

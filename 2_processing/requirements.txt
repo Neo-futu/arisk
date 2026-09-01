@@ -1,0 +1,8 @@
+# 2_processing extra Python dependencies.
+# The base processing/API stack (fastapi, sqlalchemy, pandas, numpy, scipy,
+# matplotlib, redis, apscheduler …) is provided by the runtime environment.
+# This file records dependencies added for specific processing modules.
+
+# Portfolio optimization module (组合优化 · PyPortfolioOpt)
+PyPortfolioOpt>=1.6.0
+yfinance>=0.2  # optional: only needed for the realtime data source

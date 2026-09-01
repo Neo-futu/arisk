@@ -15,16 +15,23 @@ import { Route as RecoverPasswordRouteImport } from './routes/recover-password'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LayoutRouteImport } from './routes/_layout'
 import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
+import { Route as LayoutValuationRouteImport } from './routes/_layout/valuation'
+import { Route as LayoutSystemConfigRouteImport } from './routes/_layout/system-config'
+import { Route as LayoutSqlLibraryRouteImport } from './routes/_layout/sql-library'
 import { Route as LayoutSettingsRouteImport } from './routes/_layout/settings'
 import { Route as LayoutSchedulesRouteImport } from './routes/_layout/schedules'
 import { Route as LayoutRiskRulesRouteImport } from './routes/_layout/risk-rules'
 import { Route as LayoutRiskRouteImport } from './routes/_layout/risk'
 import { Route as LayoutReportsRouteImport } from './routes/_layout/reports'
 import { Route as LayoutPositionsRouteImport } from './routes/_layout/positions'
+import { Route as LayoutPortfolioOptRouteImport } from './routes/_layout/portfolio-opt'
+import { Route as LayoutPortfolioCockpitRouteImport } from './routes/_layout/portfolio-cockpit'
 import { Route as LayoutNotificationsRouteImport } from './routes/_layout/notifications'
 import { Route as LayoutItemsRouteImport } from './routes/_layout/items'
 import { Route as LayoutInvestmentRiskRouteImport } from './routes/_layout/investment-risk'
+import { Route as LayoutIndicatorExplorerRouteImport } from './routes/_layout/indicator-explorer'
 import { Route as LayoutExpertRouteImport } from './routes/_layout/expert'
+import { Route as LayoutDataManagementRouteImport } from './routes/_layout/data-management'
 import { Route as LayoutComplianceRouteImport } from './routes/_layout/compliance'
 import { Route as LayoutChatRouteImport } from './routes/_layout/chat'
 import { Route as LayoutAutoriskRouteImport } from './routes/_layout/autorisk'
@@ -70,6 +77,21 @@ const LayoutIndexRoute = LayoutIndexRouteImport.update({
   path: '/',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutValuationRoute = LayoutValuationRouteImport.update({
+  id: '/valuation',
+  path: '/valuation',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutSystemConfigRoute = LayoutSystemConfigRouteImport.update({
+  id: '/system-config',
+  path: '/system-config',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutSqlLibraryRoute = LayoutSqlLibraryRouteImport.update({
+  id: '/sql-library',
+  path: '/sql-library',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const LayoutSettingsRoute = LayoutSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -100,6 +122,16 @@ const LayoutPositionsRoute = LayoutPositionsRouteImport.update({
   path: '/positions',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutPortfolioOptRoute = LayoutPortfolioOptRouteImport.update({
+  id: '/portfolio-opt',
+  path: '/portfolio-opt',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutPortfolioCockpitRoute = LayoutPortfolioCockpitRouteImport.update({
+  id: '/portfolio-cockpit',
+  path: '/portfolio-cockpit',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const LayoutNotificationsRoute = LayoutNotificationsRouteImport.update({
   id: '/notifications',
   path: '/notifications',
@@ -115,9 +147,19 @@ const LayoutInvestmentRiskRoute = LayoutInvestmentRiskRouteImport.update({
   path: '/investment-risk',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutIndicatorExplorerRoute = LayoutIndicatorExplorerRouteImport.update({
+  id: '/indicator-explorer',
+  path: '/indicator-explorer',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const LayoutExpertRoute = LayoutExpertRouteImport.update({
   id: '/expert',
   path: '/expert',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutDataManagementRoute = LayoutDataManagementRouteImport.update({
+  id: '/data-management',
+  path: '/data-management',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutComplianceRoute = LayoutComplianceRouteImport.update({
@@ -217,16 +259,23 @@ export interface FileRoutesByFullPath {
   '/autorisk': typeof LayoutAutoriskRoute
   '/chat': typeof LayoutChatRoute
   '/compliance': typeof LayoutComplianceRoute
+  '/data-management': typeof LayoutDataManagementRoute
   '/expert': typeof LayoutExpertRoute
+  '/indicator-explorer': typeof LayoutIndicatorExplorerRoute
   '/investment-risk': typeof LayoutInvestmentRiskRouteWithChildren
   '/items': typeof LayoutItemsRoute
   '/notifications': typeof LayoutNotificationsRoute
+  '/portfolio-cockpit': typeof LayoutPortfolioCockpitRoute
+  '/portfolio-opt': typeof LayoutPortfolioOptRoute
   '/positions': typeof LayoutPositionsRoute
   '/reports': typeof LayoutReportsRoute
   '/risk': typeof LayoutRiskRoute
   '/risk-rules': typeof LayoutRiskRulesRoute
   '/schedules': typeof LayoutSchedulesRoute
   '/settings': typeof LayoutSettingsRoute
+  '/sql-library': typeof LayoutSqlLibraryRoute
+  '/system-config': typeof LayoutSystemConfigRoute
+  '/valuation': typeof LayoutValuationRoute
   '/investment-risk/attribution': typeof LayoutInvestmentRiskAttributionRoute
   '/investment-risk/factor-behavior': typeof LayoutInvestmentRiskFactorBehaviorRoute
   '/investment-risk/indicators': typeof LayoutInvestmentRiskIndicatorsRoute
@@ -248,15 +297,22 @@ export interface FileRoutesByTo {
   '/autorisk': typeof LayoutAutoriskRoute
   '/chat': typeof LayoutChatRoute
   '/compliance': typeof LayoutComplianceRoute
+  '/data-management': typeof LayoutDataManagementRoute
   '/expert': typeof LayoutExpertRoute
+  '/indicator-explorer': typeof LayoutIndicatorExplorerRoute
   '/items': typeof LayoutItemsRoute
   '/notifications': typeof LayoutNotificationsRoute
+  '/portfolio-cockpit': typeof LayoutPortfolioCockpitRoute
+  '/portfolio-opt': typeof LayoutPortfolioOptRoute
   '/positions': typeof LayoutPositionsRoute
   '/reports': typeof LayoutReportsRoute
   '/risk': typeof LayoutRiskRoute
   '/risk-rules': typeof LayoutRiskRulesRoute
   '/schedules': typeof LayoutSchedulesRoute
   '/settings': typeof LayoutSettingsRoute
+  '/sql-library': typeof LayoutSqlLibraryRoute
+  '/system-config': typeof LayoutSystemConfigRoute
+  '/valuation': typeof LayoutValuationRoute
   '/': typeof LayoutIndexRoute
   '/investment-risk/attribution': typeof LayoutInvestmentRiskAttributionRoute
   '/investment-risk/factor-behavior': typeof LayoutInvestmentRiskFactorBehaviorRoute
@@ -281,16 +337,23 @@ export interface FileRoutesById {
   '/_layout/autorisk': typeof LayoutAutoriskRoute
   '/_layout/chat': typeof LayoutChatRoute
   '/_layout/compliance': typeof LayoutComplianceRoute
+  '/_layout/data-management': typeof LayoutDataManagementRoute
   '/_layout/expert': typeof LayoutExpertRoute
+  '/_layout/indicator-explorer': typeof LayoutIndicatorExplorerRoute
   '/_layout/investment-risk': typeof LayoutInvestmentRiskRouteWithChildren
   '/_layout/items': typeof LayoutItemsRoute
   '/_layout/notifications': typeof LayoutNotificationsRoute
+  '/_layout/portfolio-cockpit': typeof LayoutPortfolioCockpitRoute
+  '/_layout/portfolio-opt': typeof LayoutPortfolioOptRoute
   '/_layout/positions': typeof LayoutPositionsRoute
   '/_layout/reports': typeof LayoutReportsRoute
   '/_layout/risk': typeof LayoutRiskRoute
   '/_layout/risk-rules': typeof LayoutRiskRulesRoute
   '/_layout/schedules': typeof LayoutSchedulesRoute
   '/_layout/settings': typeof LayoutSettingsRoute
+  '/_layout/sql-library': typeof LayoutSqlLibraryRoute
+  '/_layout/system-config': typeof LayoutSystemConfigRoute
+  '/_layout/valuation': typeof LayoutValuationRoute
   '/_layout/': typeof LayoutIndexRoute
   '/_layout/investment-risk/attribution': typeof LayoutInvestmentRiskAttributionRoute
   '/_layout/investment-risk/factor-behavior': typeof LayoutInvestmentRiskFactorBehaviorRoute
@@ -316,16 +379,23 @@ export interface FileRouteTypes {
     | '/autorisk'
     | '/chat'
     | '/compliance'
+    | '/data-management'
     | '/expert'
+    | '/indicator-explorer'
     | '/investment-risk'
     | '/items'
     | '/notifications'
+    | '/portfolio-cockpit'
+    | '/portfolio-opt'
     | '/positions'
     | '/reports'
     | '/risk'
     | '/risk-rules'
     | '/schedules'
     | '/settings'
+    | '/sql-library'
+    | '/system-config'
+    | '/valuation'
     | '/investment-risk/attribution'
     | '/investment-risk/factor-behavior'
     | '/investment-risk/indicators'
@@ -347,15 +417,22 @@ export interface FileRouteTypes {
     | '/autorisk'
     | '/chat'
     | '/compliance'
+    | '/data-management'
     | '/expert'
+    | '/indicator-explorer'
     | '/items'
     | '/notifications'
+    | '/portfolio-cockpit'
+    | '/portfolio-opt'
     | '/positions'
     | '/reports'
     | '/risk'
     | '/risk-rules'
     | '/schedules'
     | '/settings'
+    | '/sql-library'
+    | '/system-config'
+    | '/valuation'
     | '/'
     | '/investment-risk/attribution'
     | '/investment-risk/factor-behavior'
@@ -379,16 +456,23 @@ export interface FileRouteTypes {
     | '/_layout/autorisk'
     | '/_layout/chat'
     | '/_layout/compliance'
+    | '/_layout/data-management'
     | '/_layout/expert'
+    | '/_layout/indicator-explorer'
     | '/_layout/investment-risk'
     | '/_layout/items'
     | '/_layout/notifications'
+    | '/_layout/portfolio-cockpit'
+    | '/_layout/portfolio-opt'
     | '/_layout/positions'
     | '/_layout/reports'
     | '/_layout/risk'
     | '/_layout/risk-rules'
     | '/_layout/schedules'
     | '/_layout/settings'
+    | '/_layout/sql-library'
+    | '/_layout/system-config'
+    | '/_layout/valuation'
     | '/_layout/'
     | '/_layout/investment-risk/attribution'
     | '/_layout/investment-risk/factor-behavior'
@@ -454,6 +538,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutIndexRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/valuation': {
+      id: '/_layout/valuation'
+      path: '/valuation'
+      fullPath: '/valuation'
+      preLoaderRoute: typeof LayoutValuationRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/system-config': {
+      id: '/_layout/system-config'
+      path: '/system-config'
+      fullPath: '/system-config'
+      preLoaderRoute: typeof LayoutSystemConfigRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/sql-library': {
+      id: '/_layout/sql-library'
+      path: '/sql-library'
+      fullPath: '/sql-library'
+      preLoaderRoute: typeof LayoutSqlLibraryRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/settings': {
       id: '/_layout/settings'
       path: '/settings'
@@ -496,6 +601,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutPositionsRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/portfolio-opt': {
+      id: '/_layout/portfolio-opt'
+      path: '/portfolio-opt'
+      fullPath: '/portfolio-opt'
+      preLoaderRoute: typeof LayoutPortfolioOptRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/portfolio-cockpit': {
+      id: '/_layout/portfolio-cockpit'
+      path: '/portfolio-cockpit'
+      fullPath: '/portfolio-cockpit'
+      preLoaderRoute: typeof LayoutPortfolioCockpitRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/notifications': {
       id: '/_layout/notifications'
       path: '/notifications'
@@ -517,11 +636,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutInvestmentRiskRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/indicator-explorer': {
+      id: '/_layout/indicator-explorer'
+      path: '/indicator-explorer'
+      fullPath: '/indicator-explorer'
+      preLoaderRoute: typeof LayoutIndicatorExplorerRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/expert': {
       id: '/_layout/expert'
       path: '/expert'
       fullPath: '/expert'
       preLoaderRoute: typeof LayoutExpertRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/data-management': {
+      id: '/_layout/data-management'
+      path: '/data-management'
+      fullPath: '/data-management'
+      preLoaderRoute: typeof LayoutDataManagementRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/compliance': {
@@ -671,16 +804,23 @@ interface LayoutRouteChildren {
   LayoutAutoriskRoute: typeof LayoutAutoriskRoute
   LayoutChatRoute: typeof LayoutChatRoute
   LayoutComplianceRoute: typeof LayoutComplianceRoute
+  LayoutDataManagementRoute: typeof LayoutDataManagementRoute
   LayoutExpertRoute: typeof LayoutExpertRoute
+  LayoutIndicatorExplorerRoute: typeof LayoutIndicatorExplorerRoute
   LayoutInvestmentRiskRoute: typeof LayoutInvestmentRiskRouteWithChildren
   LayoutItemsRoute: typeof LayoutItemsRoute
   LayoutNotificationsRoute: typeof LayoutNotificationsRoute
+  LayoutPortfolioCockpitRoute: typeof LayoutPortfolioCockpitRoute
+  LayoutPortfolioOptRoute: typeof LayoutPortfolioOptRoute
   LayoutPositionsRoute: typeof LayoutPositionsRoute
   LayoutReportsRoute: typeof LayoutReportsRoute
   LayoutRiskRoute: typeof LayoutRiskRoute
   LayoutRiskRulesRoute: typeof LayoutRiskRulesRoute
   LayoutSchedulesRoute: typeof LayoutSchedulesRoute
   LayoutSettingsRoute: typeof LayoutSettingsRoute
+  LayoutSqlLibraryRoute: typeof LayoutSqlLibraryRoute
+  LayoutSystemConfigRoute: typeof LayoutSystemConfigRoute
+  LayoutValuationRoute: typeof LayoutValuationRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
 }
 
@@ -690,16 +830,23 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutAutoriskRoute: LayoutAutoriskRoute,
   LayoutChatRoute: LayoutChatRoute,
   LayoutComplianceRoute: LayoutComplianceRoute,
+  LayoutDataManagementRoute: LayoutDataManagementRoute,
   LayoutExpertRoute: LayoutExpertRoute,
+  LayoutIndicatorExplorerRoute: LayoutIndicatorExplorerRoute,
   LayoutInvestmentRiskRoute: LayoutInvestmentRiskRouteWithChildren,
   LayoutItemsRoute: LayoutItemsRoute,
   LayoutNotificationsRoute: LayoutNotificationsRoute,
+  LayoutPortfolioCockpitRoute: LayoutPortfolioCockpitRoute,
+  LayoutPortfolioOptRoute: LayoutPortfolioOptRoute,
   LayoutPositionsRoute: LayoutPositionsRoute,
   LayoutReportsRoute: LayoutReportsRoute,
   LayoutRiskRoute: LayoutRiskRoute,
   LayoutRiskRulesRoute: LayoutRiskRulesRoute,
   LayoutSchedulesRoute: LayoutSchedulesRoute,
   LayoutSettingsRoute: LayoutSettingsRoute,
+  LayoutSqlLibraryRoute: LayoutSqlLibraryRoute,
+  LayoutSystemConfigRoute: LayoutSystemConfigRoute,
+  LayoutValuationRoute: LayoutValuationRoute,
   LayoutIndexRoute: LayoutIndexRoute,
 }
 
