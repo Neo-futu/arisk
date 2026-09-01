@@ -49,6 +49,18 @@ class RoleCreateInput(BaseModel):
     menu_ids: list[uuid.UUID] = Field(default_factory=list)
 
 
+class MenuReleaseUpdate(BaseModel):
+    release_stage: Literal["GA", "BETA", "HIDDEN"]
+    is_active: bool = True
+
+
+# Release stages driving front-end menu visibility (gray-release toggle).
+RELEASE_STAGES = ("GA", "BETA", "HIDDEN")
+
+# Menu codes that must never be hidden, so system-config managers keep a way back.
+PROTECTED_MENU_CODES = {"system-config"}
+
+
 # Roles seeded by migration; they underpin platform behaviour and cannot be deleted.
 BUILTIN_ROLE_CODES = {
     "PORTFOLIO_VIEWER",
@@ -113,37 +125,46 @@ def read_my_access(session: SessionDep, current_user: CurrentUser) -> dict[str, 
             str(code)
             for code in session.execute(text("SELECT code FROM iam.permission")).scalars()
         }
+        # Superusers preview gray (BETA) modules; HIDDEN rows are surfaced in
+        # menu_stages so the sidebar can hide them, but kept out of menu_paths.
         menu_rows = session.execute(
             text(
                 """
-                SELECT code, path FROM iam.menu
+                SELECT code, path, release_stage FROM iam.menu
                 WHERE is_active = TRUE
                 ORDER BY sort_order, code
                 """
             )
         ).mappings().all()
-        menu_paths = {str(row["path"]) for row in menu_rows if row["path"]}
-        menu_codes = [str(row["code"]) for row in menu_rows]
     else:
         permissions = get_user_permission_codes(session, current_user.id)
-        menu_paths = get_user_menu_paths(session, current_user.id)
-        menu_codes = [
-            str(code)
-            for code in session.execute(
-                text(
-                    """
-                    SELECT DISTINCT m.code
-                    FROM iam.user_role ur
-                    JOIN iam.role r ON r.id = ur.role_id AND r.is_active = TRUE
-                    JOIN iam.role_menu rm ON rm.role_id = r.id
-                    JOIN iam.menu m ON m.id = rm.menu_id AND m.is_active = TRUE
-                    WHERE ur.user_id = :user_id
-                    ORDER BY m.code
-                    """
-                ),
-                {"user_id": current_user.id},
-            ).scalars()
-        ]
+        # Regular users only see released (GA) modules they are granted.
+        menu_rows = session.execute(
+            text(
+                """
+                SELECT DISTINCT m.code, m.path, m.release_stage
+                FROM iam.user_role ur
+                JOIN iam.role r ON r.id = ur.role_id AND r.is_active = TRUE
+                JOIN iam.role_menu rm ON rm.role_id = r.id
+                JOIN iam.menu m ON m.id = rm.menu_id AND m.is_active = TRUE
+                    AND m.release_stage = 'GA'
+                WHERE ur.user_id = :user_id
+                ORDER BY m.code
+                """
+            ),
+            {"user_id": current_user.id},
+        ).mappings().all()
+
+    # menu_stages exposes every stage (incl. HIDDEN, superuser only) for badging /
+    # gating; menu_paths / menu_codes drive routing and exclude HIDDEN.
+    menu_stages = {
+        str(row["path"]): str(row["release_stage"])
+        for row in menu_rows
+        if row["path"]
+    }
+    visible_rows = [row for row in menu_rows if str(row["release_stage"]) != "HIDDEN"]
+    menu_codes = [str(row["code"]) for row in visible_rows]
+    menu_paths = {str(row["path"]) for row in visible_rows if row["path"]}
 
     return {
         "user_id": str(current_user.id),
@@ -155,9 +176,13 @@ def read_my_access(session: SessionDep, current_user: CurrentUser) -> dict[str, 
         "permission_codes": sorted(permissions),
         "menu_codes": menu_codes,
         "menu_paths": sorted(menu_paths),
+        "menu_stages": menu_stages,
         "portfolios": list_accessible_portfolios(session, current_user),
         "can_manage_access": bool(
             current_user.is_superuser or "iam.access.manage" in permissions
+        ),
+        "can_manage_system": bool(
+            current_user.is_superuser or "system.config.manage" in permissions
         ),
     }
 
@@ -188,11 +213,12 @@ def read_access_catalog(
             "path": row["path"],
             "sort_order": int(row["sort_order"]),
             "is_active": bool(row["is_active"]),
+            "release_stage": str(row["release_stage"]),
         }
         for row in session.execute(
             text(
                 """
-                SELECT id, name, code, path, sort_order, is_active
+                SELECT id, name, code, path, sort_order, is_active, release_stage
                 FROM iam.menu ORDER BY sort_order, code
                 """
             )
@@ -226,6 +252,103 @@ def read_access_catalog(
         "menus": menus,
         "portfolios": portfolios,
     }
+
+
+def _menu_release_row(session: SessionDep, menu_id: uuid.UUID) -> dict[str, Any]:
+    row = session.execute(
+        text(
+            """
+            SELECT id, name, code, path, sort_order, is_active, release_stage
+            FROM iam.menu WHERE id = :menu_id
+            """
+        ),
+        {"menu_id": menu_id},
+    ).mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Menu not found")
+    return {
+        "id": str(row["id"]),
+        "name": row["name"],
+        "code": row["code"],
+        "path": row["path"],
+        "sort_order": int(row["sort_order"]),
+        "is_active": bool(row["is_active"]),
+        "release_stage": str(row["release_stage"]),
+    }
+
+
+@router.get("/menu-releases")
+def read_menu_releases(
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> dict[str, Any]:
+    """Every module menu with its gray-release stage (system-config page)."""
+    ensure_global_permission(session, current_user, "system.config.manage")
+    rows = session.execute(
+        text(
+            """
+            SELECT id, name, code, path, sort_order, is_active, release_stage
+            FROM iam.menu ORDER BY sort_order, code
+            """
+        )
+    ).mappings().all()
+    return {
+        "menus": [
+            {
+                "id": str(row["id"]),
+                "name": row["name"],
+                "code": row["code"],
+                "path": row["path"],
+                "sort_order": int(row["sort_order"]),
+                "is_active": bool(row["is_active"]),
+                "release_stage": str(row["release_stage"]),
+            }
+            for row in rows
+        ],
+        "stages": list(RELEASE_STAGES),
+    }
+
+
+@router.put("/menu-releases/{menu_id}")
+def update_menu_release(
+    menu_id: uuid.UUID,
+    payload: MenuReleaseUpdate,
+    session: SessionDep,
+    current_user: CurrentUser,
+) -> dict[str, Any]:
+    ensure_global_permission(session, current_user, "system.config.manage")
+    menu = session.execute(
+        text("SELECT code FROM iam.menu WHERE id = :menu_id"),
+        {"menu_id": menu_id},
+    ).mappings().first()
+    if not menu:
+        raise HTTPException(status_code=404, detail="Menu not found")
+
+    # Never let a manager hide/disable the system-config page itself (self-lockout).
+    if menu["code"] in PROTECTED_MENU_CODES and (
+        payload.release_stage != "GA" or not payload.is_active
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="This menu must stay released and active",
+        )
+
+    session.execute(
+        text(
+            """
+            UPDATE iam.menu
+            SET release_stage = :release_stage, is_active = :is_active
+            WHERE id = :menu_id
+            """
+        ),
+        {
+            "release_stage": payload.release_stage,
+            "is_active": payload.is_active,
+            "menu_id": menu_id,
+        },
+    )
+    session.commit()
+    return _menu_release_row(session, menu_id)
 
 
 @router.get("/grants")

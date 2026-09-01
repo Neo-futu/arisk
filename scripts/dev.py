@@ -21,6 +21,7 @@ scripts/dev.py — FSI 本地整合開發啟動器
 from __future__ import annotations
 
 import argparse
+import locale
 import os
 import shutil
 import subprocess
@@ -139,7 +140,9 @@ def build_processes() -> dict[str, dict]:
                 "--reload",
             ],
             "cwd": ROOT / "backend",
-            "env_extra": {"PYTHONPATH": str(ROOT)},
+            # 不额外注入 PYTHONPATH，避免与仓库根同名 app/ 目录形成解析歧义；
+            # unified.py 会在运行时自行追加 repo root 以加载 2_processing/6_entry 等子应用。
+            "env_extra": {},
             "env_defaults": {
                 # 单端口自足：backend 的 FSI 代理与 entry 子应用都指回本进程挂载的子路径，
                 # 不再依赖独立的 :8001/:8010（对齐 ideclare 单任务）。
@@ -224,11 +227,26 @@ def _print(name: str, line: str) -> None:
     print(f"{prefix} {line}", flush=True)
 
 
+def _decode_output_line(raw: bytes) -> str:
+    """Decode child-process output robustly across UTF-8/GBK terminals."""
+    preferred = locale.getpreferredencoding(False) or "utf-8"
+    tried: list[str] = []
+    for enc in ("utf-8", preferred, "gb18030"):
+        if enc in tried:
+            continue
+        tried.append(enc)
+        try:
+            return raw.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("utf-8", errors="replace")
+
+
 def _stream(proc: subprocess.Popen, name: str, ready_event: threading.Event) -> None:
     """串流進程輸出，偵測啟動就緒信號。"""
     assert proc.stdout
     for raw in iter(proc.stdout.readline, b""):
-        line = raw.decode("utf-8", errors="replace").rstrip()
+        line = _decode_output_line(raw).rstrip()
         _print(name, line)
         ready_msg = PROCESSES[name]["ready_msg"]
         if ready_msg and not ready_event.is_set() and ready_msg in line:
@@ -360,17 +378,20 @@ def main() -> None:
     procs: list[subprocess.Popen] = []
     events: list[threading.Event] = []
 
-    for name in targets:
+    # 先啟服務端，再啟前端，避免 vite 代理在 backend 未就緒時連續報錯。
+    ordered_targets = [name for name in targets if name != "frontend"]
+    if "frontend" in targets:
+        ordered_targets.append("frontend")
+
+    print(f"\n等待所有進程就緒...")
+    deadline = time.time() + 30
+
+    for name in ordered_targets:
         proc, ready = start_process(name)
         procs.append(proc)
         events.append(ready)
-
-    # 等待所有進程就緒（最多 30s）
-    print(f"\n等待所有進程就緒...")
-    deadline = time.time() + 30
-    for name, ev in zip(targets, events):
         remaining = max(0, deadline - time.time())
-        if ev.wait(timeout=remaining):
+        if ready.wait(timeout=remaining):
             _print(name, f"{COLORS['yellow']}✓ 就緒{reset}")
         else:
             _print(name, f"{COLORS['red']}⚠ 啟動超時（進程可能仍在運行）{reset}")

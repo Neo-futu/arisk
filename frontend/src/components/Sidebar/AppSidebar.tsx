@@ -4,15 +4,22 @@ import {
   BookOpen,
   CalendarClock,
   ChevronDown,
+  Code2,
+  Database,
   FileText,
+  Gauge,
   Home,
   KeyRound,
+  LineChart,
   List,
   MessageSquare,
+  PieChart,
   Settings,
   Shield,
+  SlidersHorizontal,
   Sparkles,
   Users,
+  Wallet,
 } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { useEffect, useState } from "react"
@@ -50,6 +57,7 @@ type NavItem = {
 
 const getFsiItems = (t: (key: string) => string): NavItem[] => [
   { icon: Home, title: t("nav.dashboard"), path: "/" },
+  { icon: Gauge, title: t("nav.portfolioCockpit"), path: "/portfolio-cockpit" },
   {
     icon: BarChart3,
     title: t("nav.investmentRisk"),
@@ -67,7 +75,11 @@ const getFsiItems = (t: (key: string) => string): NavItem[] => [
       { title: t("nav.factorBehavior"), path: "/investment-risk/factor-behavior" },
     ],
   },
+  { icon: Database, title: t("nav.dataManagement"), path: "/data-management" },
+  { icon: LineChart, title: t("nav.indicatorExplorer"), path: "/indicator-explorer" },
   { icon: List, title: t("nav.positions"), path: "/positions" },
+  { icon: Wallet, title: t("nav.valuation"), path: "/valuation" },
+  { icon: PieChart, title: t("nav.portfolioOpt"), path: "/portfolio-opt" },
   { icon: Shield, title: t("nav.compliance"), path: "/compliance" },
   { icon: Shield, title: t("nav.riskRules"), path: "/risk-rules" },
   { icon: FileText, title: t("nav.reports"), path: "/reports" },
@@ -75,10 +87,12 @@ const getFsiItems = (t: (key: string) => string): NavItem[] => [
   { icon: Sparkles, title: t("nav.autorisk"), path: "/autorisk" },
   { icon: MessageSquare, title: t("nav.chat"), path: "/chat" },
   { icon: BookOpen, title: t("nav.expert"), path: "/expert" },
+  { icon: Code2, title: t("nav.sqlLibrary"), path: "/sql-library" },
 ]
 
 const getAdminItems = (t: (key: string) => string): NavItem[] => [
   { icon: Users, title: t("nav.userManagement"), path: "/admin" },
+  { icon: SlidersHorizontal, title: t("nav.systemConfig"), path: "/system-config" },
   { icon: KeyRound, title: t("nav.apiKeys"), path: "/api-keys" },
   { icon: Bell, title: t("nav.notifications"), path: "/notifications" },
   { icon: Settings, title: t("nav.settings"), path: "/settings" },
@@ -87,9 +101,11 @@ const getAdminItems = (t: (key: string) => string): NavItem[] => [
 function NavSection({
   label,
   items,
+  stages,
 }: {
   label: string
   items: NavItem[]
+  stages: Record<string, string>
 }) {
   const { isMobile, setOpenMobile } = useSidebar()
   const navigate = useNavigate()
@@ -146,6 +162,11 @@ function NavSection({
                 >
                   <item.icon className="h-4 w-4" />
                   <span>{item.title}</span>
+                  {stages[item.path] === "BETA" && (
+                    <span className="ml-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600 group-data-[collapsible=icon]:hidden dark:text-amber-400">
+                      Beta
+                    </span>
+                  )}
                   {item.children && (
                     <ChevronDown className={`ml-auto h-3.5 w-3.5 transition-transform ${isOpen ? "rotate-180" : ""}`} />
                   )}
@@ -188,9 +209,10 @@ export function AppSidebar() {
     staleTime: 30_000,
   })
   const menuPaths = new Set(accessQuery.data?.menu_paths ?? [])
-  const hasMenu = (path: string) => Boolean(
-    currentUser?.is_superuser || menuPaths.has(path),
-  )
+  const menuStages = accessQuery.data?.menu_stages ?? {}
+  // Superusers preview everything except HIDDEN modules; others follow granted GA paths.
+  const hasMenu = (path: string) =>
+    currentUser?.is_superuser ? menuStages[path] !== "HIDDEN" : menuPaths.has(path)
   const visibleFsiItems = fsiItems.filter((item) => hasMenu(item.path))
 
   const visibleAdminItems = adminItems.filter((item) => hasMenu(item.path))
@@ -201,9 +223,9 @@ export function AppSidebar() {
         <Logo variant="responsive" />
       </SidebarHeader>
       <SidebarContent>
-        <NavSection label={t("nav.fsiSection")} items={visibleFsiItems} />
+        <NavSection label={t("nav.fsiSection")} items={visibleFsiItems} stages={menuStages} />
         {visibleAdminItems.length > 0 ? (
-          <NavSection label={t("nav.systemManagement")} items={visibleAdminItems} />
+          <NavSection label={t("nav.systemManagement")} items={visibleAdminItems} stages={menuStages} />
         ) : null}
       </SidebarContent>
       <SidebarFooter>

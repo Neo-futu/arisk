@@ -1,3 +1,5 @@
+<!-- 更新时间：2026-09-01（北京时间）｜生成模型：GPT-5.6 Sol -->
+
 # 2_processing — 計算處理層
 
 ## 模塊定位
@@ -23,7 +25,13 @@ FSI 風控業績平台六層架構的**第二層**，是平台的**計算核心*
 │   ├── main.py               應用入口，路由注冊
 │   ├── deps.py               依賴注入（DB Session / API Key 驗證）
 │   └── routers/
+│       ├── data_management.py 數據管理 CRUD、模擬交易與前置風控
+│       ├── indicators.py     指標探索（DataJungle）：目錄/對比時序/CSV導出/可編輯維護
+│       ├── portfolio_cockpit.py 組合列表與駕駛艙：基本盤/MMF指標/狀態/sparkline（只讀）
+│       ├── portfolio_opt.py   組合優化：PyPortfolioOpt 有效前沿/BL/HRP + PNG 圖表（tools/performance/portfolio_optimizer.py）
 │       ├── positions.py      持倉查詢接口
+│       ├── sql_assets.py     SQL 資產庫：sql/{indicators,mmf} 目錄/正文/AI 上下文（查看用）
+│       ├── valuation.py      組合估值報表 + NAV 階段損益歸因（只讀計算）
 │       ├── risk.py           風控指標接口
 │       ├── performance.py    業績歸因接口
 │       ├── review.py         人工審核工作流接口
@@ -85,6 +93,7 @@ FSI 風控業績平台六層架構的**第二層**，是平台的**計算核心*
 
 | 路由前綴 | 功能 |
 |---|---|
+| `GET/POST/PATCH/DELETE /data-management/*` | 估值持倉與行情 CRUD、模擬交易、確定性前置風控；寫入同步追加審計事件 |
 | `GET /positions/*` | 持倉查詢：按組合/資產類別/日期查詢當日持倉 |
 | `GET /risk/*` | 風控指標：WAM/WAL/流動性/集中度/VaR/暴露明細 |
 | `GET /performance/*` | 業績歸因：收益貢獻/行業歸因/個券損益 |

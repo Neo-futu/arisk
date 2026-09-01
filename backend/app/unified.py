@@ -10,7 +10,8 @@
 - 每個掛載包 try/except：缺依賴 / 導入失敗只跳過該子應用，不使整個進程崩潰；
   啟動日誌與 `/unified/health` 匯報掛載結果。
 
-復用現有 `app.main:app`（已裝好 iam / 業務路由 + CORS + Sentry）。
+本文件顯式構建 FastAPI 應用並掛載 backend API router，避免熱重載下
+對外核心路由偶發丟失（例如 /api/v1/users/me 被 404）。
 """
 from __future__ import annotations
 
@@ -18,11 +19,39 @@ import importlib
 import logging
 import sys
 from pathlib import Path
+from fastapi import FastAPI
+from fastapi.routing import APIRoute
+from starlette.middleware.cors import CORSMiddleware
 
-# 復用現有 backend 應用（在其之上追加掛載）
-from app.main import app
+from app.api.main import api_router
+from app.core.config import settings
 
 logger = logging.getLogger("arisk.unified")
+
+
+def _custom_generate_unique_id(route: APIRoute) -> str:
+    if route.tags:
+        return f"{route.tags[0]}-{route.name}"
+    return route.name
+
+
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    generate_unique_id_function=_custom_generate_unique_id,
+)
+
+if settings.all_cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.all_cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+# 先掛核心 /api/v1 路由，再掛子應用，確保前端初始化請求穩定命中。
+app.include_router(api_router, prefix=settings.API_V1_STR)
 
 # repo 根加入 sys.path，便於導入數字名子應用包（2_processing / 6_entry / 4_mcp）
 _REPO_ROOT = Path(__file__).resolve().parents[2]

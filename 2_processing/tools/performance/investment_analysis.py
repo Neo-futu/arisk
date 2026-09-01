@@ -15,8 +15,18 @@ from .investanalsis import (
     compute_risk_indicator_timeseries,
     compute_risk_indicators,
 )
+from .investment_analysis_common import (
+    _beta,
+    _daily_returns,
+    _performance_periods,
+    _return_between,
+)
 
 __all__ = [
+    "_beta",
+    "_daily_returns",
+    "_performance_periods",
+    "_return_between",
     "compute_portfolio_overview",
     "compute_portfolio_basic_info",
     "compute_risk_indicators",

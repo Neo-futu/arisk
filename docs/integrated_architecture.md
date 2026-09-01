@@ -1,3 +1,5 @@
+<!-- 更新时间：2026-09-01（北京时间）｜生成模型：GPT-5.6 Sol -->
+
 # ARISK — Agent for Risk & Investment Analysis System
 
 **阿雷斯 · 智能風控和投資分析系統**
@@ -29,15 +31,18 @@ backend/             唯一 Web API（JWT / BFF / FSI proxy）
 ### frontend/
 
 - 對應 `full-stack-fastapi-template` 的正式 SPA 前端
-- 承載：儀表板、風控、持倉、合規、報表、Agent Chat
+- 承載：儀表板、數據管理中心、風控、持倉、合規、報表、Agent Chat
 - 僅調用 `backend/api/v1/*`
 - 不直接調 `2_processing/`，不直接調 `6_entry/`
+- 數據管理中心採用「參數區 + 數據/報表區 + 圖表區 + 可隱藏 AI 區」佈局；
+  頁面 AI 僅取得當前基金、日期、模塊與可見數據摘要
 
 ### backend/
 
 - 對應 `full-stack-fastapi-template` 的正式 FastAPI 後端
 - 承載：JWT 認證、用戶管理、BFF 聚合、代理路由
 - `/api/v1/fsi/risk/*`、`/api/v1/fsi/positions/*` 代理到 `2_processing/`
+- `/api/v1/fsi/data-management/*` 以組合權限或全局行情維護權限校驗後代理到 `2_processing/`
 - `/api/v1/fsi/agent/*` 代理到 `6_entry/`
 
 ### 6_entry/
@@ -54,6 +59,8 @@ backend/             唯一 Web API（JWT / BFF / FSI proxy）
 
 - 唯一風控計算核心
 - VaR、暴露、合規、報表數據拼裝和 SQL 應盡量只落在此層
+- 可編輯估值持倉、行情 CRUD、模擬交易與確定性前置風控由
+  `/data-management/*` 提供；每次寫入同步追加 `svc_wf_audit_log`
 - 其他層不複製計算邏輯
 
 ## 3. 推薦服務拓撲
@@ -66,6 +73,7 @@ frontend/
 backend/            http://localhost:8000
   ├── /api/v1/fsi/risk/*      → 2_processing  http://localhost:8001
   ├── /api/v1/fsi/positions/* → 2_processing  http://localhost:8001
+  ├── /api/v1/fsi/data-management/* → 2_processing  http://localhost:8001
   └── /api/v1/fsi/agent/*     → 6_entry       http://localhost:8010
 
 6_entry/

@@ -42,6 +42,7 @@ def get_user_menu_paths(session: Session, user_id: uuid.UUID) -> set[str]:
             JOIN iam.role r ON r.id = ur.role_id AND r.is_active = TRUE
             JOIN iam.role_menu rm ON rm.role_id = r.id
             JOIN iam.menu m ON m.id = rm.menu_id AND m.is_active = TRUE
+                AND m.release_stage = 'GA'
             WHERE ur.user_id = :user_id AND m.path IS NOT NULL
             """
         ),
