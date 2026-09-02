@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from datetime import date
+
 from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import Response
 
@@ -41,6 +43,24 @@ async def holdings(port_id: str, _user: CurrentUser, client: ProcessingClient) -
 @router.get("/risk-free-options")
 async def risk_free_options(_user: CurrentUser, client: ProcessingClient) -> Any:
     return await _proxy_json(client, "get", "/portfolio-opt/risk-free-options")
+
+
+@router.get("/market-quotes/history/{security_code}")
+async def market_quote_history(
+    security_code: str,
+    _user: CurrentUser,
+    client: ProcessingClient,
+    start: date,
+    end: date,
+    price_type: str = "CLOSE",
+    data_source: str = "db",
+) -> Any:
+    return await _proxy_json(
+        client,
+        "get",
+        f"/portfolio-opt/market-quotes/history/{security_code}",
+        params={"start": start, "end": end, "price_type": price_type, "data_source": data_source},
+    )
 
 
 @router.post("/evaluate")

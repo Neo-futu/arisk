@@ -41,6 +41,11 @@ def _actor(user: User) -> str:
     return str(user.id)
 
 
+def _clean_params(**kwargs: Any) -> dict[str, Any]:
+    """Drop unset query params so downstream validators don't receive literal None."""
+    return {k: v for k, v in kwargs.items() if v is not None}
+
+
 @router.get("/catalog")
 async def catalog(
     _user: CurrentUser,
@@ -52,7 +57,7 @@ async def catalog(
         client,
         "get",
         "/indicators/catalog",
-        params={"category": category, "country": country},
+        params=_clean_params(category=category, country=country),
     )
 
 
@@ -69,12 +74,12 @@ async def series(
         client,
         "get",
         "/indicators/series",
-        params={
-            "indicator_ids": indicator_ids,
-            "period": period,
-            "start": start,
-            "end": end,
-        },
+        params=_clean_params(
+            indicator_ids=indicator_ids,
+            period=period,
+            start=start,
+            end=end,
+        ),
     )
 
 
@@ -89,12 +94,12 @@ async def export_series(
 ) -> Response:
     response = await client.get(
         "/indicators/series/export",
-        params={
-            "indicator_ids": indicator_ids,
-            "period": period,
-            "start": start,
-            "end": end,
-        },
+        params=_clean_params(
+            indicator_ids=indicator_ids,
+            period=period,
+            start=start,
+            end=end,
+        ),
     )
     if response.status_code != 200:
         detail: Any = response.text

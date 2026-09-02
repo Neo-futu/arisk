@@ -958,6 +958,10 @@ export interface DataListResponse<T> {
   count: number
 }
 
+export interface MarketQuoteHistoryResponse extends DataListResponse<MarketQuote> {
+  source_used?: string
+}
+
 export interface EditablePosition {
   evaluate_date: string
   port_id: string
@@ -1822,6 +1826,19 @@ export const fsiApi = {
     return axios.get<DataListResponse<MarketQuote>>(
       `${BASE}/api/v1/fsi/data-management/market-quotes/history/${encodeURIComponent(securityCode)}`,
       { params: { start, end, price_type: priceType }, headers: authHeaders() },
+    )
+  },
+
+  getPortfolioQuoteHistory(
+    securityCode: string,
+    start: string,
+    end: string,
+    priceType = "CLOSE",
+    dataSource = "db",
+  ) {
+    return axios.get<MarketQuoteHistoryResponse>(
+      `${BASE}/api/v1/fsi/portfolio-opt/market-quotes/history/${encodeURIComponent(securityCode)}`,
+      { params: { start, end, price_type: priceType, data_source: dataSource }, headers: authHeaders() },
     )
   },
 
