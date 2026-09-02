@@ -325,6 +325,85 @@ export interface EvaluateResult {
   point: { volatility: number; expected_return: number }
 }
 
+export type RiskTestingAnalytic =
+  | "SENSITIVITY"
+  | "STRESS"
+  | "SCENARIO"
+  | "REVERSE_STRESS"
+  | "TAIL_RISK"
+  | "KRD"
+  | "PNL_EXPLAIN"
+  | "VAR_BACKTEST"
+  | "XVA"
+
+export interface RiskTestingShock {
+  factor_type: "RATE" | "FX" | "VOLATILITY" | "EQUITY" | "CREDIT_SPREAD"
+  value: number
+  mode: "ABSOLUTE" | "RELATIVE"
+  tenor?: string | null
+  currency?: string | null
+  label?: string
+}
+
+export interface RiskTestingRunRequest {
+  analytic: RiskTestingAnalytic
+  as_of_date: string
+  start_date?: string | null
+  scenario_id?: string
+  scenario_name?: string
+  shocks?: RiskTestingShock[]
+  rate_bump_bps?: number
+  target_loss_pct_nav?: number
+  max_reverse_scale?: number
+  sigma_levels?: number[]
+  capital_buffer_pct_nav?: number
+  confidence?: number
+  backtest_window?: number
+  lookback_days?: number
+  counterparty_hazard?: number
+  own_hazard?: number
+  recovery_rate?: number
+  funding_spread?: number
+  initial_margin_pct?: number
+  mva_funding_spread?: number
+}
+
+export interface RiskTestingReport {
+  analytic: RiskTestingAnalytic
+  engine: string
+  library: string
+  fund_id: string
+  as_of_date: string
+  reporting_currency: string
+  net_asset: number
+  data_quality: Record<string, unknown>
+  assumptions: string[]
+  [key: string]: unknown
+}
+
+export interface RiskTestingCapabilities {
+  module: string
+  engine: string
+  financepy_available: boolean
+  financepy_version: string | null
+  analytics: RiskTestingAnalytic[]
+  python_modules: Record<RiskTestingAnalytic, string>
+  data_modules: {
+    portfolio: string
+    market: string
+    orchestrator: string
+  }
+  financepy_core_calls: string[]
+  interfaces: string[]
+  scenarios: Array<{
+    scenario_id: string
+    name: string
+    category: string
+    description: string
+    shocks: RiskTestingShock[]
+  }>
+}
+
 export interface PortfolioCockpitItem {
   port_id: string
   port_name: string
@@ -1530,6 +1609,28 @@ export const fsiApi = {
 
   evaluatePortfolio(req: OptimizeRequest) {
     return axios.post<EvaluateResult>(`${BASE}/api/v1/fsi/portfolio-opt/evaluate`, req, { headers: authHeaders() })
+  },
+
+  // ── 专业风险测试（FinancePy） ──────────────────────────
+  getRiskTestingCapabilities() {
+    return axios.get<RiskTestingCapabilities>(`${BASE}/api/v1/fsi/risk-testing/capabilities`, {
+      headers: authHeaders(),
+    })
+  },
+
+  getRiskTestingCatalog(category?: string) {
+    return axios.get<{ items: RiskTestingCapabilities["scenarios"]; count: number }>(
+      `${BASE}/api/v1/fsi/risk-testing/catalog`,
+      { params: category ? { category } : undefined, headers: authHeaders() },
+    )
+  },
+
+  runRiskTest(fundId: string, request: RiskTestingRunRequest) {
+    return axios.post<RiskTestingReport>(
+      `${BASE}/api/v1/fsi/risk-testing/run/${fundId}`,
+      request,
+      { headers: authHeaders() },
+    )
   },
 
   optChartBlob(name: string, req: OptimizeRequest) {

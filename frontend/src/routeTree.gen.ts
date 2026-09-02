@@ -20,6 +20,7 @@ import { Route as LayoutSystemConfigRouteImport } from './routes/_layout/system-
 import { Route as LayoutSqlLibraryRouteImport } from './routes/_layout/sql-library'
 import { Route as LayoutSettingsRouteImport } from './routes/_layout/settings'
 import { Route as LayoutSchedulesRouteImport } from './routes/_layout/schedules'
+import { Route as LayoutRiskTestingRouteImport } from './routes/_layout/risk-testing'
 import { Route as LayoutRiskRulesRouteImport } from './routes/_layout/risk-rules'
 import { Route as LayoutRiskRouteImport } from './routes/_layout/risk'
 import { Route as LayoutReportsRouteImport } from './routes/_layout/reports'
@@ -37,7 +38,17 @@ import { Route as LayoutChatRouteImport } from './routes/_layout/chat'
 import { Route as LayoutAutoriskRouteImport } from './routes/_layout/autorisk'
 import { Route as LayoutApiKeysRouteImport } from './routes/_layout/api-keys'
 import { Route as LayoutAdminRouteImport } from './routes/_layout/admin'
+import { Route as LayoutRiskTestingIndexRouteImport } from './routes/_layout/risk-testing.index'
 import { Route as LayoutInvestmentRiskIndexRouteImport } from './routes/_layout/investment-risk.index'
+import { Route as LayoutRiskTestingXvaRouteImport } from './routes/_layout/risk-testing.xva'
+import { Route as LayoutRiskTestingVarBacktestRouteImport } from './routes/_layout/risk-testing.var-backtest'
+import { Route as LayoutRiskTestingTailRiskRouteImport } from './routes/_layout/risk-testing.tail-risk'
+import { Route as LayoutRiskTestingStressRouteImport } from './routes/_layout/risk-testing.stress'
+import { Route as LayoutRiskTestingSensitivityRouteImport } from './routes/_layout/risk-testing.sensitivity'
+import { Route as LayoutRiskTestingScenarioRouteImport } from './routes/_layout/risk-testing.scenario'
+import { Route as LayoutRiskTestingReverseStressRouteImport } from './routes/_layout/risk-testing.reverse-stress'
+import { Route as LayoutRiskTestingPnlExplainRouteImport } from './routes/_layout/risk-testing.pnl-explain'
+import { Route as LayoutRiskTestingKrdRouteImport } from './routes/_layout/risk-testing.krd'
 import { Route as LayoutInvestmentRiskValidationRouteImport } from './routes/_layout/investment-risk.validation'
 import { Route as LayoutInvestmentRiskRatesCreditRouteImport } from './routes/_layout/investment-risk.rates-credit'
 import { Route as LayoutInvestmentRiskPretradeBudgetRouteImport } from './routes/_layout/investment-risk.pretrade-budget'
@@ -100,6 +111,11 @@ const LayoutSettingsRoute = LayoutSettingsRouteImport.update({
 const LayoutSchedulesRoute = LayoutSchedulesRouteImport.update({
   id: '/schedules',
   path: '/schedules',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutRiskTestingRoute = LayoutRiskTestingRouteImport.update({
+  id: '/risk-testing',
+  path: '/risk-testing',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutRiskRulesRoute = LayoutRiskRulesRouteImport.update({
@@ -187,12 +203,68 @@ const LayoutAdminRoute = LayoutAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutRiskTestingIndexRoute = LayoutRiskTestingIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => LayoutRiskTestingRoute,
+} as any)
 const LayoutInvestmentRiskIndexRoute =
   LayoutInvestmentRiskIndexRouteImport.update({
     id: '/',
     path: '/',
     getParentRoute: () => LayoutInvestmentRiskRoute,
   } as any)
+const LayoutRiskTestingXvaRoute = LayoutRiskTestingXvaRouteImport.update({
+  id: '/xva',
+  path: '/xva',
+  getParentRoute: () => LayoutRiskTestingRoute,
+} as any)
+const LayoutRiskTestingVarBacktestRoute =
+  LayoutRiskTestingVarBacktestRouteImport.update({
+    id: '/var-backtest',
+    path: '/var-backtest',
+    getParentRoute: () => LayoutRiskTestingRoute,
+  } as any)
+const LayoutRiskTestingTailRiskRoute =
+  LayoutRiskTestingTailRiskRouteImport.update({
+    id: '/tail-risk',
+    path: '/tail-risk',
+    getParentRoute: () => LayoutRiskTestingRoute,
+  } as any)
+const LayoutRiskTestingStressRoute = LayoutRiskTestingStressRouteImport.update({
+  id: '/stress',
+  path: '/stress',
+  getParentRoute: () => LayoutRiskTestingRoute,
+} as any)
+const LayoutRiskTestingSensitivityRoute =
+  LayoutRiskTestingSensitivityRouteImport.update({
+    id: '/sensitivity',
+    path: '/sensitivity',
+    getParentRoute: () => LayoutRiskTestingRoute,
+  } as any)
+const LayoutRiskTestingScenarioRoute =
+  LayoutRiskTestingScenarioRouteImport.update({
+    id: '/scenario',
+    path: '/scenario',
+    getParentRoute: () => LayoutRiskTestingRoute,
+  } as any)
+const LayoutRiskTestingReverseStressRoute =
+  LayoutRiskTestingReverseStressRouteImport.update({
+    id: '/reverse-stress',
+    path: '/reverse-stress',
+    getParentRoute: () => LayoutRiskTestingRoute,
+  } as any)
+const LayoutRiskTestingPnlExplainRoute =
+  LayoutRiskTestingPnlExplainRouteImport.update({
+    id: '/pnl-explain',
+    path: '/pnl-explain',
+    getParentRoute: () => LayoutRiskTestingRoute,
+  } as any)
+const LayoutRiskTestingKrdRoute = LayoutRiskTestingKrdRouteImport.update({
+  id: '/krd',
+  path: '/krd',
+  getParentRoute: () => LayoutRiskTestingRoute,
+} as any)
 const LayoutInvestmentRiskValidationRoute =
   LayoutInvestmentRiskValidationRouteImport.update({
     id: '/validation',
@@ -271,6 +343,7 @@ export interface FileRoutesByFullPath {
   '/reports': typeof LayoutReportsRoute
   '/risk': typeof LayoutRiskRoute
   '/risk-rules': typeof LayoutRiskRulesRoute
+  '/risk-testing': typeof LayoutRiskTestingRouteWithChildren
   '/schedules': typeof LayoutSchedulesRoute
   '/settings': typeof LayoutSettingsRoute
   '/sql-library': typeof LayoutSqlLibraryRoute
@@ -285,7 +358,17 @@ export interface FileRoutesByFullPath {
   '/investment-risk/pretrade-budget': typeof LayoutInvestmentRiskPretradeBudgetRoute
   '/investment-risk/rates-credit': typeof LayoutInvestmentRiskRatesCreditRoute
   '/investment-risk/validation': typeof LayoutInvestmentRiskValidationRoute
+  '/risk-testing/krd': typeof LayoutRiskTestingKrdRoute
+  '/risk-testing/pnl-explain': typeof LayoutRiskTestingPnlExplainRoute
+  '/risk-testing/reverse-stress': typeof LayoutRiskTestingReverseStressRoute
+  '/risk-testing/scenario': typeof LayoutRiskTestingScenarioRoute
+  '/risk-testing/sensitivity': typeof LayoutRiskTestingSensitivityRoute
+  '/risk-testing/stress': typeof LayoutRiskTestingStressRoute
+  '/risk-testing/tail-risk': typeof LayoutRiskTestingTailRiskRoute
+  '/risk-testing/var-backtest': typeof LayoutRiskTestingVarBacktestRoute
+  '/risk-testing/xva': typeof LayoutRiskTestingXvaRoute
   '/investment-risk/': typeof LayoutInvestmentRiskIndexRoute
+  '/risk-testing/': typeof LayoutRiskTestingIndexRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -323,7 +406,17 @@ export interface FileRoutesByTo {
   '/investment-risk/pretrade-budget': typeof LayoutInvestmentRiskPretradeBudgetRoute
   '/investment-risk/rates-credit': typeof LayoutInvestmentRiskRatesCreditRoute
   '/investment-risk/validation': typeof LayoutInvestmentRiskValidationRoute
+  '/risk-testing/krd': typeof LayoutRiskTestingKrdRoute
+  '/risk-testing/pnl-explain': typeof LayoutRiskTestingPnlExplainRoute
+  '/risk-testing/reverse-stress': typeof LayoutRiskTestingReverseStressRoute
+  '/risk-testing/scenario': typeof LayoutRiskTestingScenarioRoute
+  '/risk-testing/sensitivity': typeof LayoutRiskTestingSensitivityRoute
+  '/risk-testing/stress': typeof LayoutRiskTestingStressRoute
+  '/risk-testing/tail-risk': typeof LayoutRiskTestingTailRiskRoute
+  '/risk-testing/var-backtest': typeof LayoutRiskTestingVarBacktestRoute
+  '/risk-testing/xva': typeof LayoutRiskTestingXvaRoute
   '/investment-risk': typeof LayoutInvestmentRiskIndexRoute
+  '/risk-testing': typeof LayoutRiskTestingIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -349,6 +442,7 @@ export interface FileRoutesById {
   '/_layout/reports': typeof LayoutReportsRoute
   '/_layout/risk': typeof LayoutRiskRoute
   '/_layout/risk-rules': typeof LayoutRiskRulesRoute
+  '/_layout/risk-testing': typeof LayoutRiskTestingRouteWithChildren
   '/_layout/schedules': typeof LayoutSchedulesRoute
   '/_layout/settings': typeof LayoutSettingsRoute
   '/_layout/sql-library': typeof LayoutSqlLibraryRoute
@@ -364,7 +458,17 @@ export interface FileRoutesById {
   '/_layout/investment-risk/pretrade-budget': typeof LayoutInvestmentRiskPretradeBudgetRoute
   '/_layout/investment-risk/rates-credit': typeof LayoutInvestmentRiskRatesCreditRoute
   '/_layout/investment-risk/validation': typeof LayoutInvestmentRiskValidationRoute
+  '/_layout/risk-testing/krd': typeof LayoutRiskTestingKrdRoute
+  '/_layout/risk-testing/pnl-explain': typeof LayoutRiskTestingPnlExplainRoute
+  '/_layout/risk-testing/reverse-stress': typeof LayoutRiskTestingReverseStressRoute
+  '/_layout/risk-testing/scenario': typeof LayoutRiskTestingScenarioRoute
+  '/_layout/risk-testing/sensitivity': typeof LayoutRiskTestingSensitivityRoute
+  '/_layout/risk-testing/stress': typeof LayoutRiskTestingStressRoute
+  '/_layout/risk-testing/tail-risk': typeof LayoutRiskTestingTailRiskRoute
+  '/_layout/risk-testing/var-backtest': typeof LayoutRiskTestingVarBacktestRoute
+  '/_layout/risk-testing/xva': typeof LayoutRiskTestingXvaRoute
   '/_layout/investment-risk/': typeof LayoutInvestmentRiskIndexRoute
+  '/_layout/risk-testing/': typeof LayoutRiskTestingIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -391,6 +495,7 @@ export interface FileRouteTypes {
     | '/reports'
     | '/risk'
     | '/risk-rules'
+    | '/risk-testing'
     | '/schedules'
     | '/settings'
     | '/sql-library'
@@ -405,7 +510,17 @@ export interface FileRouteTypes {
     | '/investment-risk/pretrade-budget'
     | '/investment-risk/rates-credit'
     | '/investment-risk/validation'
+    | '/risk-testing/krd'
+    | '/risk-testing/pnl-explain'
+    | '/risk-testing/reverse-stress'
+    | '/risk-testing/scenario'
+    | '/risk-testing/sensitivity'
+    | '/risk-testing/stress'
+    | '/risk-testing/tail-risk'
+    | '/risk-testing/var-backtest'
+    | '/risk-testing/xva'
     | '/investment-risk/'
+    | '/risk-testing/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -443,7 +558,17 @@ export interface FileRouteTypes {
     | '/investment-risk/pretrade-budget'
     | '/investment-risk/rates-credit'
     | '/investment-risk/validation'
+    | '/risk-testing/krd'
+    | '/risk-testing/pnl-explain'
+    | '/risk-testing/reverse-stress'
+    | '/risk-testing/scenario'
+    | '/risk-testing/sensitivity'
+    | '/risk-testing/stress'
+    | '/risk-testing/tail-risk'
+    | '/risk-testing/var-backtest'
+    | '/risk-testing/xva'
     | '/investment-risk'
+    | '/risk-testing'
   id:
     | '__root__'
     | '/_layout'
@@ -468,6 +593,7 @@ export interface FileRouteTypes {
     | '/_layout/reports'
     | '/_layout/risk'
     | '/_layout/risk-rules'
+    | '/_layout/risk-testing'
     | '/_layout/schedules'
     | '/_layout/settings'
     | '/_layout/sql-library'
@@ -483,7 +609,17 @@ export interface FileRouteTypes {
     | '/_layout/investment-risk/pretrade-budget'
     | '/_layout/investment-risk/rates-credit'
     | '/_layout/investment-risk/validation'
+    | '/_layout/risk-testing/krd'
+    | '/_layout/risk-testing/pnl-explain'
+    | '/_layout/risk-testing/reverse-stress'
+    | '/_layout/risk-testing/scenario'
+    | '/_layout/risk-testing/sensitivity'
+    | '/_layout/risk-testing/stress'
+    | '/_layout/risk-testing/tail-risk'
+    | '/_layout/risk-testing/var-backtest'
+    | '/_layout/risk-testing/xva'
     | '/_layout/investment-risk/'
+    | '/_layout/risk-testing/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -571,6 +707,13 @@ declare module '@tanstack/react-router' {
       path: '/schedules'
       fullPath: '/schedules'
       preLoaderRoute: typeof LayoutSchedulesRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/risk-testing': {
+      id: '/_layout/risk-testing'
+      path: '/risk-testing'
+      fullPath: '/risk-testing'
+      preLoaderRoute: typeof LayoutRiskTestingRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/risk-rules': {
@@ -692,12 +835,82 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutAdminRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/risk-testing/': {
+      id: '/_layout/risk-testing/'
+      path: '/'
+      fullPath: '/risk-testing/'
+      preLoaderRoute: typeof LayoutRiskTestingIndexRouteImport
+      parentRoute: typeof LayoutRiskTestingRoute
+    }
     '/_layout/investment-risk/': {
       id: '/_layout/investment-risk/'
       path: '/'
       fullPath: '/investment-risk/'
       preLoaderRoute: typeof LayoutInvestmentRiskIndexRouteImport
       parentRoute: typeof LayoutInvestmentRiskRoute
+    }
+    '/_layout/risk-testing/xva': {
+      id: '/_layout/risk-testing/xva'
+      path: '/xva'
+      fullPath: '/risk-testing/xva'
+      preLoaderRoute: typeof LayoutRiskTestingXvaRouteImport
+      parentRoute: typeof LayoutRiskTestingRoute
+    }
+    '/_layout/risk-testing/var-backtest': {
+      id: '/_layout/risk-testing/var-backtest'
+      path: '/var-backtest'
+      fullPath: '/risk-testing/var-backtest'
+      preLoaderRoute: typeof LayoutRiskTestingVarBacktestRouteImport
+      parentRoute: typeof LayoutRiskTestingRoute
+    }
+    '/_layout/risk-testing/tail-risk': {
+      id: '/_layout/risk-testing/tail-risk'
+      path: '/tail-risk'
+      fullPath: '/risk-testing/tail-risk'
+      preLoaderRoute: typeof LayoutRiskTestingTailRiskRouteImport
+      parentRoute: typeof LayoutRiskTestingRoute
+    }
+    '/_layout/risk-testing/stress': {
+      id: '/_layout/risk-testing/stress'
+      path: '/stress'
+      fullPath: '/risk-testing/stress'
+      preLoaderRoute: typeof LayoutRiskTestingStressRouteImport
+      parentRoute: typeof LayoutRiskTestingRoute
+    }
+    '/_layout/risk-testing/sensitivity': {
+      id: '/_layout/risk-testing/sensitivity'
+      path: '/sensitivity'
+      fullPath: '/risk-testing/sensitivity'
+      preLoaderRoute: typeof LayoutRiskTestingSensitivityRouteImport
+      parentRoute: typeof LayoutRiskTestingRoute
+    }
+    '/_layout/risk-testing/scenario': {
+      id: '/_layout/risk-testing/scenario'
+      path: '/scenario'
+      fullPath: '/risk-testing/scenario'
+      preLoaderRoute: typeof LayoutRiskTestingScenarioRouteImport
+      parentRoute: typeof LayoutRiskTestingRoute
+    }
+    '/_layout/risk-testing/reverse-stress': {
+      id: '/_layout/risk-testing/reverse-stress'
+      path: '/reverse-stress'
+      fullPath: '/risk-testing/reverse-stress'
+      preLoaderRoute: typeof LayoutRiskTestingReverseStressRouteImport
+      parentRoute: typeof LayoutRiskTestingRoute
+    }
+    '/_layout/risk-testing/pnl-explain': {
+      id: '/_layout/risk-testing/pnl-explain'
+      path: '/pnl-explain'
+      fullPath: '/risk-testing/pnl-explain'
+      preLoaderRoute: typeof LayoutRiskTestingPnlExplainRouteImport
+      parentRoute: typeof LayoutRiskTestingRoute
+    }
+    '/_layout/risk-testing/krd': {
+      id: '/_layout/risk-testing/krd'
+      path: '/krd'
+      fullPath: '/risk-testing/krd'
+      preLoaderRoute: typeof LayoutRiskTestingKrdRouteImport
+      parentRoute: typeof LayoutRiskTestingRoute
     }
     '/_layout/investment-risk/validation': {
       id: '/_layout/investment-risk/validation'
@@ -798,6 +1011,35 @@ const LayoutInvestmentRiskRouteChildren: LayoutInvestmentRiskRouteChildren = {
 const LayoutInvestmentRiskRouteWithChildren =
   LayoutInvestmentRiskRoute._addFileChildren(LayoutInvestmentRiskRouteChildren)
 
+interface LayoutRiskTestingRouteChildren {
+  LayoutRiskTestingKrdRoute: typeof LayoutRiskTestingKrdRoute
+  LayoutRiskTestingPnlExplainRoute: typeof LayoutRiskTestingPnlExplainRoute
+  LayoutRiskTestingReverseStressRoute: typeof LayoutRiskTestingReverseStressRoute
+  LayoutRiskTestingScenarioRoute: typeof LayoutRiskTestingScenarioRoute
+  LayoutRiskTestingSensitivityRoute: typeof LayoutRiskTestingSensitivityRoute
+  LayoutRiskTestingStressRoute: typeof LayoutRiskTestingStressRoute
+  LayoutRiskTestingTailRiskRoute: typeof LayoutRiskTestingTailRiskRoute
+  LayoutRiskTestingVarBacktestRoute: typeof LayoutRiskTestingVarBacktestRoute
+  LayoutRiskTestingXvaRoute: typeof LayoutRiskTestingXvaRoute
+  LayoutRiskTestingIndexRoute: typeof LayoutRiskTestingIndexRoute
+}
+
+const LayoutRiskTestingRouteChildren: LayoutRiskTestingRouteChildren = {
+  LayoutRiskTestingKrdRoute: LayoutRiskTestingKrdRoute,
+  LayoutRiskTestingPnlExplainRoute: LayoutRiskTestingPnlExplainRoute,
+  LayoutRiskTestingReverseStressRoute: LayoutRiskTestingReverseStressRoute,
+  LayoutRiskTestingScenarioRoute: LayoutRiskTestingScenarioRoute,
+  LayoutRiskTestingSensitivityRoute: LayoutRiskTestingSensitivityRoute,
+  LayoutRiskTestingStressRoute: LayoutRiskTestingStressRoute,
+  LayoutRiskTestingTailRiskRoute: LayoutRiskTestingTailRiskRoute,
+  LayoutRiskTestingVarBacktestRoute: LayoutRiskTestingVarBacktestRoute,
+  LayoutRiskTestingXvaRoute: LayoutRiskTestingXvaRoute,
+  LayoutRiskTestingIndexRoute: LayoutRiskTestingIndexRoute,
+}
+
+const LayoutRiskTestingRouteWithChildren =
+  LayoutRiskTestingRoute._addFileChildren(LayoutRiskTestingRouteChildren)
+
 interface LayoutRouteChildren {
   LayoutAdminRoute: typeof LayoutAdminRoute
   LayoutApiKeysRoute: typeof LayoutApiKeysRoute
@@ -816,6 +1058,7 @@ interface LayoutRouteChildren {
   LayoutReportsRoute: typeof LayoutReportsRoute
   LayoutRiskRoute: typeof LayoutRiskRoute
   LayoutRiskRulesRoute: typeof LayoutRiskRulesRoute
+  LayoutRiskTestingRoute: typeof LayoutRiskTestingRouteWithChildren
   LayoutSchedulesRoute: typeof LayoutSchedulesRoute
   LayoutSettingsRoute: typeof LayoutSettingsRoute
   LayoutSqlLibraryRoute: typeof LayoutSqlLibraryRoute
@@ -842,6 +1085,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutReportsRoute: LayoutReportsRoute,
   LayoutRiskRoute: LayoutRiskRoute,
   LayoutRiskRulesRoute: LayoutRiskRulesRoute,
+  LayoutRiskTestingRoute: LayoutRiskTestingRouteWithChildren,
   LayoutSchedulesRoute: LayoutSchedulesRoute,
   LayoutSettingsRoute: LayoutSettingsRoute,
   LayoutSqlLibraryRoute: LayoutSqlLibraryRoute,
