@@ -7,6 +7,7 @@ import { defineConfig } from "vite"
 // https://vitejs.dev/config/
 export default defineConfig({
   resolve: {
+    dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime", "i18next", "react-i18next"],
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
@@ -17,12 +18,19 @@ export default defineConfig({
   // POST 返回 404 —— 即 dashboard 崩溃与 /api/v1/logs/batch 404 的根因。
   // 如需指向其它后端地址，设 VITE_API_URL（fsiClient / logger 会用作 BASE）。
   server: {
+    hmr: {
+      protocol: "ws",
+      host: "localhost",
+    },
     proxy: {
       "/api": {
-        target: "http://localhost:8000",
+        target: process.env.VITE_DEV_PROXY_TARGET || "http://localhost:8000",
         changeOrigin: true,
       },
     },
+  },
+  optimizeDeps: {
+    include: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime", "i18next", "react-i18next"],
   },
   plugins: [
     tanstackRouter({

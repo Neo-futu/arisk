@@ -34,6 +34,10 @@ interface FsiToolbarProps {
   onFundChange: (id: string) => void
   asOfDate: string
   onDateChange: (date: string) => void
+  asOfDateLabel?: string
+  startDate?: string
+  onStartDateChange?: (date: string) => void
+  startDateLabel?: string
   onRefresh: () => void
   isFetching?: boolean
   extra?: ReactNode
@@ -44,6 +48,10 @@ export function FsiToolbar({
   onFundChange,
   asOfDate,
   onDateChange,
+  asOfDateLabel,
+  startDate,
+  onStartDateChange,
+  startDateLabel,
   onRefresh,
   isFetching = false,
   extra,
@@ -82,7 +90,17 @@ export function FsiToolbar({
         </SelectContent>
       </Select>
 
-      <DatePicker value={asOfDate} onChange={onDateChange} />
+      {startDate !== undefined && onStartDateChange ? (
+        <div className="space-y-1">
+          {startDateLabel ? <div className="text-xs text-muted-foreground">{startDateLabel}</div> : null}
+          <DatePicker value={startDate} onChange={onStartDateChange} />
+        </div>
+      ) : null}
+
+      <div className="space-y-1">
+        {asOfDateLabel ? <div className="text-xs text-muted-foreground">{asOfDateLabel}</div> : null}
+        <DatePicker value={asOfDate} onChange={onDateChange} />
+      </div>
 
       <Button
         variant="outline"

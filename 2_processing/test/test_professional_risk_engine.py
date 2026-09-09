@@ -12,6 +12,7 @@ models_module = import_module("2_processing.tools.risk_testing.models")
 scenario_module = import_module("2_processing.tools.risk_testing.scenarios")
 router_module = import_module("2_processing.api.routers.risk_testing")
 analytics_module = import_module("2_processing.tools.risk_testing.analytics")
+market_data_module = import_module("2_processing.tools.risk_testing.market_data")
 
 ProfessionalRiskEngine = engine_module.ProfessionalRiskEngine
 PortfolioSnapshot = models_module.PortfolioSnapshot
@@ -20,6 +21,8 @@ RiskFactorType = models_module.RiskFactorType
 Shock = models_module.Shock
 ShockMode = models_module.ShockMode
 SCENARIOS = scenario_module.SCENARIOS
+HistoricalAssetSeries = market_data_module.HistoricalAssetSeries
+HistoricalMarketData = market_data_module.HistoricalMarketData
 
 
 def sample_snapshot(as_of: date = date(2026, 9, 1), equity_value: float = 300_000.0) -> PortfolioSnapshot:
@@ -160,6 +163,48 @@ def test_xml_configuration_parses_shocks_and_parameters() -> None:
     assert request.shocks[0].value == pytest.approx(0.0075)
 
 
+def test_historical_backtest_supports_current_and_custom_weights() -> None:
+    """Historical replay must use current holdings or normalized user-adjusted weights."""
+
+    snapshot = sample_snapshot()
+    start = date(2026, 8, 3)
+    end = date(2026, 9, 1)
+    market = HistoricalMarketData(
+        start_date=start,
+        end_date=end,
+        source_tables=("fsi.mktdata_quotes", "fsi.mktdata_bond_risk"),
+        series=(
+            HistoricalAssetSeries(
+                "BOND5Y", "Five Year Bond", "BOND",
+                ((start, 100.0), (end, 95.0)),
+                "fsi.mktdata_bond_risk", "REAL_MARKET", True,
+            ),
+            HistoricalAssetSeries(
+                "US_EQ", "US Equity", "EQUITY",
+                ((start, 100.0), (end, 110.0)),
+                "fsi.mktdata_quotes", "REAL_MARKET", True,
+            ),
+            HistoricalAssetSeries(
+                "CASH", "Cash", "CASH",
+                ((start, 1.0), (end, 1.0)),
+                "constant_value", "ZERO_RETURN_PROXY", False,
+            ),
+        ),
+    )
+    current = analytics_module.historical_backtest.run(snapshot, market, "CURRENT")
+    adjusted = analytics_module.historical_backtest.run(
+        snapshot,
+        market,
+        "CUSTOM",
+        {"BOND5Y": 0.0, "US_EQ": 50.0, "CASH": 50.0},
+    )
+    assert current["total_return_pct"] == pytest.approx(0.0)
+    assert adjusted["total_return_pct"] == pytest.approx(5.0)
+    assert adjusted["data_quality"]["real_market_weight_pct"] == pytest.approx(50.0)
+    assert adjusted["data_quality"]["proxy_weight_pct"] == pytest.approx(50.0)
+    assert adjusted["implementation"]["financepy_calls"] == []
+
+
 def test_each_submenu_business_module_is_callable_and_auditable() -> None:
     """Every submenu owns a Python run function and implementation metadata."""
 
@@ -177,10 +222,30 @@ def test_each_submenu_business_module_is_callable_and_auditable() -> None:
         analytics_module.tail_risk.run(engine, [3.0, 4.0, 5.0], 80_000.0),
         analytics_module.krd.run(engine, 1.0),
         analytics_module.pnl_explain.run(engine, previous),
+        analytics_module.historical_backtest.run(
+            current,
+            HistoricalMarketData(
+                start_date=date(2026, 8, 1),
+                end_date=date(2026, 9, 1),
+                source_tables=("test",),
+                series=tuple(
+                    HistoricalAssetSeries(
+                        item.security_code,
+                        item.security_name,
+                        item.asset_class,
+                        ((date(2026, 8, 1), 1.0), (date(2026, 9, 1), 1.01)),
+                        "test",
+                        "REAL_MARKET",
+                        True,
+                    )
+                    for item in current.positions
+                ),
+            ),
+        ),
         analytics_module.var_backtest.run(engine, 0.99, 60),
         analytics_module.xva.run(engine, 0.02, 0.01, 0.40, 0.01, 0.05, 0.008),
     ]
-    assert len(reports) == 9
+    assert len(reports) == 10
     for report in reports:
         implementation = report["implementation"]
         assert implementation["business_module"].startswith("risk_testing.analytics.")

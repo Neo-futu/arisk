@@ -40,6 +40,18 @@ class RiskTestingClient:
         response.raise_for_status()
         return response.json()["items"]
 
+    def holdings(self, fund_id: str, as_of_date: str) -> dict[str, Any]:
+        """Read the authorized current holdings used to build backtest weights."""
+
+        response = httpx.get(
+            self.base_url + "/api/v1/fsi/risk-testing/holdings/" + fund_id,
+            headers=self._headers,
+            params={"as_of_date": as_of_date},
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
     def run(self, fund_id: str, request: dict[str, Any]) -> dict[str, Any]:
         """Run one JSON-configured analytic using existing portfolio access."""
 

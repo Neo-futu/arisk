@@ -1,6 +1,7 @@
 """Independently callable business modules for every Risk Testing submenu."""
 
 from . import (
+    historical_backtest,
     krd,
     pnl_explain,
     reverse_stress,
@@ -13,6 +14,7 @@ from . import (
 )
 
 __all__ = [
+    "historical_backtest",
     "krd",
     "pnl_explain",
     "reverse_stress",

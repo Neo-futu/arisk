@@ -17,7 +17,7 @@
 | 层次 | 实现 |
 |---|---|
 | 核心估值 | FinancePy 贴现曲线、统一冲击重估、交易级 PV/PnL |
-| 风险计量 | 敏感度、压力、情景、反向压力、尾部风险、KRD、PnL Explain、VaR/CVaR 回测、XVA |
+| 风险计量 | 敏感度、压力、情景、反向压力、尾部风险、KRD、PnL Explain、历史收益回测、VaR/CVaR 回测、XVA |
 | 数据与配置 | 现有 ARISK 数据库加载器、JSON API、XML 配置 API |
 | 客户端 | React GUI、CSV/Excel/LibreOffice、Python/Jupyter REST client |
 | QA/模型验证 | 确定性跨资产样例、方向性、平衡性、覆盖率与回归测试 |
@@ -27,7 +27,7 @@
 | Python 模块 | 职责 |
 |---|---|
 | `risk_testing.portfolio_data` | 从现有 `fsi.balance_*` 表读取组合头、债券、CD、存款、股票、基金和现金持仓，并对账 NAV |
-| `risk_testing.market_data` | 从现有 `fsi.balance_portfolio_nav` 与 `fsi.mktdata_quotes` 读取 NAV 收益和证券历史波动率 |
+| `risk_testing.market_data` | 读取 NAV 收益、股票/ETF收盘价、基金NAV、债券价格、即期汇率与历史持仓单位估值，并为历史回测披露逐证券来源 |
 | `risk_testing.loader` | 组合持仓与市场数据编排，不保存第二套主数据 |
 | `risk_testing.financepy_adapter` | 将估值日转换为 FinancePy `Date`，创建 `FlatDiscountCurve`，调用 `df_t()` 和 `bump_parallel()`；旧版自动回退 `DiscountCurveFlat` |
 | `risk_testing.engine` | 统一交易级 PV、冲击后 PV、PnL 与风险因子重估内核 |
@@ -43,10 +43,40 @@
 | 尾部风险测试 | `risk_testing.analytics.tail_risk.run` | FinancePy PV 作为估值基础；NumPy 历史分位数、CVaR/ES、3σ–5σ |
 | KRD | `risk_testing.analytics.krd.run` | `FlatDiscountCurve.bump_parallel()` + `df_t()` 节点隔离重估 |
 | PnL 归因 | `risk_testing.analytics.pnl_explain.run` | FinancePy 估值持仓输入；Carry、Rates、FX、Position、Residual 对账 |
+| 历史收益回测 | `risk_testing.analytics.historical_backtest.run` | 当前持仓或调整权重；真实市场价格路径、买入持有法、收益/波动/回撤；本功能不调用 FinancePy |
 | VaR 回测 | `risk_testing.analytics.var_backtest.run` | FinancePy PV 作为估值基础；NumPy VaR/CVaR 与 Kupiec LR |
 | XVA | `risk_testing.analytics.xva.run` | `FlatDiscountCurve.df_t()` 贴现 EPE/ENE；CVA/DVA/FVA/MVA 积分 |
 
 每次运行的 API 响应均返回 `implementation`，明确记录本次实际业务模块、FinancePy 类/方法、持仓模块、市场数据模块和补充算法。
+
+## 时间语义
+
+前端按业务含义区分“估值时点”和“开始/结束日期”，不再给所有分析套用同一种日期控件：
+
+| 类型 | 子菜单 | 日期含义 |
+|---|---|---|
+| 时点 | 敏感度、压力、情景、反向压力、KRD、XVA | 在所选估值时点加载最新可用持仓与市场数据并重估 |
+| 区间 | 尾部风险、PnL 归因、历史收益回测、VaR 回测 | 只使用所选开始日期至结束日期内的历史样本；结束日期同时是当前持仓快照时点 |
+
+`GET /risk-testing/capabilities` 的 `time_semantics` 同步公开上述机器可读约定。
+
+## 历史收益回测
+
+历史收益回测固定使用结束日期时点的当前持仓作为投资范围，支持两种权重方式：
+
+1. `CURRENT`：按当前持仓市值占比建仓；
+2. `CUSTOM`：用户修改当前持仓权重，后端校验非负并按合计值归一化。
+
+回测在区间首个共同可用日按目标权重建仓，之后采用买入持有法，权重随价格自然漂移。行情按以下顺序取数：
+
+1. 股票/ETF：`fsi.mktdata_quotes` 收盘价；
+2. 基金：`fsi.mktdata_fund_nav` 累计/单位NAV，其次 `fsi.mktdata_quotes`；
+3. 债券/CD：`fsi.mktdata_bond_risk` 全价/净价；
+4. 市场行情不足两点时：`fsi.balance_*` 历史单位估值；
+5. 仍然缺失时：存款、CD、债券使用持仓YTM/票息应计代理，现金及未映射净资产使用零收益代理；
+6. 非本位币资产优先叠加 `fsi.mktdata_fx_rate` 历史即期汇率，缺失时使用快照汇率。
+
+报告的 `data_quality` 返回 `real_market_weight_pct`、`historical_valuation_weight_pct`、`proxy_weight_pct` 和逐证券 `series_sources`。代理部分不会被描述为真实市场行情。结果未计交易成本、税费、申赎、现金流再投资及历史交易行为。
 
 ## 菜单
 
@@ -59,6 +89,7 @@
 - 尾部风险测试
 - 关键利率久期 KRD
 - PnL 归因
+- 历史收益回测
 - VaR 回测
 - 估值调整 XVA
 
@@ -68,6 +99,7 @@
 
 - `GET /api/v1/fsi/risk-testing/capabilities`
 - `GET /api/v1/fsi/risk-testing/catalog`
+- `GET /api/v1/fsi/risk-testing/holdings/{fund_id}?as_of_date=YYYY-MM-DD`
 - `POST /api/v1/fsi/risk-testing/run/{fund_id}`
 - `POST /api/v1/fsi/risk-testing/run-xml/{fund_id}`
 
@@ -82,6 +114,22 @@ JSON 敏感度测试示例：
     {"factor_type": "FX", "value": 0.01, "mode": "RELATIVE", "label": "FX +/-1%"},
     {"factor_type": "VOLATILITY", "value": 0.10, "mode": "RELATIVE", "label": "Vol +10%"}
   ]
+}
+```
+
+JSON 历史收益回测示例：
+
+```json
+{
+  "analytic": "HISTORICAL_BACKTEST",
+  "start_date": "2026-01-01",
+  "as_of_date": "2026-09-01",
+  "weight_mode": "CUSTOM",
+  "custom_weights": {
+    "BNYHFN26213.CMU": 35,
+    "0700.HK": 25,
+    "DEP_BOCHK_01": 40
+  }
 }
 ```
 

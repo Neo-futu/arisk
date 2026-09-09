@@ -33,6 +33,7 @@ const zhTW = {
     tailRiskTesting: "尾部風險測試",
     krdTesting: "關鍵利率久期 KRD",
     pnlExplainTesting: "PnL 歸因",
+    historicalBacktesting: "歷史收益回測",
     varBacktesting: "VaR 回測",
     xvaTesting: "估值調整 XVA",
     dataManagement: "數據管理中心",

@@ -333,6 +333,7 @@ export type RiskTestingAnalytic =
   | "TAIL_RISK"
   | "KRD"
   | "PNL_EXPLAIN"
+  | "HISTORICAL_BACKTEST"
   | "VAR_BACKTEST"
   | "XVA"
 
@@ -360,6 +361,8 @@ export interface RiskTestingRunRequest {
   confidence?: number
   backtest_window?: number
   lookback_days?: number
+  weight_mode?: "CURRENT" | "CUSTOM"
+  custom_weights?: Record<string, number>
   counterparty_hazard?: number
   own_hazard?: number
   recovery_rate?: number
@@ -394,6 +397,7 @@ export interface RiskTestingCapabilities {
     orchestrator: string
   }
   financepy_core_calls: string[]
+  time_semantics: Record<RiskTestingAnalytic, "POINT_IN_TIME" | "DATE_RANGE">
   interfaces: string[]
   scenarios: Array<{
     scenario_id: string
@@ -402,6 +406,22 @@ export interface RiskTestingCapabilities {
     description: string
     shocks: RiskTestingShock[]
   }>
+}
+
+export interface RiskTestingHolding {
+  security_code: string
+  security_name: string
+  asset_class: string
+  market_value_base: number
+  current_weight_pct: number
+}
+
+export interface RiskTestingHoldings {
+  fund_id: string
+  requested_date: string
+  effective_date: string
+  reporting_currency: string
+  holdings: RiskTestingHolding[]
 }
 
 export interface PortfolioCockpitItem {
@@ -1622,6 +1642,13 @@ export const fsiApi = {
     return axios.get<{ items: RiskTestingCapabilities["scenarios"]; count: number }>(
       `${BASE}/api/v1/fsi/risk-testing/catalog`,
       { params: category ? { category } : undefined, headers: authHeaders() },
+    )
+  },
+
+  getRiskTestingHoldings(fundId: string, asOfDate: string) {
+    return axios.get<RiskTestingHoldings>(
+      `${BASE}/api/v1/fsi/risk-testing/holdings/${fundId}`,
+      { params: { as_of_date: asOfDate }, headers: authHeaders() },
     )
   },
 

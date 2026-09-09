@@ -1,6 +1,8 @@
 """Standalone professional risk-testing API powered by FinancePy."""
 from __future__ import annotations
 
+import json
+import logging
 from datetime import date, timedelta
 from enum import Enum
 from typing import Annotated, Any
@@ -12,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...tools.risk_testing import ProfessionalRiskEngine, SCENARIOS, load_portfolio_snapshot, scenario_catalog
 from ...tools.risk_testing.analytics import (
+    historical_backtest,
     krd,
     pnl_explain,
     reverse_stress,
@@ -23,10 +26,12 @@ from ...tools.risk_testing.analytics import (
     xva,
 )
 from ...tools.risk_testing.financepy_adapter import FINANCEPY_CORE_CALLS
+from ...tools.risk_testing.market_data import load_historical_market_data
 from ...tools.risk_testing.models import RiskFactorType, Scenario, Shock, ShockMode
 from ..deps import get_db, verify_api_key
 
 router = APIRouter(dependencies=[Depends(verify_api_key)])
+logger = logging.getLogger(__name__)
 
 
 class AnalyticType(str, Enum):
@@ -39,8 +44,16 @@ class AnalyticType(str, Enum):
     TAIL_RISK = "TAIL_RISK"
     KRD = "KRD"
     PNL_EXPLAIN = "PNL_EXPLAIN"
+    HISTORICAL_BACKTEST = "HISTORICAL_BACKTEST"
     VAR_BACKTEST = "VAR_BACKTEST"
     XVA = "XVA"
+
+
+class WeightMode(str, Enum):
+    """How historical-backtest target weights are sourced."""
+
+    CURRENT = "CURRENT"
+    CUSTOM = "CUSTOM"
 
 
 class ShockInput(BaseModel):
@@ -76,6 +89,8 @@ class RiskRunRequest(BaseModel):
     confidence: float = Field(default=0.99, gt=0.5, lt=1.0)
     backtest_window: int = Field(default=60, ge=20, le=1000)
     lookback_days: int = Field(default=500, ge=30, le=5000)
+    weight_mode: WeightMode = WeightMode.CURRENT
+    custom_weights: dict[str, float] = Field(default_factory=dict, max_length=500)
     counterparty_hazard: float = Field(default=0.02, ge=0, le=1)
     own_hazard: float = Field(default=0.01, ge=0, le=1)
     recovery_rate: float = Field(default=0.40, ge=0, le=1)
@@ -133,6 +148,7 @@ async def capabilities() -> dict[str, Any]:
             "TAIL_RISK": "risk_testing.analytics.tail_risk.run",
             "KRD": "risk_testing.analytics.krd.run",
             "PNL_EXPLAIN": "risk_testing.analytics.pnl_explain.run",
+            "HISTORICAL_BACKTEST": "risk_testing.analytics.historical_backtest.run",
             "VAR_BACKTEST": "risk_testing.analytics.var_backtest.run",
             "XVA": "risk_testing.analytics.xva.run",
         },
@@ -142,6 +158,18 @@ async def capabilities() -> dict[str, Any]:
             "orchestrator": "risk_testing.loader.load_portfolio_snapshot",
         },
         "financepy_core_calls": FINANCEPY_CORE_CALLS,
+        "time_semantics": {
+            "SENSITIVITY": "POINT_IN_TIME",
+            "STRESS": "POINT_IN_TIME",
+            "SCENARIO": "POINT_IN_TIME",
+            "REVERSE_STRESS": "POINT_IN_TIME",
+            "TAIL_RISK": "DATE_RANGE",
+            "KRD": "POINT_IN_TIME",
+            "PNL_EXPLAIN": "DATE_RANGE",
+            "HISTORICAL_BACKTEST": "DATE_RANGE",
+            "VAR_BACKTEST": "DATE_RANGE",
+            "XVA": "POINT_IN_TIME",
+        },
         "interfaces": ["REST JSON", "REST XML", "Python", "Jupyter", "Excel/LibreOffice CSV"],
         "scenarios": scenario_catalog(),
     }
@@ -158,6 +186,48 @@ async def run_risk_test(
     return await _execute(fund_id, request, db)
 
 
+@router.get("/holdings/{fund_id}", summary="历史回测当前持仓及权重")
+async def historical_backtest_holdings(
+    fund_id: str,
+    as_of_date: Annotated[date, Query()],
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Return current snapshot weights so GUI users can create adjusted allocations."""
+
+    snapshot = await load_portfolio_snapshot(fund_id, as_of_date, db, 30)
+    total = sum(max(position.market_value_base, 0.0) for position in snapshot.positions)
+    return {
+        "fund_id": fund_id,
+        "requested_date": as_of_date.isoformat(),
+        "effective_date": snapshot.as_of_date.isoformat(),
+        "reporting_currency": snapshot.reporting_currency,
+        "holdings": [
+            {
+                "security_code": position.security_code,
+                "security_name": position.security_name,
+                "asset_class": position.asset_class,
+                "market_value_base": position.market_value_base,
+                "current_weight_pct": (
+                    max(position.market_value_base, 0.0) / total * 100.0
+                    if total else 0.0
+                ),
+            }
+            for position in sorted(
+                snapshot.positions,
+                key=lambda item: item.market_value_base,
+                reverse=True,
+            )
+        ],
+    }
+
+
+def _period_start(request: RiskRunRequest, default_days: int = 365) -> date:
+    start_date = request.start_date or request.as_of_date - timedelta(days=default_days)
+    if start_date >= request.as_of_date:
+        raise HTTPException(status_code=422, detail="start_date must be earlier than as_of_date")
+    return start_date
+
+
 async def _execute(
     fund_id: str,
     request: RiskRunRequest,
@@ -166,37 +236,80 @@ async def _execute(
     """Execute a validated JSON or XML risk configuration."""
 
     try:
-        snapshot = await load_portfolio_snapshot(fund_id, request.as_of_date, db, request.lookback_days)
+        requested_history_days = request.lookback_days
+        if request.start_date is not None:
+            requested_history_days = max(
+                requested_history_days,
+                (request.as_of_date - request.start_date).days + 30,
+            )
+        snapshot = await load_portfolio_snapshot(fund_id, request.as_of_date, db, requested_history_days)
         engine = ProfessionalRiskEngine(snapshot)
+        result: dict[str, Any]
         if request.analytic == AnalyticType.SENSITIVITY:
             shocks = tuple(item.to_domain() for item in request.shocks) or _default_sensitivities()
-            return sensitivity.run(engine, shocks)
+            result = sensitivity.run(engine, shocks)
+            _log_runtime_trace(fund_id, request, result)
+            return result
         if request.analytic == AnalyticType.STRESS:
-            return stress.run(engine, _scenario(request))
+            result = stress.run(engine, _scenario(request))
+            _log_runtime_trace(fund_id, request, result)
+            return result
         if request.analytic == AnalyticType.SCENARIO:
-            return scenario_analytic.run(engine, _scenario(request))
+            result = scenario_analytic.run(engine, _scenario(request))
+            _log_runtime_trace(fund_id, request, result)
+            return result
         if request.analytic == AnalyticType.REVERSE_STRESS:
-            return reverse_stress.run(
+            result = reverse_stress.run(
                 engine,
                 _scenario(request),
                 request.target_loss_pct_nav,
                 request.max_reverse_scale,
             )
+            _log_runtime_trace(fund_id, request, result)
+            return result
         if request.analytic == AnalyticType.TAIL_RISK:
+            start_date = _period_start(request)
+            snapshot.nav_returns = [item for item in snapshot.nav_returns if item[0] >= start_date]
             capital = snapshot.net_asset * request.capital_buffer_pct_nav / 100.0
-            return tail_risk.run(engine, request.sigma_levels, capital)
+            result = tail_risk.run(engine, request.sigma_levels, capital)
+            _log_runtime_trace(fund_id, request, result)
+            return result
         if request.analytic == AnalyticType.KRD:
-            return krd.run(engine, request.rate_bump_bps)
+            result = krd.run(engine, request.rate_bump_bps)
+            _log_runtime_trace(fund_id, request, result)
+            return result
         if request.analytic == AnalyticType.PNL_EXPLAIN:
-            start_date = request.start_date or request.as_of_date - timedelta(days=30)
-            if start_date >= request.as_of_date:
-                raise HTTPException(status_code=422, detail="start_date must be earlier than as_of_date")
+            start_date = _period_start(request, 30)
             previous = await load_portfolio_snapshot(fund_id, start_date, db, request.lookback_days)
-            return pnl_explain.run(engine, previous)
+            result = pnl_explain.run(engine, previous)
+            _log_runtime_trace(fund_id, request, result)
+            return result
+        if request.analytic == AnalyticType.HISTORICAL_BACKTEST:
+            start_date = _period_start(request)
+            market = await load_historical_market_data(
+                fund_id,
+                snapshot.positions,
+                start_date,
+                snapshot.as_of_date,
+                snapshot.reporting_currency,
+                db,
+            )
+            result = historical_backtest.run(
+                snapshot,
+                market,
+                request.weight_mode.value,
+                request.custom_weights,
+            )
+            _log_runtime_trace(fund_id, request, result)
+            return result
         if request.analytic == AnalyticType.VAR_BACKTEST:
-            return var_backtest.run(engine, request.confidence, request.backtest_window)
+            start_date = _period_start(request)
+            snapshot.nav_returns = [item for item in snapshot.nav_returns if item[0] >= start_date]
+            result = var_backtest.run(engine, request.confidence, request.backtest_window)
+            _log_runtime_trace(fund_id, request, result)
+            return result
         if request.analytic == AnalyticType.XVA:
-            return xva.run(
+            result = xva.run(
                 engine,
                 request.counterparty_hazard,
                 request.own_hazard,
@@ -205,6 +318,8 @@ async def _execute(
                 request.initial_margin_pct,
                 request.mva_funding_spread,
             )
+            _log_runtime_trace(fund_id, request, result)
+            return result
     except HTTPException:
         raise
     except (ValueError, KeyError) as exc:
@@ -212,6 +327,22 @@ async def _execute(
     except ImportError as exc:
         raise HTTPException(status_code=503, detail="FinancePy is not installed in the processing runtime") from exc
     raise HTTPException(status_code=422, detail="Unsupported analytic")
+
+
+def _log_runtime_trace(fund_id: str, request: RiskRunRequest, result: dict[str, Any]) -> None:
+    """Persist Python module and FinancePy chain in processing logs rather than frontend UI."""
+
+    implementation = result.get("implementation")
+    scenario = result.get("scenario") if isinstance(result.get("scenario"), dict) else None
+    shocks = scenario.get("shocks") if isinstance(scenario, dict) else None
+    logger.info(
+        "risk-testing execution fund=%s analytic=%s scenario=%s implementation=%s shocks=%s",
+        fund_id,
+        request.analytic.value,
+        request.scenario_id,
+        json.dumps(implementation, ensure_ascii=True, default=str),
+        json.dumps(shocks, ensure_ascii=True, default=str),
+    )
 
 
 def _xml_request(payload: bytes) -> RiskRunRequest:

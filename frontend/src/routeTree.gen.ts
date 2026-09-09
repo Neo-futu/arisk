@@ -49,6 +49,7 @@ import { Route as LayoutRiskTestingScenarioRouteImport } from './routes/_layout/
 import { Route as LayoutRiskTestingReverseStressRouteImport } from './routes/_layout/risk-testing.reverse-stress'
 import { Route as LayoutRiskTestingPnlExplainRouteImport } from './routes/_layout/risk-testing.pnl-explain'
 import { Route as LayoutRiskTestingKrdRouteImport } from './routes/_layout/risk-testing.krd'
+import { Route as LayoutRiskTestingHistoricalBacktestRouteImport } from './routes/_layout/risk-testing.historical-backtest'
 import { Route as LayoutInvestmentRiskValidationRouteImport } from './routes/_layout/investment-risk.validation'
 import { Route as LayoutInvestmentRiskRatesCreditRouteImport } from './routes/_layout/investment-risk.rates-credit'
 import { Route as LayoutInvestmentRiskPretradeBudgetRouteImport } from './routes/_layout/investment-risk.pretrade-budget'
@@ -265,6 +266,12 @@ const LayoutRiskTestingKrdRoute = LayoutRiskTestingKrdRouteImport.update({
   path: '/krd',
   getParentRoute: () => LayoutRiskTestingRoute,
 } as any)
+const LayoutRiskTestingHistoricalBacktestRoute =
+  LayoutRiskTestingHistoricalBacktestRouteImport.update({
+    id: '/historical-backtest',
+    path: '/historical-backtest',
+    getParentRoute: () => LayoutRiskTestingRoute,
+  } as any)
 const LayoutInvestmentRiskValidationRoute =
   LayoutInvestmentRiskValidationRouteImport.update({
     id: '/validation',
@@ -358,6 +365,7 @@ export interface FileRoutesByFullPath {
   '/investment-risk/pretrade-budget': typeof LayoutInvestmentRiskPretradeBudgetRoute
   '/investment-risk/rates-credit': typeof LayoutInvestmentRiskRatesCreditRoute
   '/investment-risk/validation': typeof LayoutInvestmentRiskValidationRoute
+  '/risk-testing/historical-backtest': typeof LayoutRiskTestingHistoricalBacktestRoute
   '/risk-testing/krd': typeof LayoutRiskTestingKrdRoute
   '/risk-testing/pnl-explain': typeof LayoutRiskTestingPnlExplainRoute
   '/risk-testing/reverse-stress': typeof LayoutRiskTestingReverseStressRoute
@@ -406,6 +414,7 @@ export interface FileRoutesByTo {
   '/investment-risk/pretrade-budget': typeof LayoutInvestmentRiskPretradeBudgetRoute
   '/investment-risk/rates-credit': typeof LayoutInvestmentRiskRatesCreditRoute
   '/investment-risk/validation': typeof LayoutInvestmentRiskValidationRoute
+  '/risk-testing/historical-backtest': typeof LayoutRiskTestingHistoricalBacktestRoute
   '/risk-testing/krd': typeof LayoutRiskTestingKrdRoute
   '/risk-testing/pnl-explain': typeof LayoutRiskTestingPnlExplainRoute
   '/risk-testing/reverse-stress': typeof LayoutRiskTestingReverseStressRoute
@@ -458,6 +467,7 @@ export interface FileRoutesById {
   '/_layout/investment-risk/pretrade-budget': typeof LayoutInvestmentRiskPretradeBudgetRoute
   '/_layout/investment-risk/rates-credit': typeof LayoutInvestmentRiskRatesCreditRoute
   '/_layout/investment-risk/validation': typeof LayoutInvestmentRiskValidationRoute
+  '/_layout/risk-testing/historical-backtest': typeof LayoutRiskTestingHistoricalBacktestRoute
   '/_layout/risk-testing/krd': typeof LayoutRiskTestingKrdRoute
   '/_layout/risk-testing/pnl-explain': typeof LayoutRiskTestingPnlExplainRoute
   '/_layout/risk-testing/reverse-stress': typeof LayoutRiskTestingReverseStressRoute
@@ -510,6 +520,7 @@ export interface FileRouteTypes {
     | '/investment-risk/pretrade-budget'
     | '/investment-risk/rates-credit'
     | '/investment-risk/validation'
+    | '/risk-testing/historical-backtest'
     | '/risk-testing/krd'
     | '/risk-testing/pnl-explain'
     | '/risk-testing/reverse-stress'
@@ -558,6 +569,7 @@ export interface FileRouteTypes {
     | '/investment-risk/pretrade-budget'
     | '/investment-risk/rates-credit'
     | '/investment-risk/validation'
+    | '/risk-testing/historical-backtest'
     | '/risk-testing/krd'
     | '/risk-testing/pnl-explain'
     | '/risk-testing/reverse-stress'
@@ -609,6 +621,7 @@ export interface FileRouteTypes {
     | '/_layout/investment-risk/pretrade-budget'
     | '/_layout/investment-risk/rates-credit'
     | '/_layout/investment-risk/validation'
+    | '/_layout/risk-testing/historical-backtest'
     | '/_layout/risk-testing/krd'
     | '/_layout/risk-testing/pnl-explain'
     | '/_layout/risk-testing/reverse-stress'
@@ -912,6 +925,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutRiskTestingKrdRouteImport
       parentRoute: typeof LayoutRiskTestingRoute
     }
+    '/_layout/risk-testing/historical-backtest': {
+      id: '/_layout/risk-testing/historical-backtest'
+      path: '/historical-backtest'
+      fullPath: '/risk-testing/historical-backtest'
+      preLoaderRoute: typeof LayoutRiskTestingHistoricalBacktestRouteImport
+      parentRoute: typeof LayoutRiskTestingRoute
+    }
     '/_layout/investment-risk/validation': {
       id: '/_layout/investment-risk/validation'
       path: '/validation'
@@ -1012,6 +1032,7 @@ const LayoutInvestmentRiskRouteWithChildren =
   LayoutInvestmentRiskRoute._addFileChildren(LayoutInvestmentRiskRouteChildren)
 
 interface LayoutRiskTestingRouteChildren {
+  LayoutRiskTestingHistoricalBacktestRoute: typeof LayoutRiskTestingHistoricalBacktestRoute
   LayoutRiskTestingKrdRoute: typeof LayoutRiskTestingKrdRoute
   LayoutRiskTestingPnlExplainRoute: typeof LayoutRiskTestingPnlExplainRoute
   LayoutRiskTestingReverseStressRoute: typeof LayoutRiskTestingReverseStressRoute
@@ -1025,6 +1046,8 @@ interface LayoutRiskTestingRouteChildren {
 }
 
 const LayoutRiskTestingRouteChildren: LayoutRiskTestingRouteChildren = {
+  LayoutRiskTestingHistoricalBacktestRoute:
+    LayoutRiskTestingHistoricalBacktestRoute,
   LayoutRiskTestingKrdRoute: LayoutRiskTestingKrdRoute,
   LayoutRiskTestingPnlExplainRoute: LayoutRiskTestingPnlExplainRoute,
   LayoutRiskTestingReverseStressRoute: LayoutRiskTestingReverseStressRoute,

@@ -88,6 +88,7 @@ const getFsiItems = (t: (key: string) => string): NavItem[] => [
       { title: t("nav.tailRiskTesting"), path: "/risk-testing/tail-risk" },
       { title: t("nav.krdTesting"), path: "/risk-testing/krd" },
       { title: t("nav.pnlExplainTesting"), path: "/risk-testing/pnl-explain" },
+      { title: t("nav.historicalBacktesting"), path: "/risk-testing/historical-backtest" },
       { title: t("nav.varBacktesting"), path: "/risk-testing/var-backtest" },
       { title: t("nav.xvaTesting"), path: "/risk-testing/xva" },
     ],

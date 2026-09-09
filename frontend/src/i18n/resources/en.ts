@@ -33,6 +33,7 @@ const en = {
     tailRiskTesting: "Tail Risk Testing",
     krdTesting: "Key Rate Duration (KRD)",
     pnlExplainTesting: "PnL Explain",
+    historicalBacktesting: "Historical Return Backtest",
     varBacktesting: "VaR Backtesting",
     xvaTesting: "Valuation Adjustments (XVA)",
     dataManagement: "Data Management",

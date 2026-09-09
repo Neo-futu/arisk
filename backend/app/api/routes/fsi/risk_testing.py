@@ -41,6 +41,24 @@ async def catalog(
     return await _proxy(client, "get", "/risk-testing/catalog", params=params)
 
 
+@router.get("/holdings/{fund_id}", summary="历史回测当前持仓及权重")
+async def historical_backtest_holdings(
+    fund_id: str,
+    as_of_date: str,
+    _user: PortfolioViewer,
+    client: ProcessingClient,
+) -> Any:
+    """Return authorized current holdings for adjustable backtest weights."""
+
+    return await _proxy(
+        client,
+        "get",
+        f"/risk-testing/holdings/{fund_id}",
+        params={"as_of_date": as_of_date},
+        timeout=120.0,
+    )
+
+
 @router.post("/run/{fund_id}", summary="运行专业风险测试")
 async def run_risk_test(
     fund_id: str,

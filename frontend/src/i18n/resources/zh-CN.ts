@@ -33,6 +33,7 @@ const zhCN = {
     tailRiskTesting: "尾部风险测试",
     krdTesting: "关键利率久期 KRD",
     pnlExplainTesting: "PnL 归因",
+    historicalBacktesting: "历史收益回测",
     varBacktesting: "VaR 回测",
     xvaTesting: "估值调整 XVA",
     dataManagement: "数据管理中心",
