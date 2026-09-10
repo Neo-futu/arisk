@@ -7,7 +7,8 @@ tables: per-portfolio type / currency / AUM / unit NAV / day return / MMF metric
 from __future__ import annotations
 
 from datetime import date
-from typing import Any, Literal
+from importlib import import_module
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
@@ -18,12 +19,11 @@ from ..deps import get_db, verify_api_key
 router = APIRouter(dependencies=[Depends(verify_api_key)])
 
 SPARKLINE_POINTS = 30
-# SFC MMF shadow-price deviation action threshold is 0.5% = 50bp; warn nearing it.
-DEVIATION_BREACH_BP = 50.0
-DEVIATION_WARN_BP = 40.0
-LIMIT_WARN_RATIO = 0.9
-
-Status = Literal["ok", "warn", "breach"]
+_sfc = import_module("3_riskengine.limits.sfc")
+DEVIATION_BREACH_BP = _sfc.DEVIATION_BREACH_BP
+DEVIATION_WARN_BP = _sfc.DEVIATION_WARN_BP
+LIMIT_WARN_RATIO = _sfc.LIMIT_WARN_RATIO
+Status = _sfc.Status
 
 
 def _f(value: Any) -> float | None:
@@ -38,33 +38,9 @@ def _compliance_status(
     wal_limit: float | None,
     deviation_bp: float | None,
 ) -> Status:
-    """Derive an MMF cockpit status. Non-MMF (or no metrics) → ok.
+    """MMF cockpit status. Canonical 口径 is RiskEngine ``limits.sfc``."""
 
-    breach: any hard SFC limit exceeded (WAM>limit, WAL>limit, |deviation|>50bp).
-    warn:   nearing a limit (≥90% of WAM/WAL limit, or |deviation|≥40bp).
-    """
-    if not is_mmf:
-        return "ok"
-    breach = False
-    warn = False
-    for value, limit in ((wam_days, wam_limit), (wal_days, wal_limit)):
-        if value is None or limit is None or limit <= 0:
-            continue
-        if value > limit:
-            breach = True
-        elif value >= limit * LIMIT_WARN_RATIO:
-            warn = True
-    if deviation_bp is not None:
-        abs_dev = abs(deviation_bp)
-        if abs_dev > DEVIATION_BREACH_BP:
-            breach = True
-        elif abs_dev >= DEVIATION_WARN_BP:
-            warn = True
-    if breach:
-        return "breach"
-    if warn:
-        return "warn"
-    return "ok"
+    return _sfc.compliance_status(is_mmf, wam_days, wal_days, wam_limit, wal_limit, deviation_bp)
 
 
 @router.get("/overview", summary="組合列表與駕駛艙總覽")

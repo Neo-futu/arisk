@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/table"
 import { fsiApi } from "@/fsiClient"
 import { exportCsv, HorizontalBarList, TrendLineChart } from "@/modules/investment-risk/dashboard-kit"
+import { EngineKpiPanel } from "@/modules/investment-risk/EngineKpiPanel"
 
 export const Route = createFileRoute("/_layout/investment-risk/overview")({
   component: PortfolioOverviewPage,
@@ -184,6 +185,10 @@ function PortfolioOverviewPage() {
         isFetching={isFetching}
       />
 
+      <EngineKpiPanel domain="overview" fundId={fundId} asOfDate={asOfDate} />
+
+      <section id="asset-risk" className="scroll-mt-20 space-y-4">
+      <EngineKpiPanel domain="fx" fundId={fundId} asOfDate={asOfDate} title={t("nav.fxAssetRisk")} />
       {isFetching && <p className="text-muted-foreground animate-pulse text-sm">{t("investmentRisk.common.loading")}</p>}
       {isError && (
         <Card className="border-destructive">
@@ -402,6 +407,7 @@ function PortfolioOverviewPage() {
           </Card>
         </>
       )}
+      </section>
     </div>
   )
 }

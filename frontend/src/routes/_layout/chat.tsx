@@ -4,12 +4,16 @@ import { SessionPanel } from "@/components/Chat/SessionPanel"
 import { useChatSession } from "@/components/Chat/useChatSession"
 
 export const Route = createFileRoute("/_layout/chat")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    agent: typeof search.agent === "string" ? search.agent : undefined,
+  }),
   component: ChatPage,
   head: () => ({ meta: [{ title: "Agent Chat — ARISK" }] }),
 })
 
 function ChatPage() {
-  const chat = useChatSession()
+  const { agent } = Route.useSearch()
+  const chat = useChatSession(agent)
 
   return (
     <div className="flex h-[calc(100vh-8rem)] gap-0">

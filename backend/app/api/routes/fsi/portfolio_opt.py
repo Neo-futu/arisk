@@ -101,3 +101,75 @@ async def chart(
         media_type="image/png",
         headers={"Content-Disposition": response.headers.get("content-disposition", f'attachment; filename="{name}.png"')},
     )
+
+
+@router.get("/catalog")
+async def catalog(_user: CurrentUser, client: ProcessingClient) -> Any:
+    return await _proxy_json(client, "get", "/portfolio-opt/catalog")
+
+
+@router.post("/governed-optimize")
+async def governed_optimize(
+    _user: CurrentUser,
+    client: ProcessingClient,
+    payload: dict[str, Any] = Body(...),
+) -> Any:
+    return await _proxy_json(client, "post", "/portfolio-opt/governed-optimize", json=payload)
+
+
+@router.post("/simulate/clone")
+async def simulate_clone(
+    _user: CurrentUser,
+    client: ProcessingClient,
+    payload: dict[str, Any] = Body(...),
+) -> Any:
+    return await _proxy_json(client, "post", "/portfolio-opt/simulate/clone", json=payload)
+
+
+@router.post("/simulate/{sim_id}/modify")
+async def simulate_modify(
+    sim_id: str,
+    _user: CurrentUser,
+    client: ProcessingClient,
+    payload: dict[str, Any] = Body(...),
+) -> Any:
+    return await _proxy_json(client, "post", f"/portfolio-opt/simulate/{sim_id}/modify", json=payload)
+
+
+@router.post("/simulate/{sim_id}/optimize")
+async def simulate_optimize(
+    sim_id: str,
+    _user: CurrentUser,
+    client: ProcessingClient,
+    payload: dict[str, Any] = Body(...),
+) -> Any:
+    return await _proxy_json(client, "post", f"/portfolio-opt/simulate/{sim_id}/optimize", json=payload)
+
+
+@router.post("/simulate/{sim_id}/stress")
+async def simulate_stress(
+    sim_id: str,
+    _user: CurrentUser,
+    client: ProcessingClient,
+    scenario_id: str = "gfc_2008",
+) -> Any:
+    return await _proxy_json(
+        client,
+        "post",
+        f"/portfolio-opt/simulate/{sim_id}/stress",
+        params={"scenario_id": scenario_id},
+    )
+
+
+@router.get("/simulate/{sim_id}/compare")
+async def simulate_compare(sim_id: str, _user: CurrentUser, client: ProcessingClient) -> Any:
+    return await _proxy_json(client, "get", f"/portfolio-opt/simulate/{sim_id}/compare")
+
+
+@router.post("/live/apply")
+async def live_apply(
+    _user: CurrentUser,
+    client: ProcessingClient,
+    payload: dict[str, Any] = Body(...),
+) -> Any:
+    return await _proxy_json(client, "post", "/portfolio-opt/live/apply", json=payload)

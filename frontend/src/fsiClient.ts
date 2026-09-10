@@ -384,11 +384,114 @@ export interface RiskTestingReport {
   [key: string]: unknown
 }
 
+export interface AdapterProbe {
+  name?: string
+  available?: boolean
+  version?: string | null
+  error?: string | null
+  [key: string]: unknown
+}
+
+export interface AdapterBundle {
+  engine?: string
+  engine_version?: string
+  financepy?: AdapterProbe
+  riskfolio?: AdapterProbe
+  ore?: AdapterProbe
+  [key: string]: unknown
+}
+
+export interface InvestmentKpiReport {
+  kpi: string
+  input?: Record<string, unknown>
+  calculation?: string
+  engine: string
+  formula: string
+  result: unknown
+  data_quality?: Record<string, unknown>
+  engine_version?: string
+}
+
+export interface InvestmentKpiPack {
+  fund_id: string
+  as_of_date: string
+  reporting_currency?: string
+  engine?: string
+  engine_version?: string
+  adapters?: AdapterBundle
+  kpis?: Record<string, InvestmentKpiReport>
+  domains?: Record<string, { domain: string; kpis: Record<string, InvestmentKpiReport>; engine?: string }>
+  limits?: unknown
+  data_quality?: Record<string, unknown>
+}
+
+export interface InvestmentKpiCatalog {
+  module: string
+  engine?: string
+  engine_version?: string
+  adapters?: AdapterBundle
+  kpis?: string[]
+  domains?: Record<string, string[]>
+}
+
+export interface LimitsCatalog {
+  module?: string
+  engine?: string
+  engine_version?: string
+  adapters?: AdapterBundle
+  states?: string[]
+  limit_ids?: string[]
+  policy_id?: string
+  [key: string]: unknown
+}
+
+export interface PortfolioOptCatalog {
+  module?: string
+  engine?: string
+  engine_version?: string
+  adapters?: AdapterBundle
+  methods?: string[]
+  gate?: string[]
+  is_trade_instruction?: boolean
+  [key: string]: unknown
+}
+
+export interface GovernedOptimizeRequest {
+  method: string
+  universe?: string[]
+  holdings?: Record<string, number>
+  constraints?: Record<string, unknown>
+  views?: Record<string, number>
+  risk_budgets?: Record<string, number>
+  fund_id?: string | null
+  as_of_date?: string | null
+  lookback_days?: number
+}
+
+export interface GovernedOptimizeResult {
+  is_trade_instruction: boolean
+  status?: string
+  method?: string
+  weights?: Record<string, number>
+  gate?: string[]
+  gate_status?: Record<string, boolean>
+  ready_for_review?: boolean
+  requires_authorization?: boolean
+  optimization?: Record<string, unknown>
+  limits?: unknown
+  investment_risk?: { kpis?: Record<string, InvestmentKpiReport>; engine?: string }
+  adapters?: AdapterBundle
+  [key: string]: unknown
+}
+
 export interface RiskTestingCapabilities {
   module: string
   engine: string
+  riskengine?: string
+  riskengine_version?: string
   financepy_available: boolean
   financepy_version: string | null
+  adapters?: AdapterBundle
   analytics: RiskTestingAnalytic[]
   python_modules: Record<RiskTestingAnalytic, string>
   data_modules: {
@@ -1615,6 +1718,24 @@ export const fsiApi = {
     return axios.post<OptimizeResult>(`${BASE}/api/v1/fsi/portfolio-opt/analyze`, req, { headers: authHeaders() })
   },
 
+  getPortfolioOptCatalog() {
+    return axios.get<PortfolioOptCatalog>(`${BASE}/api/v1/fsi/portfolio-opt/catalog`, {
+      headers: authHeaders(),
+    })
+  },
+
+  governedOptimize(req: GovernedOptimizeRequest) {
+    return axios.post<GovernedOptimizeResult>(`${BASE}/api/v1/fsi/portfolio-opt/governed-optimize`, req, {
+      headers: authHeaders(),
+    })
+  },
+
+  getLimitsCatalog() {
+    return axios.get<LimitsCatalog>(`${BASE}/api/v1/fsi/risk/limits/catalog`, {
+      headers: authHeaders(),
+    })
+  },
+
   listOptPortfolios() {
     return axios.get<{ portfolios: OptPortfolioRef[] }>(`${BASE}/api/v1/fsi/portfolio-opt/portfolios`, { headers: authHeaders() })
   },
@@ -1837,6 +1958,23 @@ export const fsiApi = {
       `${BASE}/api/v1/fsi/investment/factor-behavior/${fundId}`,
       { params: { start, end }, headers: authHeaders() },
     )
+  },
+
+  getInvestmentKpiCatalog() {
+    return axios.get<InvestmentKpiCatalog>(`${BASE}/api/v1/fsi/investment/kpi-catalog`, {
+      headers: authHeaders(),
+    })
+  },
+
+  getInvestmentKpiPack(fundId: string, asOfDate: string, options?: { confidence?: number; lookbackDays?: number }) {
+    return axios.get<InvestmentKpiPack>(`${BASE}/api/v1/fsi/investment/kpis/${fundId}`, {
+      params: {
+        as_of_date: asOfDate,
+        confidence: options?.confidence ?? 0.99,
+        lookback_days: options?.lookbackDays ?? 500,
+      },
+      headers: authHeaders(),
+    })
   },
 
   /** 暴露分析 + SFC 合規狀態 */
@@ -2297,10 +2435,36 @@ export const fsiApi = {
   },
 
   /** Agent V2 非流式 chat */
-  chatV2(message: string, agent: string, context?: { fund_id?: string; as_of_date?: string }) {
+  chatV2(message: string, agent: string, context?: {
+    fund_id?: string
+    as_of_date?: string
+    module?: string
+    result?: string
+    chart?: string
+    risk_metrics?: Record<string, unknown>
+  }) {
     return axios.post<{ reply: string; agent: string; tool_calls: unknown[] }>(
       `${BASE}/api/v1/fsi/agent/v2/chat`,
       { message, agent, context },
+      { headers: authHeaders() },
+    )
+  },
+
+  invokeAgents(payload: {
+    message: string
+    agent?: string
+    fund_id?: string
+    role?: string
+    holdings?: Record<string, number>
+  }) {
+    return axios.post<{
+      ok: boolean
+      explanation?: string
+      result?: unknown
+      error?: { code?: string; message?: string }
+    }>(
+      `${BASE}/api/v1/agents/invoke`,
+      payload,
       { headers: authHeaders() },
     )
   },

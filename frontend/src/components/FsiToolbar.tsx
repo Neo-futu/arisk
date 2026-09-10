@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { fsiApi } from "@/fsiClient"
+import { usePageContext } from "@/platform/page-context"
 
 export const FUNDS = [
   { id: "BHMMF001", name: "博匯港元貨幣市場基金 I" },
@@ -57,6 +58,7 @@ export function FsiToolbar({
   extra,
 }: FsiToolbarProps) {
   const { t } = useTranslation()
+  const page = usePageContext()
   const accessQuery = useQuery({
     queryKey: ["my-access-context"],
     queryFn: () => fsiApi.getMyAccessContext().then((response) => response.data),
@@ -67,6 +69,10 @@ export function FsiToolbar({
     name: portfolio.port_name,
   }))
   const funds = authorizedFunds ?? FUNDS
+
+  useEffect(() => {
+    page.patch({ portfolio: fundId, date: asOfDate })
+  }, [asOfDate, fundId, page.patch])
 
   useEffect(() => {
     if (!authorizedFunds || authorizedFunds.length === 0) return

@@ -32,4 +32,6 @@ export const FALLBACK_AGENTS = [
   { id: "compliance-officer", name: "SFC 合規審查員",     nameKey: "chat.agentComplianceOfficer" },
   { id: "fund-reporter",      name: "基金報表助理",       nameKey: "chat.agentFundReporter" },
   { id: "market-researcher",  name: "市場研究員",         nameKey: "chat.agentMarketResearcher" },
+  { id: "valuation-reviewer", name: "估值覆核員",         nameKey: "chat.agentValuationReviewer" },
+  { id: "month-end-closer",   name: "月結工作流助理",     nameKey: "chat.agentWorkflow" },
 ]

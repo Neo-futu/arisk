@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/table"
 import { fsiApi, type SecurityPnl } from "@/fsiClient"
 import { exportCsv, TrendLineChart } from "@/modules/investment-risk/dashboard-kit"
+import { EngineKpiPanel } from "@/modules/investment-risk/EngineKpiPanel"
 
 export const Route = createFileRoute("/_layout/investment-risk/attribution")({
   component: PerformanceAttributionPage,
@@ -138,6 +139,8 @@ function PerformanceAttributionPage() {
         isFetching={isFetching}
         extra={startPicker}
       />
+
+      <EngineKpiPanel domain="pnl_attribution" fundId={fundId} asOfDate={endDate} />
 
       {startDate > endDate && <p className="text-sm text-destructive">{t("investmentRisk.attribution.dateRangeError")}</p>}
       {(isFetching || attributionSeries.isFetching) && <p className="text-muted-foreground animate-pulse text-sm">{t("investmentRisk.attribution.calculating")}</p>}

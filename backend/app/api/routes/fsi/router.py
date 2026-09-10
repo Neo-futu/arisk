@@ -19,6 +19,7 @@ from .risk_testing import router as risk_testing_router
 from .schedules import router as schedules_router
 from .sql_assets import router as sql_assets_router
 from .valuation import router as valuation_router
+from app.api.routes.quant import router as quant_router
 
 router = APIRouter()
 router.include_router(agent_router,   prefix="/agent",     tags=["FSI Agent / Chat"])
@@ -36,3 +37,4 @@ router.include_router(positions_router, prefix="/positions", tags=["FSI 持倉"]
 router.include_router(reports_router, prefix="/reports",   tags=["FSI 報表"])
 router.include_router(schedules_router, prefix="/schedules", tags=["FSI 定時報表"])
 router.include_router(indicator_sql_router, prefix="/indicator-sql", tags=["FSI 指標SQL"])
+router.include_router(quant_router, prefix="/quant", tags=["FSI Quant API"])

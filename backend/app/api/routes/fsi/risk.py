@@ -8,7 +8,7 @@ import asyncio
 from datetime import date
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from app.api.deps import CurrentUser, PortfolioViewer, ProcessingClient, SessionDep
 from app.services.portfolio_access import list_accessible_portfolios
@@ -177,3 +177,29 @@ async def get_var_compare(
         "results": list(results),
         "max_var_pct_nav": max_var_pct,
     }
+
+
+async def _proxy_post(client: ProcessingClient, path: str, payload: dict[str, Any]) -> Any:
+    response = await client.post(path, json=payload)
+    if response.status_code != 200:
+        detail: Any = response.text
+        try:
+            detail = response.json().get("detail", detail)
+        except ValueError:
+            pass
+        raise HTTPException(status_code=response.status_code, detail=detail)
+    return response.json()
+
+
+@router.get("/limits/catalog", summary="統一 Limit Engine / 風險治理目錄")
+async def limits_catalog(_user: CurrentUser, client: ProcessingClient) -> Any:
+    return await _proxy(client, "/risk/limits/catalog")
+
+
+@router.post("/pre-trade", summary="前置風控")
+async def pre_trade(
+    _user: CurrentUser,
+    client: ProcessingClient,
+    payload: dict[str, Any] = Body(...),
+) -> Any:
+    return await _proxy_post(client, "/risk/pre-trade", payload)

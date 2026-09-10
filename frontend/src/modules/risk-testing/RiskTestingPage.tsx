@@ -22,6 +22,8 @@ import {
   type RiskTestingShock,
 } from "@/fsiClient"
 import { exportCsv } from "@/modules/investment-risk/dashboard-kit"
+import { AdapterStatusBar } from "@/platform/AdapterStatus"
+import { useBindPageContext } from "@/platform/page-context"
 
 type RiskTestingPath =
   | "/risk-testing/sensitivity" | "/risk-testing/stress" | "/risk-testing/scenario"
@@ -195,6 +197,12 @@ export function RiskTestingPage({ analytic }: { analytic: RiskTestingAnalytic })
   const [weightMode, setWeightMode] = useState<"CURRENT" | "CUSTOM">("CURRENT")
   const [customWeights, setCustomWeights] = useState<Record<string, string>>({})
   const catalog = useQuery({ queryKey: ["risk-testing-catalog"], queryFn: () => fsiApi.getRiskTestingCatalog().then((r) => r.data.items), staleTime: 300_000 })
+  const capabilities = useQuery({
+    queryKey: ["risk-testing-capabilities"],
+    queryFn: () => fsiApi.getRiskTestingCapabilities().then((r) => r.data),
+    staleTime: 300_000,
+    retry: 1,
+  })
   const holdings = useQuery({
     queryKey: ["risk-testing-holdings", fundId, asOfDate],
     queryFn: async () => {
@@ -320,9 +328,28 @@ export function RiskTestingPage({ analytic }: { analytic: RiskTestingAnalytic })
   }
 
   const extra = <Button onClick={() => run.mutate()} disabled={run.isPending || invalidRange}><Play className="mr-2 h-4 w-4" />{run.isPending ? "计算中…" : "运行测试"}</Button>
+  useBindPageContext({
+    portfolio: fundId,
+    date: asOfDate,
+    module: "risk-testing",
+    result: data ? String(data.analytic ?? analytic) : undefined,
+    chart: analytic === "HISTORICAL_BACKTEST" ? "backtest-curve" : undefined,
+    riskMetrics: data ? { status: data.status, analytic: data.analytic, library: data.library } : undefined,
+  })
   return (
-    <div className="space-y-6">
-      <div><h1 className="text-2xl font-bold">{meta.label}</h1><p className="mt-1 text-sm text-muted-foreground">{meta.description}</p></div>
+    <div className="space-y-6" data-testid="platform-workbench">
+      <div>
+        <h1 className="text-2xl font-bold">{meta.label}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{meta.description}</p>
+        <div className="mt-3">
+          <AdapterStatusBar
+            adapters={capabilities.data?.adapters}
+            engine={capabilities.data?.riskengine ?? capabilities.data?.engine}
+            engineVersion={capabilities.data?.riskengine_version}
+          />
+        </div>
+      </div>
+      <div data-testid="platform-parameter">
       <FsiToolbar
         fundId={fundId}
         onFundChange={setFundId}
@@ -336,7 +363,10 @@ export function RiskTestingPage({ analytic }: { analytic: RiskTestingAnalytic })
         isFetching={run.isPending}
         extra={extra}
       />
-      {invalidRange ? <div className="text-sm text-destructive">开始日期必须早于结束日期。</div> : null}
+      </div>
+      {run.isPending ? <p className="animate-pulse text-sm text-muted-foreground" data-testid="platform-loading">正在加载…</p> : null}
+      {run.isError ? <p className="text-sm text-destructive" data-testid="platform-error">{apiErrorMessage(run.error, "运行失败")}</p> : null}
+      {!run.isPending && !run.isError && !data ? <p className="text-sm text-muted-foreground" data-testid="platform-empty">暂无数据</p> : null}
 
       <Card><CardHeader><CardTitle className="text-base">参数配置</CardTitle></CardHeader><CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {analytic === "SENSITIVITY" ? <><div className="space-y-1"><Label>风险因子</Label><Select value={factorType} onValueChange={(v) => setFactorType(v as RiskTestingShock["factor_type"])}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{["RATE", "FX", "VOLATILITY", "EQUITY", "CREDIT_SPREAD"].map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent></Select></div><div className="space-y-1"><Label>冲击值</Label><Input type="number" step="0.0001" value={shockValue} onChange={(e) => setShockValue(e.target.value)} /></div><div className="space-y-1"><Label>冲击模式</Label><Select value={shockMode} onValueChange={(v) => setShockMode(v as RiskTestingShock["mode"])}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="ABSOLUTE">绝对变化</SelectItem><SelectItem value="RELATIVE">相对变化</SelectItem></SelectContent></Select></div></> : null}
@@ -404,10 +434,10 @@ export function RiskTestingPage({ analytic }: { analytic: RiskTestingAnalytic })
         {analytic === "XVA" ? <div className="grid gap-4 md:grid-cols-4">{["cva", "dva", "fva", "mva"].map((key) => <Metric key={key} label={key.toUpperCase()} value={number(data[key], 2)} />)}</div> : null}
         {analytic === "HISTORICAL_BACKTEST" ? <>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"><Metric label="区间总收益" value={`${number(data.total_return_pct, 3)}%`} /><Metric label="年化收益" value={`${number(data.annualized_return_pct, 3)}%`} /><Metric label="年化波动率" value={`${number(data.annualized_volatility_pct, 3)}%`} /><Metric label="最大回撤" value={`${number(data.max_drawdown_pct, 3)}%`} /></div>
-          <BacktestCurve points={(data.backtest_points as Array<Record<string, unknown>> | undefined) ?? []} />
+          <div data-testid="platform-charts"><BacktestCurve points={(data.backtest_points as Array<Record<string, unknown>> | undefined) ?? []} /></div>
         </> : null}
         {analytic === "VAR_BACKTEST" ? <div className="grid gap-4 md:grid-cols-4"><Metric label="例外次数" value={number(data.exceptions, 0)} /><Metric label="例外率" value={`${number(data.exception_rate_pct, 3)}%`} /><Metric label="Kupiec LR" value={number(data.kupiec_lr, 4)} /><Metric label="交通灯" value={String(data.traffic_light ?? "—")} /></div> : null}
-        <Card><CardHeader><div className="flex items-center justify-between gap-3"><CardTitle className="flex items-center gap-2 text-base"><ShieldCheck className="h-4 w-4 text-emerald-600" />结构化风险结果</CardTitle><Button variant="outline" size="sm" onClick={downloadCsv} disabled={!rows.length}><Download className="mr-2 h-4 w-4" />CSV / Excel</Button></div></CardHeader><CardContent><ResultTable rows={rows} /></CardContent></Card>
+        <Card><CardHeader><div className="flex items-center justify-between gap-3"><CardTitle className="flex items-center gap-2 text-base"><ShieldCheck className="h-4 w-4 text-emerald-600" />结构化风险结果</CardTitle><Button variant="outline" size="sm" data-testid="platform-export" onClick={downloadCsv} disabled={!rows.length}><Download className="mr-2 h-4 w-4" />CSV / Excel</Button></div></CardHeader><CardContent data-testid="platform-data"><ResultTable rows={rows} /></CardContent></Card>
         <Card>
           <CardHeader><CardTitle className="text-base">数据质量与模型假设</CardTitle></CardHeader>
           <CardContent>

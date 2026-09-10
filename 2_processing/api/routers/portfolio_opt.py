@@ -611,3 +611,136 @@ def _render_chart(name: str, pm: engine.PortfolioManager, result: dict[str, Any]
     fig.savefig(buf, format="png", dpi=200)
     plt.close(fig)
     return buf.getvalue()
+
+
+# ── Wave 5：Riskfolio 闸门优化与仿真仓（不改变 /analyze 合同）────────
+from importlib import import_module  # noqa: E402
+
+_po = import_module("4_business.portfolio_optimization.service")
+_LiveLocked = import_module("4_business.portfolio_optimization.simulation").LivePortfolioLocked
+
+_OPT_METHODS = Literal[
+    "construction",
+    "saa",
+    "taa",
+    "risk_budget",
+    "risk_parity",
+    "black_litterman",
+    "hrp",
+    "herc",
+    "cvar",
+]
+
+
+class GovernedOptimizeRequest(BaseModel):
+    method: _OPT_METHODS = "hrp"
+    universe: list[str] = Field(default_factory=list)
+    holdings: dict[str, float] = Field(default_factory=dict)
+    constraints: dict[str, Any] = Field(default_factory=dict)
+    views: dict[str, float] = Field(default_factory=dict)
+    risk_budgets: dict[str, float] = Field(default_factory=dict)
+    fund_id: str | None = None
+    as_of_date: date | None = None
+    lookback_days: int = Field(default=500, ge=30, le=5000)
+
+
+class CloneRequest(BaseModel):
+    fund_id: str | None = None
+    as_of_date: date | None = None
+    holdings: dict[str, float] = Field(default_factory=dict)
+    label: str = ""
+    lookback_days: int = Field(default=500, ge=30, le=5000)
+
+
+class ModifyRequest(BaseModel):
+    weights: dict[str, float]
+    target: Literal["simulation", "live"] = "simulation"
+    authorized: bool = False
+
+
+class SimOptimizeRequest(BaseModel):
+    method: _OPT_METHODS = "hrp"
+    constraints: dict[str, Any] = Field(default_factory=dict)
+    views: dict[str, float] = Field(default_factory=dict)
+    risk_budgets: dict[str, float] = Field(default_factory=dict)
+
+
+class LiveApplyRequest(BaseModel):
+    sim_id: str
+    authorized: bool = False
+
+
+async def _snapshot_for(req: GovernedOptimizeRequest | CloneRequest, db: AsyncSession):
+    if req.fund_id:
+        as_of = req.as_of_date or date.today()
+        return await _po.load_snapshot(req.fund_id, as_of, db, req.lookback_days)
+    holdings = dict(req.holdings)
+    if not holdings:
+        universe = list(getattr(req, "universe", []) or engine.DEFAULT_UNIVERSE[:5])
+        holdings = {code: 1.0 / len(universe) for code in universe}
+    return _po.snapshot_from_weights(holdings, fund_id=req.fund_id or "SIM")
+
+
+@router.get("/catalog", summary="組合優化方法與閘門目錄")
+async def catalog() -> dict[str, Any]:
+    return _po.catalog()
+
+
+@router.post("/governed-optimize", summary="優化提案（經 RiskEngine 閘門，非交易指令）")
+async def governed_optimize(req: GovernedOptimizeRequest, db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    snapshot = await _snapshot_for(req, db)
+    return _po.optimize_and_govern(
+        snapshot,
+        req.method,
+        constraints=req.constraints or None,
+        views=req.views or None,
+        risk_budgets=req.risk_budgets or None,
+    )
+
+
+@router.post("/simulate/clone", summary="從 Live 克隆 Simulation Portfolio")
+async def simulate_clone(req: CloneRequest, db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    snapshot = await _snapshot_for(req, db)
+    return _po.clone_live(snapshot, label=req.label)
+
+
+@router.post("/simulate/{sim_id}/modify", summary="修改仿真倉權重（默認不得寫 Live）")
+async def simulate_modify(sim_id: str, req: ModifyRequest) -> dict[str, Any]:
+    try:
+        return _po.modify_simulation(
+            sim_id,
+            req.weights,
+            target=req.target,
+            authorized=req.authorized,
+        )
+    except _LiveLocked as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
+@router.post("/simulate/{sim_id}/optimize", summary="在仿真倉上優化並過閘")
+async def simulate_optimize(sim_id: str, req: SimOptimizeRequest) -> dict[str, Any]:
+    return _po.optimize_simulation(
+        sim_id,
+        req.method,
+        constraints=req.constraints or None,
+        views=req.views or None,
+        risk_budgets=req.risk_budgets or None,
+    )
+
+
+@router.post("/simulate/{sim_id}/stress", summary="對仿真倉做壓力測試")
+async def simulate_stress(sim_id: str, scenario_id: str = "gfc_2008") -> dict[str, Any]:
+    return _po.stress_simulation(sim_id, scenario_id=scenario_id)
+
+
+@router.get("/simulate/{sim_id}/compare", summary="Live vs Simulation 對比")
+async def simulate_compare(sim_id: str) -> dict[str, Any]:
+    return _po.compare_simulation(sim_id)
+
+
+@router.post("/live/apply", summary="將仿真提案申請寫入 Live（需授權；仍非交易指令）")
+async def live_apply(req: LiveApplyRequest) -> dict[str, Any]:
+    try:
+        return _po.apply_to_live(req.sim_id, authorized=req.authorized)
+    except _LiveLocked as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc

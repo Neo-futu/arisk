@@ -16,12 +16,14 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as LayoutRouteImport } from './routes/_layout'
 import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
 import { Route as LayoutValuationRouteImport } from './routes/_layout/valuation'
+import { Route as LayoutTradingRouteImport } from './routes/_layout/trading'
 import { Route as LayoutSystemConfigRouteImport } from './routes/_layout/system-config'
 import { Route as LayoutSqlLibraryRouteImport } from './routes/_layout/sql-library'
 import { Route as LayoutSettingsRouteImport } from './routes/_layout/settings'
 import { Route as LayoutSchedulesRouteImport } from './routes/_layout/schedules'
 import { Route as LayoutRiskTestingRouteImport } from './routes/_layout/risk-testing'
 import { Route as LayoutRiskRulesRouteImport } from './routes/_layout/risk-rules'
+import { Route as LayoutRiskGovernanceRouteImport } from './routes/_layout/risk-governance'
 import { Route as LayoutRiskRouteImport } from './routes/_layout/risk'
 import { Route as LayoutReportsRouteImport } from './routes/_layout/reports'
 import { Route as LayoutPositionsRouteImport } from './routes/_layout/positions'
@@ -94,6 +96,11 @@ const LayoutValuationRoute = LayoutValuationRouteImport.update({
   path: '/valuation',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutTradingRoute = LayoutTradingRouteImport.update({
+  id: '/trading',
+  path: '/trading',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const LayoutSystemConfigRoute = LayoutSystemConfigRouteImport.update({
   id: '/system-config',
   path: '/system-config',
@@ -122,6 +129,11 @@ const LayoutRiskTestingRoute = LayoutRiskTestingRouteImport.update({
 const LayoutRiskRulesRoute = LayoutRiskRulesRouteImport.update({
   id: '/risk-rules',
   path: '/risk-rules',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutRiskGovernanceRoute = LayoutRiskGovernanceRouteImport.update({
+  id: '/risk-governance',
+  path: '/risk-governance',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutRiskRoute = LayoutRiskRouteImport.update({
@@ -349,12 +361,14 @@ export interface FileRoutesByFullPath {
   '/positions': typeof LayoutPositionsRoute
   '/reports': typeof LayoutReportsRoute
   '/risk': typeof LayoutRiskRoute
+  '/risk-governance': typeof LayoutRiskGovernanceRoute
   '/risk-rules': typeof LayoutRiskRulesRoute
   '/risk-testing': typeof LayoutRiskTestingRouteWithChildren
   '/schedules': typeof LayoutSchedulesRoute
   '/settings': typeof LayoutSettingsRoute
   '/sql-library': typeof LayoutSqlLibraryRoute
   '/system-config': typeof LayoutSystemConfigRoute
+  '/trading': typeof LayoutTradingRoute
   '/valuation': typeof LayoutValuationRoute
   '/investment-risk/attribution': typeof LayoutInvestmentRiskAttributionRoute
   '/investment-risk/factor-behavior': typeof LayoutInvestmentRiskFactorBehaviorRoute
@@ -398,11 +412,13 @@ export interface FileRoutesByTo {
   '/positions': typeof LayoutPositionsRoute
   '/reports': typeof LayoutReportsRoute
   '/risk': typeof LayoutRiskRoute
+  '/risk-governance': typeof LayoutRiskGovernanceRoute
   '/risk-rules': typeof LayoutRiskRulesRoute
   '/schedules': typeof LayoutSchedulesRoute
   '/settings': typeof LayoutSettingsRoute
   '/sql-library': typeof LayoutSqlLibraryRoute
   '/system-config': typeof LayoutSystemConfigRoute
+  '/trading': typeof LayoutTradingRoute
   '/valuation': typeof LayoutValuationRoute
   '/': typeof LayoutIndexRoute
   '/investment-risk/attribution': typeof LayoutInvestmentRiskAttributionRoute
@@ -450,12 +466,14 @@ export interface FileRoutesById {
   '/_layout/positions': typeof LayoutPositionsRoute
   '/_layout/reports': typeof LayoutReportsRoute
   '/_layout/risk': typeof LayoutRiskRoute
+  '/_layout/risk-governance': typeof LayoutRiskGovernanceRoute
   '/_layout/risk-rules': typeof LayoutRiskRulesRoute
   '/_layout/risk-testing': typeof LayoutRiskTestingRouteWithChildren
   '/_layout/schedules': typeof LayoutSchedulesRoute
   '/_layout/settings': typeof LayoutSettingsRoute
   '/_layout/sql-library': typeof LayoutSqlLibraryRoute
   '/_layout/system-config': typeof LayoutSystemConfigRoute
+  '/_layout/trading': typeof LayoutTradingRoute
   '/_layout/valuation': typeof LayoutValuationRoute
   '/_layout/': typeof LayoutIndexRoute
   '/_layout/investment-risk/attribution': typeof LayoutInvestmentRiskAttributionRoute
@@ -504,12 +522,14 @@ export interface FileRouteTypes {
     | '/positions'
     | '/reports'
     | '/risk'
+    | '/risk-governance'
     | '/risk-rules'
     | '/risk-testing'
     | '/schedules'
     | '/settings'
     | '/sql-library'
     | '/system-config'
+    | '/trading'
     | '/valuation'
     | '/investment-risk/attribution'
     | '/investment-risk/factor-behavior'
@@ -553,11 +573,13 @@ export interface FileRouteTypes {
     | '/positions'
     | '/reports'
     | '/risk'
+    | '/risk-governance'
     | '/risk-rules'
     | '/schedules'
     | '/settings'
     | '/sql-library'
     | '/system-config'
+    | '/trading'
     | '/valuation'
     | '/'
     | '/investment-risk/attribution'
@@ -604,12 +626,14 @@ export interface FileRouteTypes {
     | '/_layout/positions'
     | '/_layout/reports'
     | '/_layout/risk'
+    | '/_layout/risk-governance'
     | '/_layout/risk-rules'
     | '/_layout/risk-testing'
     | '/_layout/schedules'
     | '/_layout/settings'
     | '/_layout/sql-library'
     | '/_layout/system-config'
+    | '/_layout/trading'
     | '/_layout/valuation'
     | '/_layout/'
     | '/_layout/investment-risk/attribution'
@@ -694,6 +718,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutValuationRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/trading': {
+      id: '/_layout/trading'
+      path: '/trading'
+      fullPath: '/trading'
+      preLoaderRoute: typeof LayoutTradingRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/system-config': {
       id: '/_layout/system-config'
       path: '/system-config'
@@ -734,6 +765,13 @@ declare module '@tanstack/react-router' {
       path: '/risk-rules'
       fullPath: '/risk-rules'
       preLoaderRoute: typeof LayoutRiskRulesRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/risk-governance': {
+      id: '/_layout/risk-governance'
+      path: '/risk-governance'
+      fullPath: '/risk-governance'
+      preLoaderRoute: typeof LayoutRiskGovernanceRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/risk': {
@@ -1080,12 +1118,14 @@ interface LayoutRouteChildren {
   LayoutPositionsRoute: typeof LayoutPositionsRoute
   LayoutReportsRoute: typeof LayoutReportsRoute
   LayoutRiskRoute: typeof LayoutRiskRoute
+  LayoutRiskGovernanceRoute: typeof LayoutRiskGovernanceRoute
   LayoutRiskRulesRoute: typeof LayoutRiskRulesRoute
   LayoutRiskTestingRoute: typeof LayoutRiskTestingRouteWithChildren
   LayoutSchedulesRoute: typeof LayoutSchedulesRoute
   LayoutSettingsRoute: typeof LayoutSettingsRoute
   LayoutSqlLibraryRoute: typeof LayoutSqlLibraryRoute
   LayoutSystemConfigRoute: typeof LayoutSystemConfigRoute
+  LayoutTradingRoute: typeof LayoutTradingRoute
   LayoutValuationRoute: typeof LayoutValuationRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
 }
@@ -1107,12 +1147,14 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutPositionsRoute: LayoutPositionsRoute,
   LayoutReportsRoute: LayoutReportsRoute,
   LayoutRiskRoute: LayoutRiskRoute,
+  LayoutRiskGovernanceRoute: LayoutRiskGovernanceRoute,
   LayoutRiskRulesRoute: LayoutRiskRulesRoute,
   LayoutRiskTestingRoute: LayoutRiskTestingRouteWithChildren,
   LayoutSchedulesRoute: LayoutSchedulesRoute,
   LayoutSettingsRoute: LayoutSettingsRoute,
   LayoutSqlLibraryRoute: LayoutSqlLibraryRoute,
   LayoutSystemConfigRoute: LayoutSystemConfigRoute,
+  LayoutTradingRoute: LayoutTradingRoute,
   LayoutValuationRoute: LayoutValuationRoute,
   LayoutIndexRoute: LayoutIndexRoute,
 }
