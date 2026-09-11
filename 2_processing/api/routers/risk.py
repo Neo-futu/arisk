@@ -1,8 +1,10 @@
 """風控 API Router。"""
 from datetime import date
-from typing import Annotated
+from importlib import import_module
+from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..deps import get_db, verify_api_key
@@ -14,6 +16,11 @@ from ...tools.risk.var_calculator import (
 )
 
 router = APIRouter(dependencies=[Depends(verify_api_key)])
+_gov = import_module("4_business.risk_governance.service")
+_pre = import_module("4_business.risk_governance.pre_trade")
+_po = import_module("4_business.portfolio_optimization.service")
+_Unauthorized = _gov.Unauthorized
+_HardLocked = _gov.HardBreachLocked
 
 
 @router.get("/exposure-latest-date/{fund_id}")
@@ -105,3 +112,80 @@ async def get_var(
         "method": result.method,
         "sample_size": result.sample_size,
     }
+
+
+class PreTradeRequest(BaseModel):
+    fund_id: str | None = None
+    as_of_date: date | None = None
+    security_code: str
+    security_name: str | None = None
+    side: Literal["BUY", "SELL"] = "BUY"
+    amount: float
+    asset_class: str = "EQUITY"
+    currency: str | None = None
+    issuer: str | None = None
+    sector: str | None = None
+    country: str | None = None
+    counterparty: str | None = None
+    duration: float = 0.0
+    holdings: dict[str, float] = Field(default_factory=dict)
+    policy: dict[str, Any] = Field(default_factory=dict)
+    exception_approved: bool = False
+    actor: str = "system"
+    lookback_days: int = Field(default=500, ge=30, le=5000)
+    scenario_id: str = "gfc_2008"
+
+
+class GovernanceMutation(BaseModel):
+    case_id: str
+    reason: str = ""
+    note: str = ""
+    authorized: bool = False
+    actor: str = "system"
+
+
+async def _snapshot_for_pretrade(req: PreTradeRequest, db: AsyncSession):
+    if req.fund_id:
+        as_of = req.as_of_date or date.today()
+        return await _gov.load_snapshot(req.fund_id, as_of, db, req.lookback_days)
+    holdings = dict(req.holdings)
+    if not holdings:
+        raise HTTPException(status_code=422, detail="fund_id or holdings is required")
+    return _po.snapshot_from_weights(holdings, fund_id="SIM")
+
+
+@router.get("/limits/catalog", summary="統一 Limit Engine 目錄")
+async def limits_catalog() -> dict[str, Any]:
+    return _gov.catalog()
+
+
+@router.get("/governance/catalog", summary="風險治理目錄")
+async def governance_catalog() -> dict[str, Any]:
+    return _gov.catalog()
+
+
+@router.post("/pre-trade", summary="前置風控：Order → Limit → APPROVE/WARNING/REJECT")
+async def pre_trade(req: PreTradeRequest, db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    snapshot = await _snapshot_for_pretrade(req, db)
+    return _pre.run_pre_trade(
+        snapshot,
+        req.model_dump(),
+        policy=req.policy or None,
+        scenario_id=req.scenario_id,
+        exception_approved=req.exception_approved,
+        actor=req.actor,
+    )
+
+
+@router.post("/governance/exception", summary="申請限额例外（需授權）")
+async def governance_exception(req: GovernanceMutation) -> dict[str, Any]:
+    try:
+        return _gov.default_cases().request_exception(
+            req.case_id, req.reason or req.note, authorized=req.authorized, actor=req.actor
+        )
+    except _Unauthorized as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except _HardLocked as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc

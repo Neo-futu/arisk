@@ -1,6 +1,10 @@
+<!-- 更新时间：2026-09-09（北京时间）｜生成模型：Cursor Grok 4.6 -->
+
 # 4_mcp — 外部 / 內部數據連接層
 
 ## 模塊定位
+
+MCP 是 ARISK 的 **Tool Connectivity Layer**。Agent / Skills 只透過本層取數，**不得用 MCP 取代 RiskEngine**。VaR / NAV / PnL / Stress / Valuation / Limit 的計算走 `4_business` → `3_riskengine`。
 
 FSI 風控業績平台的**統一數據連接層**。MCP（Model Context Protocol）在這裡的意義不是再做一個業務層，而是把所有**外部數據源**與**內部數據庫**封裝成標準化工具，讓 Agent / Skills 只透過一致協議取數，不直接綁死在底層實作上。
 
@@ -66,7 +70,7 @@ FSI 風控業績平台的**統一數據連接層**。MCP（Model Context Protoco
 
 **啟動方式：** `python -m 4_mcp.internal.internal_mcp_server`
 
-**實現約束：** SQL 已下沉到 `2_processing/tools/internal/sql_queries.py`，`internal_mcp_server.py` 僅做 MCP 工具調度與風控計算邏輯。
+**實現約束：** SQL 已下沉到 `2_processing/tools/internal/sql_queries.py`。`internal_mcp_server.py` 負責 MCP 工具調度與只讀取數。Agent 路徑的風險指標由 RiskEngine 計算，不經 MCP 取代引擎。
 
 **認證：** `MCP_GATEWAY_SECRET` Bearer Token
 

@@ -48,7 +48,7 @@ export function ChatArea({
         <h1 className="text-lg font-bold tracking-tight">{t("chat.title")}</h1>
 
         <Select value={agentId} onValueChange={setAgentId}>
-          <SelectTrigger className="h-8 w-44 text-xs"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="h-8 w-44 text-xs" data-testid="agent-selector" data-agent-id={agentId}><SelectValue /></SelectTrigger>
           <SelectContent>
             {agentList.map(a => (
               <SelectItem key={a.id} value={a.id} className="text-xs">{a.name}</SelectItem>

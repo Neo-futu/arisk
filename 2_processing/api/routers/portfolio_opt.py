@@ -7,7 +7,7 @@ diagnosis, frontier curve, correlation) plus downloadable matplotlib PNG charts.
 from __future__ import annotations
 
 import io
-from datetime import date
+from datetime import date, timedelta
 from typing import Any, Literal
 
 import matplotlib
@@ -68,6 +68,189 @@ async def _db_prices(
     return df.pivot_table(index="price_date", columns="security_code", values="close_price")
 
 
+def _series_rows_from_frame(
+    security_code: str,
+    frame: pd.DataFrame,
+    *,
+    market_id: str,
+    price_type: str,
+) -> list[dict[str, Any]]:
+    if frame.empty:
+        return []
+
+    normalized = frame.copy()
+    normalized.columns = [str(c).lower() for c in normalized.columns]
+    normalized.index = pd.to_datetime(normalized.index).tz_localize(None)
+    normalized = normalized.sort_index()
+
+    selected_key = price_type.strip().lower()
+    if selected_key not in {"open", "high", "low", "close"}:
+        selected_key = "close"
+
+    rows: list[dict[str, Any]] = []
+    prev_selected: float | None = None
+    for obs_date, row in normalized.iterrows():
+        open_price = row.get("open")
+        high_price = row.get("high")
+        low_price = row.get("low")
+        close_price = row.get(selected_key, row.get("close"))
+        volume = row.get("volume")
+        turnover = row.get("turnover")
+        if pd.isna(close_price):
+            continue
+        selected = float(close_price)
+        prev_close = prev_selected
+        change = ((selected - prev_close) / prev_close) if prev_close not in (None, 0) else None
+        rows.append(
+            {
+                "price_date": obs_date.date().isoformat(),
+                "security_code": security_code.upper(),
+                "market_id": market_id,
+                "price_type": price_type.strip().upper() or "CLOSE",
+                "open_price": None if pd.isna(open_price) else float(open_price),
+                "high_price": None if pd.isna(high_price) else float(high_price),
+                "low_price": None if pd.isna(low_price) else float(low_price),
+                "close_price": selected,
+                "prev_close": prev_close,
+                "price_change_pct": None if change is None else float(change),
+                "volume": None if pd.isna(volume) else float(volume),
+                "turnover": None if pd.isna(turnover) else float(turnover) if turnover is not None else None,
+                "data_source": market_id,
+                "loaded_at": None,
+            }
+        )
+        prev_selected = selected
+    return rows
+
+
+async def _db_market_quote_history(
+    db: AsyncSession,
+    security_code: str,
+    start: date,
+    end: date,
+    price_type: str,
+) -> list[dict[str, Any]]:
+    rows = (
+        await db.execute(
+            text(
+                """
+                SELECT price_date, security_code, market_id, price_type,
+                       open_price, high_price, low_price, close_price, prev_close,
+                       price_change_pct, volume, turnover, data_source, loaded_at
+                FROM fsi.mktdata_quotes
+                WHERE security_code = :security_code AND price_type = :price_type
+                  AND price_date BETWEEN :start AND :end
+                ORDER BY price_date
+                """
+            ),
+            {
+                "security_code": security_code.strip().upper(),
+                "price_type": price_type.strip().upper(),
+                "start": start,
+                "end": end,
+            },
+        )
+    ).mappings().all()
+    return [dict(row) for row in rows]
+
+
+def _yfinance_market_quote_history(
+    security_code: str,
+    start: date,
+    end: date,
+    price_type: str,
+) -> list[dict[str, Any]]:
+    try:
+        import yfinance as yf
+    except Exception:
+        return []
+
+    hist = yf.Ticker(security_code.strip().upper()).history(
+        auto_adjust=False,
+        start=str(start),
+        end=str(end + timedelta(days=1)),
+    )
+    if hist.empty:
+        return []
+    return _series_rows_from_frame(security_code, hist, market_id="YFINANCE", price_type=price_type)
+
+
+def _openbb_market_quote_history(
+    security_code: str,
+    start: date,
+    end: date,
+    price_type: str,
+) -> list[dict[str, Any]]:
+    try:
+        from openbb import obb
+    except Exception:
+        return []
+
+    try:
+        frame = obb.equity.price.historical(
+            symbol=security_code.strip().upper(),
+            provider="yfinance",
+            start_date=str(start),
+            end_date=str(end),
+        ).to_df()
+    except Exception:
+        return []
+    if frame.empty:
+        return []
+    if "date" in frame.columns:
+        frame = frame.set_index("date")
+    return _series_rows_from_frame(security_code, frame, market_id="OPENBB", price_type=price_type)
+
+
+def _synthetic_market_quote_history(
+    security_code: str,
+    start: date,
+    end: date,
+    price_type: str,
+) -> list[dict[str, Any]]:
+    code = security_code.strip().upper()
+    dates = pd.bdate_range(start=start, end=end)
+    if len(dates) == 0:
+        return []
+
+    lookback_days = max(len(dates), 120)
+    prices = engine.build_synthetic_prices([code], lookback_days)
+    if prices.empty:
+        return []
+
+    base = prices.iloc[:, 0].astype(float).to_numpy()
+    if len(base) >= len(dates):
+        close_values = base[-len(dates):]
+    else:
+        close_values = np.resize(base, len(dates))
+    close_series = pd.Series(close_values, index=dates)
+
+    rows: list[dict[str, Any]] = []
+    prev_close: float | None = None
+    for obs_date, close_price in close_series.items():
+        change = ((close_price - prev_close) / prev_close) if prev_close not in (None, 0) else None
+        rows.append(
+            {
+                "price_date": obs_date.date().isoformat(),
+                "security_code": code,
+                "market_id": "SYNTHETIC",
+                "price_type": price_type.strip().upper() or "CLOSE",
+                "open_price": float(close_price),
+                "high_price": float(close_price),
+                "low_price": float(close_price),
+                "close_price": float(close_price),
+                "prev_close": prev_close,
+                "price_change_pct": None if change is None else float(change),
+                "volume": None,
+                "turnover": None,
+                "data_source": "SYNTHETIC",
+                "loaded_at": None,
+            }
+        )
+        prev_close = float(close_price)
+    return rows
+
+
 # Price panels only depend on (source, universe, lookback) — cache so repeated
 # analyses (RF spin / weight drags) reuse fetched data instead of re-downloading.
 _PRICE_CACHE: dict[tuple, Any] = {}
@@ -91,8 +274,20 @@ async def _build_manager(req: OptimizeRequest, db: AsyncSession) -> engine.Portf
         db_prices = await _db_prices(db, universe, req.start_date, req.end_date) if req.data_source == "db" else None
         try:
             pm.load_prices(req.data_source, lookback_days=req.lookback_days, db_prices=db_prices, start=req.start_date, end=req.end_date)
-        except Exception as exc:  # any data-source failure → clean 502, never a 500
-            raise HTTPException(status_code=502, detail=f"Data source unavailable: {exc}") from exc
+        except Exception as exc:
+            # MMF universes may include non-equity identifiers that yfinance/openbb
+            # cannot resolve; auto-fallback to platform DB instead of returning 502.
+            if req.data_source != "db":
+                db_prices = await _db_prices(db, universe, req.start_date, req.end_date)
+                try:
+                    pm.load_prices("db", lookback_days=req.lookback_days, db_prices=db_prices, start=req.start_date, end=req.end_date)
+                except Exception as db_exc:  # any data-source failure → clean 502, never a 500
+                    raise HTTPException(
+                        status_code=502,
+                        detail=f"Data source unavailable: {req.data_source}={exc}; db fallback failed: {db_exc}",
+                    ) from db_exc
+            else:
+                raise HTTPException(status_code=502, detail=f"Data source unavailable: {exc}") from exc
         if len(_PRICE_CACHE) >= _PRICE_CACHE_MAX:
             _PRICE_CACHE.clear()
         _PRICE_CACHE[cache_key] = pm.prices_df
@@ -308,6 +503,58 @@ async def universe(db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
     return {"default": list(engine.DEFAULT_UNIVERSE), "db_tickers": [str(t) for t in db_rows]}
 
 
+@router.get("/market-quotes/history/{security_code}", summary="單證券市場行情時序")
+async def market_quote_history(
+    security_code: str,
+    start: date,
+    end: date,
+    price_type: str = "CLOSE",
+    data_source: Literal["db", "yfinance", "openbb"] = "db",
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    if start > end:
+        raise HTTPException(status_code=422, detail="start must not be later than end")
+
+    requested = data_source.strip().lower()
+    if requested not in {"db", "yfinance", "openbb"}:
+        requested = "db"
+
+    fallback_order = [requested, "db", "yfinance", "openbb", "synthetic"]
+    source_candidates: list[str] = []
+    for s in fallback_order:
+        if s in {"db", "yfinance", "openbb", "synthetic"} and s not in source_candidates:
+            source_candidates.append(s)
+    seen: set[str] = set()
+    for source in fallback_order:
+        if source in seen:
+            continue
+        seen.add(source)
+        if source == "db":
+            rows = await _db_market_quote_history(db, security_code, start, end, price_type)
+        elif source == "yfinance":
+            rows = _yfinance_market_quote_history(security_code, start, end, price_type)
+        elif source == "synthetic":
+            rows = _synthetic_market_quote_history(security_code, start, end, price_type)
+        else:
+            rows = _openbb_market_quote_history(security_code, start, end, price_type)
+        if rows:
+            return {
+                "items": rows,
+                "count": len(rows),
+                "source_used": source,
+                "source_candidates": source_candidates,
+                "fallback_version": "v2",
+            }
+
+    return {
+        "items": [],
+        "count": 0,
+        "source_used": requested,
+        "source_candidates": source_candidates,
+        "fallback_version": "v2",
+    }
+
+
 @router.post("/analyze", summary="組合優化與風控分析")
 async def analyze(req: OptimizeRequest, db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
     pm = await _build_manager(req, db)
@@ -364,3 +611,136 @@ def _render_chart(name: str, pm: engine.PortfolioManager, result: dict[str, Any]
     fig.savefig(buf, format="png", dpi=200)
     plt.close(fig)
     return buf.getvalue()
+
+
+# ── Wave 5：Riskfolio 闸门优化与仿真仓（不改变 /analyze 合同）────────
+from importlib import import_module  # noqa: E402
+
+_po = import_module("4_business.portfolio_optimization.service")
+_LiveLocked = import_module("4_business.portfolio_optimization.simulation").LivePortfolioLocked
+
+_OPT_METHODS = Literal[
+    "construction",
+    "saa",
+    "taa",
+    "risk_budget",
+    "risk_parity",
+    "black_litterman",
+    "hrp",
+    "herc",
+    "cvar",
+]
+
+
+class GovernedOptimizeRequest(BaseModel):
+    method: _OPT_METHODS = "hrp"
+    universe: list[str] = Field(default_factory=list)
+    holdings: dict[str, float] = Field(default_factory=dict)
+    constraints: dict[str, Any] = Field(default_factory=dict)
+    views: dict[str, float] = Field(default_factory=dict)
+    risk_budgets: dict[str, float] = Field(default_factory=dict)
+    fund_id: str | None = None
+    as_of_date: date | None = None
+    lookback_days: int = Field(default=500, ge=30, le=5000)
+
+
+class CloneRequest(BaseModel):
+    fund_id: str | None = None
+    as_of_date: date | None = None
+    holdings: dict[str, float] = Field(default_factory=dict)
+    label: str = ""
+    lookback_days: int = Field(default=500, ge=30, le=5000)
+
+
+class ModifyRequest(BaseModel):
+    weights: dict[str, float]
+    target: Literal["simulation", "live"] = "simulation"
+    authorized: bool = False
+
+
+class SimOptimizeRequest(BaseModel):
+    method: _OPT_METHODS = "hrp"
+    constraints: dict[str, Any] = Field(default_factory=dict)
+    views: dict[str, float] = Field(default_factory=dict)
+    risk_budgets: dict[str, float] = Field(default_factory=dict)
+
+
+class LiveApplyRequest(BaseModel):
+    sim_id: str
+    authorized: bool = False
+
+
+async def _snapshot_for(req: GovernedOptimizeRequest | CloneRequest, db: AsyncSession):
+    if req.fund_id:
+        as_of = req.as_of_date or date.today()
+        return await _po.load_snapshot(req.fund_id, as_of, db, req.lookback_days)
+    holdings = dict(req.holdings)
+    if not holdings:
+        universe = list(getattr(req, "universe", []) or engine.DEFAULT_UNIVERSE[:5])
+        holdings = {code: 1.0 / len(universe) for code in universe}
+    return _po.snapshot_from_weights(holdings, fund_id=req.fund_id or "SIM")
+
+
+@router.get("/catalog", summary="組合優化方法與閘門目錄")
+async def catalog() -> dict[str, Any]:
+    return _po.catalog()
+
+
+@router.post("/governed-optimize", summary="優化提案（經 RiskEngine 閘門，非交易指令）")
+async def governed_optimize(req: GovernedOptimizeRequest, db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    snapshot = await _snapshot_for(req, db)
+    return _po.optimize_and_govern(
+        snapshot,
+        req.method,
+        constraints=req.constraints or None,
+        views=req.views or None,
+        risk_budgets=req.risk_budgets or None,
+    )
+
+
+@router.post("/simulate/clone", summary="從 Live 克隆 Simulation Portfolio")
+async def simulate_clone(req: CloneRequest, db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+    snapshot = await _snapshot_for(req, db)
+    return _po.clone_live(snapshot, label=req.label)
+
+
+@router.post("/simulate/{sim_id}/modify", summary="修改仿真倉權重（默認不得寫 Live）")
+async def simulate_modify(sim_id: str, req: ModifyRequest) -> dict[str, Any]:
+    try:
+        return _po.modify_simulation(
+            sim_id,
+            req.weights,
+            target=req.target,
+            authorized=req.authorized,
+        )
+    except _LiveLocked as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
+@router.post("/simulate/{sim_id}/optimize", summary="在仿真倉上優化並過閘")
+async def simulate_optimize(sim_id: str, req: SimOptimizeRequest) -> dict[str, Any]:
+    return _po.optimize_simulation(
+        sim_id,
+        req.method,
+        constraints=req.constraints or None,
+        views=req.views or None,
+        risk_budgets=req.risk_budgets or None,
+    )
+
+
+@router.post("/simulate/{sim_id}/stress", summary="對仿真倉做壓力測試")
+async def simulate_stress(sim_id: str, scenario_id: str = "gfc_2008") -> dict[str, Any]:
+    return _po.stress_simulation(sim_id, scenario_id=scenario_id)
+
+
+@router.get("/simulate/{sim_id}/compare", summary="Live vs Simulation 對比")
+async def simulate_compare(sim_id: str) -> dict[str, Any]:
+    return _po.compare_simulation(sim_id)
+
+
+@router.post("/live/apply", summary="將仿真提案申請寫入 Live（需授權；仍非交易指令）")
+async def live_apply(req: LiveApplyRequest) -> dict[str, Any]:
+    try:
+        return _po.apply_to_live(req.sim_id, authorized=req.authorized)
+    except _LiveLocked as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc

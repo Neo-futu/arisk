@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -18,6 +19,7 @@ from app.api.deps import CurrentUser, SessionDep
 from app.models import IAM_SCHEMA, CHAT_SCHEMA
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 # ── Pydantic ──────────────────────────────────────────────────────
@@ -48,35 +50,45 @@ def save_log_batch(
     now = datetime.now(UTC)
 
     from sqlalchemy import text
-    rows = [
-        {
-            "id":         str(uuid.uuid4()),
-            "user_id":    str(current_user.id),
-            "log_type":   e.log_type[:30],
-            "level":      e.level[:10],
-            "module":     e.module[:100],
-            "action":     e.action[:200],
-            "detail":     json.dumps(e.detail, ensure_ascii=False) if e.detail else None,
-            "user_agent": user_agent,
-            "url":        (e.url or "")[:500],
-            "created_at": now,
-        }
-        for e in body.entries
-    ]
 
-    if rows:
-        session.exec(  # type: ignore[call-overload]
-            text(f"""
-                INSERT INTO {CHAT_SCHEMA}.frontend_log
-                    (id, user_id, log_type, level, module, action, detail, user_agent, url, created_at)
-                VALUES
-                    (:id, :user_id, :log_type, :level, :module, :action, :detail, :user_agent, :url, :created_at)
-            """),
-            rows,
-        )
-        session.commit()
+    rows: list[dict[str, Any]] = []
+    dropped = 0
+    for entry in body.entries:
+        try:
+            rows.append(
+                {
+                    "id":         str(uuid.uuid4()),
+                    "user_id":    str(current_user.id),
+                    "log_type":   entry.log_type[:30],
+                    "level":      entry.level[:10],
+                    "module":     entry.module[:100],
+                    "action":     entry.action[:200],
+                    "detail":     json.dumps(entry.detail, ensure_ascii=False, default=str) if entry.detail else None,
+                    "user_agent": user_agent,
+                    "url":        (entry.url or "")[:500],
+                    "created_at": now,
+                }
+            )
+        except Exception:
+            dropped += 1
 
-    return {"saved": len(rows)}
+    try:
+        if rows:
+            session.exec(  # type: ignore[call-overload]
+                text(f"""
+                    INSERT INTO {CHAT_SCHEMA}.frontend_log
+                        (id, user_id, log_type, level, module, action, detail, user_agent, url, created_at)
+                    VALUES
+                        (:id, :user_id, :log_type, :level, :module, :action, :detail, :user_agent, :url, :created_at)
+                """),
+                rows,
+            )
+            session.commit()
+        return {"saved": len(rows), "dropped": dropped}
+    except Exception as exc:
+        logger.warning("frontend log batch dropped due to persistence error: %s", exc)
+        session.rollback()
+        return {"saved": 0, "dropped": len(rows) + dropped, "accepted": len(body.entries)}
 
 
 # ── 查詢（僅超管） ─────────────────────────────────────────────────

@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { fsiApi } from "@/fsiClient"
+import { usePageContext } from "@/platform/page-context"
 
 export const FUNDS = [
   { id: "BHMMF001", name: "博匯港元貨幣市場基金 I" },
@@ -34,6 +35,10 @@ interface FsiToolbarProps {
   onFundChange: (id: string) => void
   asOfDate: string
   onDateChange: (date: string) => void
+  asOfDateLabel?: string
+  startDate?: string
+  onStartDateChange?: (date: string) => void
+  startDateLabel?: string
   onRefresh: () => void
   isFetching?: boolean
   extra?: ReactNode
@@ -44,11 +49,16 @@ export function FsiToolbar({
   onFundChange,
   asOfDate,
   onDateChange,
+  asOfDateLabel,
+  startDate,
+  onStartDateChange,
+  startDateLabel,
   onRefresh,
   isFetching = false,
   extra,
 }: FsiToolbarProps) {
   const { t } = useTranslation()
+  const page = usePageContext()
   const accessQuery = useQuery({
     queryKey: ["my-access-context"],
     queryFn: () => fsiApi.getMyAccessContext().then((response) => response.data),
@@ -59,6 +69,10 @@ export function FsiToolbar({
     name: portfolio.port_name,
   }))
   const funds = authorizedFunds ?? FUNDS
+
+  useEffect(() => {
+    page.patch({ portfolio: fundId, date: asOfDate })
+  }, [asOfDate, fundId, page.patch])
 
   useEffect(() => {
     if (!authorizedFunds || authorizedFunds.length === 0) return
@@ -82,7 +96,17 @@ export function FsiToolbar({
         </SelectContent>
       </Select>
 
-      <DatePicker value={asOfDate} onChange={onDateChange} />
+      {startDate !== undefined && onStartDateChange ? (
+        <div className="space-y-1">
+          {startDateLabel ? <div className="text-xs text-muted-foreground">{startDateLabel}</div> : null}
+          <DatePicker value={startDate} onChange={onStartDateChange} />
+        </div>
+      ) : null}
+
+      <div className="space-y-1">
+        {asOfDateLabel ? <div className="text-xs text-muted-foreground">{asOfDateLabel}</div> : null}
+        <DatePicker value={asOfDate} onChange={onDateChange} />
+      </div>
 
       <Button
         variant="outline"

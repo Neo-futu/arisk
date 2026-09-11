@@ -57,16 +57,7 @@ const integrationItems = [
   },
 ]
 
-const riskTrend = [62, 68, 71, 66, 74, 81, 78]
-
 type RiskSeverity = "high" | "medium"
-
-const exposureMix = [
-  { labelKey: "investmentRisk.module.exposureRates", value: 74 },
-  { labelKey: "investmentRisk.module.exposureCredit", value: 61 },
-  { labelKey: "investmentRisk.module.exposureLiquidity", value: 58 },
-  { labelKey: "investmentRisk.module.exposureFactor", value: 49 },
-]
 
 const riskItems: Array<{
   id: string
@@ -196,7 +187,7 @@ export function InvestmentRiskModuleHome() {
 
   const trendValues = useMemo(() => {
     const values = dashboardData?.performance.map((item) => item.return_pct) ?? []
-    return values.length > 1 ? values : riskTrend
+    return values.length > 1 ? values : []
   }, [dashboardData?.performance])
 
   const trendLabels = useMemo(() => {
@@ -218,7 +209,7 @@ export function InvestmentRiskModuleHome() {
     const items = (dashboardData?.asset_allocation ?? [])
       .slice(0, 4)
       .map((item) => ({ label: item.asset_class, value: Math.max(0, Math.min(100, item.weight_pct)) }))
-    return items.length ? items : exposureMix.map((item) => ({ label: t(item.labelKey), value: item.value }))
+    return items.length ? items : []
   }, [dashboardData?.asset_allocation, t])
 
   const dashboardRows = useMemo(() => {
@@ -353,16 +344,22 @@ export function InvestmentRiskModuleHome() {
                 <line x1="20" y1="140" x2="340" y2="140" stroke="currentColor" strokeOpacity="0.25" />
                 <line x1="20" y1="95" x2="340" y2="95" stroke="currentColor" strokeOpacity="0.15" />
                 <line x1="20" y1="50" x2="340" y2="50" stroke="currentColor" strokeOpacity="0.15" />
-                <path d={buildLinePath(trendValues)} fill="none" stroke="#2563eb" strokeWidth="3" strokeLinecap="round" />
-                {trendValues.map((value, index) => {
-                  const maxValue = Math.max(...trendValues)
-                  const minValue = Math.min(...trendValues)
-                  const range = maxValue - minValue || 1
-                  const x = 20 + (index / (trendValues.length - 1)) * 320
-                  const normalized = (value - minValue) / range
-                  const y = 140 - normalized * 90
-                  return <circle key={`${value}-${index}`} cx={x} cy={y} r="4.5" fill="#38bdf8" />
-                })}
+                {trendValues.length > 1 ? (
+                  <>
+                    <path d={buildLinePath(trendValues)} fill="none" stroke="#2563eb" strokeWidth="3" strokeLinecap="round" />
+                    {trendValues.map((value, index) => {
+                      const maxValue = Math.max(...trendValues)
+                      const minValue = Math.min(...trendValues)
+                      const range = maxValue - minValue || 1
+                      const x = 20 + (index / (trendValues.length - 1)) * 320
+                      const normalized = (value - minValue) / range
+                      const y = 140 - normalized * 90
+                      return <circle key={`${value}-${index}`} cx={x} cy={y} r="4.5" fill="#38bdf8" />
+                    })}
+                  </>
+                ) : (
+                  <text x="180" y="85" textAnchor="middle" className="fill-current text-xs" fill="currentColor">{t("platform.empty")}</text>
+                )}
               </svg>
               <div className="mt-2 flex justify-between text-xs text-muted-foreground">
                 {trendLabels.map((label) => (
@@ -383,7 +380,7 @@ export function InvestmentRiskModuleHome() {
                 </div>
               </div>
               <div className="space-y-3">
-                {exposureMixData.map((item) => (
+                {exposureMixData.length ? exposureMixData.map((item) => (
                   <div key={item.label}>
                     <div className="mb-1 flex items-center justify-between text-sm">
                       <span>{item.label}</span>
@@ -393,7 +390,9 @@ export function InvestmentRiskModuleHome() {
                       <div className="h-2 rounded-full bg-primary" style={{ width: `${item.value}%` }} />
                     </div>
                   </div>
-                ))}
+                )) : (
+                  <p className="text-sm text-muted-foreground">{t("platform.empty")}</p>
+                )}
               </div>
             </div>
           </div>

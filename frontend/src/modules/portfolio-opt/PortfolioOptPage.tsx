@@ -1,12 +1,19 @@
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { Download, PieChart, Play } from "lucide-react"
+import { Download, LineChart, PieChart, Play } from "lucide-react"
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 
-import { FloatingAiChat } from "@/components/FloatingAiChat"
+import { DatePicker } from "@/components/DatePicker"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -30,8 +37,11 @@ import {
   type OptimizeRequest,
   type OptimizeResult,
   type OptMetrics,
+  type MarketQuote,
 } from "@/fsiClient"
 import { exportCsv } from "@/modules/investment-risk/dashboard-kit"
+import { AdapterStatusBar } from "@/platform/AdapterStatus"
+import { useBindPageContext } from "@/platform/page-context"
 
 const PROFILE_COLORS: Record<string, string> = {
   conservative: "#2563eb", balanced: "#ef4444", aggressive: "#22c55e",
@@ -81,6 +91,69 @@ function CorrelationHeatmap({ assets, matrix }: { assets: string[]; matrix: numb
           ))}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+function MarketQuoteSparkline({
+  points,
+  noDataText,
+  xAxisLabel,
+  yAxisLabel,
+}: {
+  points: Array<{ date: string; value: number }>
+  noDataText: string
+  xAxisLabel: string
+  yAxisLabel: string
+}) {
+  if (!points.length) return <div className="flex h-44 items-center justify-center text-xs text-muted-foreground">{noDataText}</div>
+  const width = 720
+  const height = 220
+  const padL = 58
+  const padR = 24
+  const padT = 18
+  const padB = 48
+  const values = points.map((p) => p.value)
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const scaleX = (i: number) => padL + (i / Math.max(points.length - 1, 1)) * (width - padL - padR)
+  const scaleY = (v: number) => height - padB - ((v - min) / ((max - min) || 1)) * (height - padT - padB)
+  const line = points.map((p, i) => `${scaleX(i)},${scaleY(p.value)}`).join(" ")
+  const area = `${line} ${scaleX(points.length - 1)},${height - padB} ${scaleX(0)},${height - padB}`
+  const yTicks = Array.from({ length: 5 }, (_, i) => min + ((4 - i) / 4) * ((max - min) || 1))
+  const xTickIdx = Array.from(new Set([0, Math.floor((points.length - 1) * 0.33), Math.floor((points.length - 1) * 0.66), points.length - 1]))
+
+  return (
+    <div className="w-full">
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-64 w-full">
+        <defs>
+          <linearGradient id="quoteArea" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#2563eb" stopOpacity="0.22" />
+            <stop offset="100%" stopColor="#2563eb" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {yTicks.map((tick, i) => (
+          <g key={`qy-${i}`}>
+            <line x1={padL} y1={scaleY(tick)} x2={width - padR} y2={scaleY(tick)} stroke="currentColor" strokeOpacity="0.12" />
+            <text x={padL - 8} y={scaleY(tick) + 3} fontSize="10" textAnchor="end" fill="currentColor" opacity="0.65">{tick.toFixed(2)}</text>
+          </g>
+        ))}
+        {xTickIdx.map((idx) => (
+          <g key={`qx-${idx}`}>
+            <line x1={scaleX(idx)} y1={height - padB} x2={scaleX(idx)} y2={height - padB + 5} stroke="currentColor" strokeOpacity="0.45" />
+            <text x={scaleX(idx)} y={height - padB + 18} fontSize="10" textAnchor="middle" fill="currentColor" opacity="0.65">{points[idx]?.date?.slice(5) ?? ""}</text>
+          </g>
+        ))}
+        <line x1={padL} y1={height - padB} x2={width - padR} y2={height - padB} stroke="currentColor" strokeOpacity="0.45" />
+        <line x1={padL} y1={padT} x2={padL} y2={height - padB} stroke="currentColor" strokeOpacity="0.45" />
+        <polygon points={area} fill="url(#quoteArea)" />
+        <polyline points={line} fill="none" stroke="#2563eb" strokeWidth="2.8" />
+        {points.map((p, i) => (
+          <circle key={`${p.date}-${i}`} cx={scaleX(i)} cy={scaleY(p.value)} r="3.3" fill="#2563eb" />
+        ))}
+        <text x={(padL + width - padR) / 2} y={height - 7} fontSize="11" textAnchor="middle" fill="currentColor" opacity="0.75">{xAxisLabel}</text>
+        <text x="16" y={(padT + height - padB) / 2} fontSize="11" textAnchor="middle" fill="currentColor" opacity="0.75" transform={`rotate(-90 16 ${(padT + height - padB) / 2})`}>{yAxisLabel}</text>
+      </svg>
     </div>
   )
 }
@@ -204,20 +277,26 @@ export function PortfolioOptPage() {
   const [benchWeights, setBenchWeights] = useState<Record<string, number>>({})
   const [dataSource, setDataSource] = useState<OptimizeRequest["data_source"]>("yfinance")
   const [lookback] = useState("500")  // fallback window when no explicit date range
-  const [startDate, setStartDate] = useState(() => new Date(Date.now() - 730 * 864e5).toISOString().slice(0, 10))
+  const [startDate, setStartDate] = useState(() => new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10))
   const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [rf, setRf] = useState("0.042")
   const [wLo, setWLo] = useState("0")
   const [wHi, setWHi] = useState("0.35")
   const [returnModel, setReturnModel] = useState<OptimizeRequest["return_model"]>("historical_mean")
   const [targetReturn, setTargetReturn] = useState("")
+  const [quoteSecurity, setQuoteSecurity] = useState("")
+  const [quoteSource, setQuoteSource] = useState<OptimizeRequest["data_source"]>("db")
+  const [quotePriceType, setQuotePriceType] = useState("CLOSE")
+  const [quoteDialogOpen, setQuoteDialogOpen] = useState(false)
   const [result, setResult] = useState<OptimizeResult | null>(null)
   const [liveMetrics, setLiveMetrics] = useState<OptMetrics | null>(null)
   const [livePoint, setLivePoint] = useState<{ volatility: number; expected_return: number } | null>(null)
+  const [optMethod, setOptMethod] = useState("hrp")
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const portfolios = useQuery({ queryKey: ["opt-portfolios"], queryFn: () => fsiApi.listOptPortfolios().then((r) => r.data.portfolios), staleTime: 60_000 })
   const rfOptions = useQuery({ queryKey: ["opt-rf-options"], queryFn: () => fsiApi.getRiskFreeOptions().then((r) => r.data.options), staleTime: 300_000 })
+  const catalog = useQuery({ queryKey: ["portfolio-opt-catalog"], queryFn: () => fsiApi.getPortfolioOptCatalog().then((r) => r.data), staleTime: 300_000, retry: 1 })
 
   function buildReq(): OptimizeRequest {
     return {
@@ -266,8 +345,59 @@ export function PortfolioOptPage() {
   const analyze = useMutation({
     mutationFn: () => fsiApi.analyzePortfolio(buildReq()).then((r) => r.data),
     onSuccess: (data) => { setResult(data); setLiveMetrics(null); setLivePoint(null) },
+    onError: () => {
+      setResult(null)
+      setLiveMetrics(null)
+      setLivePoint(null)
+      toast.error(t("portfolioOpt.operationFailed"))
+    },
+  })
+
+  const governed = useMutation({
+    mutationFn: () => fsiApi.governedOptimize({
+      method: optMethod,
+      fund_id: userPortfolio === NONE ? undefined : userPortfolio,
+      holdings: userPortfolio === NONE ? userWeights : undefined,
+      universe,
+      as_of_date: endDate,
+      lookback_days: Number(lookback) || 500,
+      constraints: { weight_bounds: [Number(wLo) || 0, Number(wHi) || 1] },
+    }).then((response) => response.data),
     onError: () => toast.error(t("portfolioOpt.operationFailed")),
   })
+
+  const quoteUniverse = useMemo(() => {
+    const merged = new Set<string>([...universe, ...(result?.universe ?? [])])
+    return Array.from(merged).filter(Boolean).sort()
+  }, [result?.universe, universe])
+
+  const quoteHistoryQuery = useQuery({
+    queryKey: ["portfolio-opt-quote-history", quoteSecurity, startDate, endDate, quotePriceType, quoteSource],
+    queryFn: async () => fsiApi.getPortfolioQuoteHistory(quoteSecurity, startDate, endDate, quotePriceType, quoteSource).then((r) => r.data),
+    enabled: Boolean(quoteSecurity && startDate && endDate && quoteDialogOpen),
+    staleTime: 60_000,
+  })
+
+  const quoteRows = quoteHistoryQuery.data?.items ?? []
+  const quoteSourceUsed = quoteHistoryQuery.data?.source_used ?? quoteSource
+  const quotePoints = useMemo(
+    () => quoteRows.map((row) => ({ date: row.price_date, value: row.close_price })),
+    [quoteRows],
+  )
+  const quoteSummary = quoteRows.length
+    ? {
+        first: quoteRows[0],
+        last: quoteRows[quoteRows.length - 1],
+        min: Math.min(...quoteRows.map((row) => row.close_price)),
+        max: Math.max(...quoteRows.map((row) => row.close_price)),
+      }
+    : null
+
+  function openQuoteDialog(code: string) {
+    setQuoteSecurity(code)
+    setQuoteSource(dataSource)
+    setQuoteDialogOpen(true)
+  }
 
   // Real-time: debounced auto-analysis whenever any parameter or weight changes.
   const reqSignature = JSON.stringify([universe, dataSource, lookback, startDate, endDate, rf, wLo, wHi, returnModel, targetReturn, userWeights, benchWeights])
@@ -289,7 +419,21 @@ export function PortfolioOptPage() {
 
   useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current) }, [])
 
+  useEffect(() => {
+    if (!window.location.hash) return
+    const target = document.getElementById(window.location.hash.slice(1))
+    target?.scrollIntoView({ block: "start" })
+  }, [result])
+
   const profileNames = result ? Object.keys(result.profiles) : []
+  useBindPageContext({
+    portfolio: userPortfolio === NONE ? universe.join(",") : userPortfolio,
+    date: endDate,
+    module: "portfolio-optimization",
+    result: result ? `tangency=${result.tangency ?? ""}` : undefined,
+    chart: result ? "efficient-frontier" : undefined,
+    riskMetrics: liveMetrics ? { ...liveMetrics } : undefined,
+  })
   const weightAssets = useMemo(() => {
     if (!result) return []
     const set = new Set<string>()
@@ -299,16 +443,25 @@ export function PortfolioOptPage() {
   const userWeightSum = Object.values(userWeights).reduce((a, b) => a + b, 0)
 
   return (
-    <div className="space-y-5">
+    <div id="overview" className="space-y-5 scroll-mt-20">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight"><PieChart className="h-6 w-6 text-primary" />{t("portfolioOpt.title")}</h1>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("portfolioOpt.subtitle")}</p>
+          <div className="mt-3">
+            <AdapterStatusBar
+              adapters={catalog.data?.adapters}
+              engine={catalog.data?.engine}
+              engineVersion={catalog.data?.engine_version}
+            />
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">{t("portfolioOpt.notTradeInstruction")}</p>
         </div>
       </div>
 
-      <div className="space-y-5">
-          <Card className="border-primary/20 bg-gradient-to-br from-primary/[0.06] to-transparent">
+      <div className="space-y-5" data-testid="platform-workbench">
+          <div id="construction" className="scroll-mt-20">
+          <Card id="parameters" className="scroll-mt-20 border-primary/20 bg-gradient-to-br from-primary/[0.06] to-transparent" data-testid="platform-parameter">
             <CardHeader><ZoneTitle index="01" title={t("portfolioOpt.parameters")} /></CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -349,9 +502,9 @@ export function PortfolioOptPage() {
                     <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setRf(((Number(rf) || 0) + 0.0025).toFixed(4))}>+</Button>
                   </div>
                 </div>
-                <div className="space-y-1"><Label className="text-xs">{t("portfolioOpt.startDate")}</Label><Input className="h-9" type="date" value={startDate} max={endDate} onChange={(e) => setStartDate(e.target.value)} /></div>
-                <div className="space-y-1"><Label className="text-xs">{t("portfolioOpt.endDate")}</Label><Input className="h-9" type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} /></div>
-                <div className="grid grid-cols-2 gap-2"><div className="space-y-1"><Label className="text-xs">{t("portfolioOpt.weightMin")}</Label><Input className="h-9" type="number" step="0.05" value={wLo} onChange={(e) => setWLo(e.target.value)} /></div><div className="space-y-1"><Label className="text-xs">{t("portfolioOpt.weightMax")}</Label><Input className="h-9" type="number" step="0.05" value={wHi} onChange={(e) => setWHi(e.target.value)} /></div></div>
+                <div className="space-y-1"><Label className="text-xs">{t("portfolioOpt.startDate")}</Label><DatePicker className="h-9 w-full" value={startDate} onChange={(next) => { setStartDate(next); if (next > endDate) setEndDate(next) }} /></div>
+                <div className="space-y-1"><Label className="text-xs">{t("portfolioOpt.endDate")}</Label><DatePicker className="h-9 w-full" value={endDate} onChange={(next) => { setEndDate(next); if (next < startDate) setStartDate(next) }} /></div>
+                <div id="constraints" className="grid scroll-mt-20 grid-cols-2 gap-2"><div className="space-y-1"><Label className="text-xs">{t("portfolioOpt.weightMin")}</Label><Input className="h-9" type="number" step="0.05" value={wLo} onChange={(e) => setWLo(e.target.value)} /></div><div className="space-y-1"><Label className="text-xs">{t("portfolioOpt.weightMax")}</Label><Input className="h-9" type="number" step="0.05" value={wHi} onChange={(e) => setWHi(e.target.value)} /></div></div>
               </div>
               <div className="flex flex-wrap items-end gap-3">
                 {userPortfolio === NONE ? (
@@ -369,9 +522,51 @@ export function PortfolioOptPage() {
               </div>
             </CardContent>
           </Card>
+          </div>
+
+          <Card id="optimization-gate" className="scroll-mt-20">
+            <CardHeader>
+              <ZoneTitle
+                index="01b"
+                title={t("portfolioOpt.governedTitle")}
+                detail={t("portfolioOpt.governedHint")}
+                action={<Button size="sm" onClick={() => governed.mutate()} disabled={governed.isPending}><Play className="mr-1 h-4 w-4" />{t("portfolioOpt.runGoverned")}</Button>}
+              />
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="space-y-1">
+                  <Label className="text-xs">{t("portfolioOpt.riskfolioMethod")}</Label>
+                  <Select value={optMethod} onValueChange={setOptMethod}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {(catalog.data?.methods ?? ["hrp", "risk_parity", "cvar", "black_litterman", "herc"]).map((method) => (
+                        <SelectItem key={method} value={method}>{method}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="rounded-lg border bg-muted/30 p-3 text-xs">
+                  {t("portfolioOpt.notTradeInstruction")}
+                  {governed.data ? ` · ${governed.data.status ?? "PROPOSAL"}` : ""}
+                </div>
+              </div>
+              {governed.data ? (
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {Object.entries(governed.data.gate_status ?? {}).map(([gate, passed]) => (
+                    <div key={gate} className="rounded-md border px-3 py-2 text-xs">
+                      <span className="font-medium">{gate}</span>
+                      <span className={passed ? "ml-2 text-emerald-600" : "ml-2 text-destructive"}>{passed ? "PASS" : "HOLD"}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
 
           <div className="grid items-stretch gap-5 xl:grid-cols-[20rem_minmax(0,1fr)]">
-          <Card className="flex flex-col">
+          <div id="simulation" className="scroll-mt-20">
+          <Card id="user-weights" className="flex scroll-mt-20 flex-col">
             <CardHeader><ZoneTitle index="02" title={t("portfolioOpt.userWeights")} detail={t("portfolioOpt.weightHint", { sum: (userWeightSum * 100).toFixed(0) })} /></CardHeader>
             <CardContent className="flex flex-1 flex-col gap-3">
               {(() => {
@@ -394,7 +589,13 @@ export function PortfolioOptPage() {
                   return (
                     <div key={code} className="min-w-0 space-y-1 border-b pb-1.5 last:border-0">
                       <div className="flex items-center justify-between gap-2 text-xs">
-                        <span className="min-w-0 truncate" title={names[code] ?? code}><span className="font-mono">{code}</span>{names[code] && names[code] !== code ? <span className="ml-1 text-muted-foreground">{names[code]}</span> : null}</span>
+                        <div className="flex min-w-0 items-center gap-1.5 truncate">
+                          <Button type="button" variant="ghost" size="sm" className="h-6 gap-1 px-1.5 font-normal" onClick={() => openQuoteDialog(code)} title={t("portfolioOpt.quoteOpen")}>
+                            <LineChart className="h-3.5 w-3.5" />
+                            <span className="font-mono">{code}</span>
+                          </Button>
+                          {names[code] && names[code] !== code ? <span className="truncate text-muted-foreground" title={names[code]}>{names[code]}</span> : null}
+                        </div>
                         <span className="shrink-0 font-mono text-primary" title={t("portfolioOpt.normalized")}>≈{(normalized * 100).toFixed(1)}%</span>
                       </div>
                       <div className="flex items-center gap-1">
@@ -402,6 +603,9 @@ export function PortfolioOptPage() {
                         <Button type="button" variant="outline" size="icon" className="h-6 w-6 shrink-0" onClick={() => onWeightChange(code, Math.max(0, Number((raw - 0.05).toFixed(4))))}>−</Button>
                         <span className="w-9 shrink-0 text-center font-mono text-xs">{(raw * 100).toFixed(0)}%</span>
                         <Button type="button" variant="outline" size="icon" className="h-6 w-6 shrink-0" onClick={() => onWeightChange(code, Math.min(1, Number((raw + 0.05).toFixed(4))))}>+</Button>
+                        <Button type="button" variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => openQuoteDialog(code)} title={t("portfolioOpt.quoteOpen")}>
+                          <LineChart className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
                     </div>
                   )
@@ -409,6 +613,7 @@ export function PortfolioOptPage() {
               </div>
             </CardContent>
           </Card>
+          </div>
           <Card className="flex flex-col">
             <CardHeader><ZoneTitle index="03" title={t("portfolioOpt.frontier")} detail={t("portfolioOpt.frontierLiveHint")} action={result ? <Button size="sm" variant="ghost" onClick={() => downloadChart("efficient_frontier")}><Download className="mr-1 h-4 w-4" />PNG</Button> : undefined} /></CardHeader>
             <CardContent className="flex flex-1 items-center">
@@ -419,7 +624,7 @@ export function PortfolioOptPage() {
 
           {result ? (
             <>
-              <Card>
+              <Card id="return-models" className="scroll-mt-20">
                 <CardHeader><ZoneTitle index="04" title={t("portfolioOpt.returnModels")}
                   action={<Button size="sm" variant="outline" onClick={() => exportCsv("individual_assets_return_models.csv", ["asset", "historical_mean", "real_cagr", "capm", "black_litterman", "period_total_return"], result.return_models.map((r) => [r.asset, r.historical_mean, r.real_cagr, r.capm, r.black_litterman, r.period_total_return]))}><Download className="mr-1 h-4 w-4" />CSV</Button>} />
                 </CardHeader>
@@ -432,7 +637,7 @@ export function PortfolioOptPage() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card id="asset-metrics" className="scroll-mt-20">
                 <CardHeader><ZoneTitle index="05" title={t("portfolioOpt.assetMetrics")}
                   action={<Button size="sm" variant="outline" onClick={() => exportCsv("individual_assets_metrics.csv", ["asset", "expected_return", "volatility", "sharpe", "max_drawdown", "var_95", "cvar_95"], result.asset_metrics.map((r) => [r.asset, r.expected_return, r.volatility, r.sharpe, r.max_drawdown, r.var_95, r.cvar_95]))}><Download className="mr-1 h-4 w-4" />CSV</Button>} />
                 </CardHeader>
@@ -445,7 +650,8 @@ export function PortfolioOptPage() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <div id="optimization" className="scroll-mt-20">
+              <Card id="portfolios" className="scroll-mt-20" data-testid="platform-data">
                 <CardHeader><ZoneTitle index="06" title={t("portfolioOpt.portfolios")}
                   action={<Button size="sm" variant="outline" onClick={() => exportCsv("portfolio_profiles_weights.csv", ["asset", ...profileNames], weightAssets.map((a) => [a, ...profileNames.map((p) => result.profiles[p].weights[a] ?? 0)]))}><Download className="mr-1 h-4 w-4" />CSV</Button>} />
                 </CardHeader>
@@ -460,8 +666,10 @@ export function PortfolioOptPage() {
                   ) : null}
                 </CardContent>
               </Card>
+              </div>
 
-              <Card>
+              <div id="comparison" className="scroll-mt-20">
+              <Card id="charts" className="scroll-mt-20" data-testid="platform-charts">
                 <CardHeader><ZoneTitle index="07" title={t("portfolioOpt.charts")} detail={t("portfolioOpt.chartsHint")} /></CardHeader>
                 <CardContent className="space-y-6">
                   <div>
@@ -477,22 +685,134 @@ export function PortfolioOptPage() {
                   </div>
                 </CardContent>
               </Card>
+              </div>
+              <Card id="validation" className="scroll-mt-20">
+                <CardHeader><ZoneTitle index="08" title={t("nav.portfolioValidation")} /></CardHeader>
+                <CardContent className="text-sm text-muted-foreground" data-testid="platform-engine-note">
+                  {t("platform.engineNote")}
+                  {result.efficiency ? (
+                    <div className="mt-2 flex flex-wrap gap-6 text-xs">
+                      <span>{t("portfolioOpt.alphaLoss")}: <span className="font-mono">{pct(result.efficiency.alpha_loss)}</span></span>
+                      <span>{t("portfolioOpt.excessVol")}: <span className="font-mono">{pct(result.efficiency.excess_vol)}</span></span>
+                    </div>
+                  ) : null}
+                </CardContent>
+              </Card>
             </>
           ) : (
             <Card><CardContent className="py-16 text-center text-sm text-muted-foreground">{t("portfolioOpt.runPrompt")}</CardContent></Card>
           )}
       </div>
-      <FloatingAiChat
-        title={t("portfolioOpt.aiArea")}
-        hint={t("portfolioOpt.aiHint")}
-        placeholder={t("portfolioOpt.aiPlaceholder")}
-        buildPrompt={(q) => [
-          "你正在 ARISK 组合优化模块协助投资经理解读有效前沿/CML/Black-Litterman/HRP 结果。",
-          "以下是当前分析摘要（只作分析，不得杜撰数据）：",
-          JSON.stringify(result ? { universe: result.universe, return_model: result.return_model, risk_free_rate: result.risk_free_rate, tangency: result.tangency, profiles: Object.fromEntries(Object.entries(result.profiles).map(([k, v]) => [k, v.metrics])), efficiency: result.efficiency } : null),
-          `用户问题：${q}`,
-        ].join("\n")}
-      />
+      <Dialog open={quoteDialogOpen} onOpenChange={setQuoteDialogOpen}>
+        <DialogContent className="w-[96vw] max-w-6xl p-0">
+          <div className="flex h-[86vh] min-h-[42rem] flex-col overflow-hidden">
+            <DialogHeader className="shrink-0 border-b px-6 py-4 pr-12">
+            <DialogTitle className="flex items-center gap-2">
+              <LineChart className="h-4 w-4 text-primary" />
+              {t("portfolioOpt.quoteTrace")}
+            </DialogTitle>
+            <DialogDescription>
+              {quoteSecurity} · {t("portfolioOpt.quoteTraceHint")}
+            </DialogDescription>
+            </DialogHeader>
+            <div className="w-full flex-1 space-y-4 overflow-y-auto px-6 py-4">
+            <div className="grid w-full gap-3 lg:grid-cols-[minmax(0,1.5fr)_10rem_10rem]">
+              <div className="space-y-1">
+                <Label className="text-xs">{t("portfolioOpt.quoteSecurity")}</Label>
+                <Input
+                  className="h-9"
+                  list="portfolio-opt-security-codes-dialog"
+                  placeholder={t("portfolioOpt.quoteSecurityPh")}
+                  value={quoteSecurity}
+                  onChange={(e) => setQuoteSecurity(e.target.value.trim().toUpperCase())}
+                />
+                <datalist id="portfolio-opt-security-codes-dialog">
+                  {quoteUniverse.map((code) => <option key={`dlg-${code}`} value={code} />)}
+                </datalist>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">{t("portfolioOpt.quotePriceType")}</Label>
+                <Select value={quotePriceType} onValueChange={setQuotePriceType}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="OPEN">OPEN</SelectItem>
+                    <SelectItem value="HIGH">HIGH</SelectItem>
+                    <SelectItem value="LOW">LOW</SelectItem>
+                    <SelectItem value="CLOSE">CLOSE</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">{t("portfolioOpt.quoteSource")}</Label>
+                <Select value={quoteSource} onValueChange={(v) => setQuoteSource(v as OptimizeRequest["data_source"]) }>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="db">db</SelectItem>
+                    <SelectItem value="yfinance">yfinance</SelectItem>
+                    <SelectItem value="openbb">openbb</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="w-full rounded-lg border bg-muted/30 p-3 text-xs">
+              <div className="text-muted-foreground">{t("portfolioOpt.quoteRange")}</div>
+              <div className="font-mono">{startDate || "—"} → {endDate || "—"}</div>
+              <div className="text-muted-foreground">{t("portfolioOpt.quoteSourceCol")}: <span className="font-mono">{quoteSourceUsed.toUpperCase()}</span></div>
+            </div>
+            {quoteHistoryQuery.isFetching ? <div className="text-xs text-muted-foreground">{t("portfolioOpt.quoteLoading")}</div> : null}
+            {quoteHistoryQuery.isError ? <div className="text-xs text-destructive">{t("portfolioOpt.quoteFailed")}</div> : null}
+            {quoteSummary ? (
+              <div className="grid w-full gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-lg border bg-muted/20 p-3 text-xs"><div className="text-muted-foreground">{t("portfolioOpt.quoteFirst")}</div><div className="font-mono">{quoteSummary.first.price_date}</div><div className="font-mono">{quoteSummary.first.close_price.toFixed(4)}</div></div>
+                <div className="rounded-lg border bg-muted/20 p-3 text-xs"><div className="text-muted-foreground">{t("portfolioOpt.quoteLast")}</div><div className="font-mono">{quoteSummary.last.price_date}</div><div className="font-mono">{quoteSummary.last.close_price.toFixed(4)}</div></div>
+                <div className="rounded-lg border bg-muted/20 p-3 text-xs"><div className="text-muted-foreground">{t("portfolioOpt.quoteMin")}</div><div className="font-mono">{quoteSummary.min.toFixed(4)}</div></div>
+                <div className="rounded-lg border bg-muted/20 p-3 text-xs"><div className="text-muted-foreground">{t("portfolioOpt.quoteMax")}</div><div className="font-mono">{quoteSummary.max.toFixed(4)}</div></div>
+              </div>
+            ) : null}
+            <div className="w-full rounded-lg border bg-background/70 p-3">
+              {quotePoints.length ? (
+                <MarketQuoteSparkline
+                  points={quotePoints}
+                  noDataText={t("portfolioOpt.quoteEmpty")}
+                  xAxisLabel={t("portfolioOpt.quoteDate")}
+                  yAxisLabel={t("dataManagement.unitPrice")}
+                />
+              ) : <div className="flex h-64 items-center justify-center text-xs text-muted-foreground">{t("portfolioOpt.quoteEmpty")}</div>}
+            </div>
+            <div className="w-full min-h-0 overflow-auto rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t("portfolioOpt.quoteDate")}</TableHead>
+                    <TableHead className="text-right">Open</TableHead>
+                    <TableHead className="text-right">High</TableHead>
+                    <TableHead className="text-right">Low</TableHead>
+                    <TableHead className="text-right">Close</TableHead>
+                    <TableHead className="text-right">Vol</TableHead>
+                    <TableHead className="text-right">Turnover</TableHead>
+                    <TableHead>{t("portfolioOpt.quoteSourceCol")}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {quoteRows.map((row: MarketQuote) => (
+                    <TableRow key={`${row.price_date}-${row.security_code}-${row.price_type}`}>
+                      <TableCell className="font-mono text-xs">{row.price_date}</TableCell>
+                      <TableCell className="text-right font-mono">{row.open_price == null ? "—" : row.open_price.toFixed(4)}</TableCell>
+                      <TableCell className="text-right font-mono">{row.high_price == null ? "—" : row.high_price.toFixed(4)}</TableCell>
+                      <TableCell className="text-right font-mono">{row.low_price == null ? "—" : row.low_price.toFixed(4)}</TableCell>
+                      <TableCell className="text-right font-mono">{row.close_price.toFixed(4)}</TableCell>
+                      <TableCell className="text-right font-mono">{row.volume == null ? "—" : Number(row.volume).toLocaleString()}</TableCell>
+                      <TableCell className="text-right font-mono">{row.turnover == null ? "—" : Number(row.turnover).toLocaleString()}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{row.data_source}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select"
 import { fsiApi, type PortfolioCockpitItem } from "@/fsiClient"
 import { exportCsv, TrendLineChart } from "@/modules/investment-risk/dashboard-kit"
+import { RiskDashboard } from "@/modules/portfolio-cockpit/RiskDashboard"
 
 const ALL = "__all__"
 
@@ -219,8 +220,17 @@ export function PortfolioCockpitPage() {
             </CardContent>
           </Card>
 
+          <div className="space-y-4">
+            <ZoneTitle
+              index="03"
+              title={t("portfolioCockpit.riskOverview")}
+              detail={t("portfolioCockpit.riskOverviewHint")}
+            />
+            <RiskDashboard asOfDate={asOfDate} onAsOfDateChange={setAsOfDate} embedded />
+          </div>
+
           <Card>
-            <CardHeader><ZoneTitle index="03" title={t("portfolioCockpit.cockpitList")} detail={t("portfolioCockpit.cardCount", { count: filtered.length })} /></CardHeader>
+            <CardHeader><ZoneTitle index="04" title={t("portfolioCockpit.cockpitList")} detail={t("portfolioCockpit.cardCount", { count: filtered.length })} /></CardHeader>
             <CardContent>
               {cockpit.isFetching ? <p className="py-10 text-center text-sm text-muted-foreground">{t("portfolioCockpit.loading")}</p> : null}
               {cockpit.isError ? <p className="py-10 text-center text-sm text-destructive">{t("portfolioCockpit.operationFailed")}</p> : null}

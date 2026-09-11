@@ -15,9 +15,11 @@ from .positions import router as positions_router
 from .reports import router as reports_router
 from .risk import router as risk_router
 from .risk_rules import router as risk_rules_router
+from .risk_testing import router as risk_testing_router
 from .schedules import router as schedules_router
 from .sql_assets import router as sql_assets_router
 from .valuation import router as valuation_router
+from app.api.routes.quant import router as quant_router
 
 router = APIRouter()
 router.include_router(agent_router,   prefix="/agent",     tags=["FSI Agent / Chat"])
@@ -28,9 +30,11 @@ router.include_router(portfolio_cockpit_router, prefix="/portfolio-cockpit", tag
 router.include_router(portfolio_opt_router, prefix="/portfolio-opt", tags=["FSI 組合優化"])
 router.include_router(sql_assets_router, prefix="/sql-assets", tags=["FSI SQL 資產庫"])
 router.include_router(investment_router, prefix="/investment", tags=["FSI 投資風險分析"])
+router.include_router(risk_testing_router, prefix="/risk-testing", tags=["FSI 專業風險測試"])
 router.include_router(risk_router,    prefix="/risk",      tags=["FSI 風控"])
 router.include_router(risk_rules_router, prefix="/risk-rules", tags=["FSI 風控規則配置"])
 router.include_router(positions_router, prefix="/positions", tags=["FSI 持倉"])
 router.include_router(reports_router, prefix="/reports",   tags=["FSI 報表"])
 router.include_router(schedules_router, prefix="/schedules", tags=["FSI 定時報表"])
 router.include_router(indicator_sql_router, prefix="/indicator-sql", tags=["FSI 指標SQL"])
+router.include_router(quant_router, prefix="/quant", tags=["FSI Quant API"])

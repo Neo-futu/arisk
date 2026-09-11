@@ -213,3 +213,31 @@ async def get_factor_behavior(
         f"/investment/factor-behavior/{fund_id}",
         {"start": str(start), "end": str(end)},
     )
+
+
+@router.get("/kpi-catalog", summary="投資風險 KPI 目錄")
+async def get_kpi_catalog(
+    _user: PortfolioViewer,
+    client: ProcessingClient,
+) -> Any:
+    return await _proxy(client, "/investment/kpi-catalog", {})
+
+
+@router.get("/kpis/{fund_id}", summary="投資風險統一 KPI 包")
+async def get_kpi_pack(
+    fund_id: str,
+    as_of_date: Annotated[date, Query(description="估值日期 YYYY-MM-DD")],
+    _user: PortfolioViewer,
+    client: ProcessingClient,
+    confidence: Annotated[float, Query(description="VaR/CVaR/ES 置信度", gt=0.5, lt=1.0)] = 0.99,
+    lookback_days: Annotated[int, Query(ge=30, le=5000)] = 500,
+) -> Any:
+    return await _proxy(
+        client,
+        f"/investment/kpis/{fund_id}",
+        {
+            "as_of_date": str(as_of_date),
+            "confidence": confidence,
+            "lookback_days": lookback_days,
+        },
+    )

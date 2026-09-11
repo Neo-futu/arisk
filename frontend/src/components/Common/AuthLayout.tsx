@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next"
+
 import { Appearance } from "@/components/Common/Appearance"
 import { Logo } from "@/components/Common/Logo"
 import { Footer } from "./Footer"
@@ -7,19 +9,30 @@ interface AuthLayoutProps {
 }
 
 export function AuthLayout({ children }: AuthLayoutProps) {
+  const { t } = useTranslation()
+
   return (
-    <div className="grid min-h-svh lg:grid-cols-2">
-      <div className="bg-muted dark:bg-zinc-900 relative hidden lg:flex lg:items-center lg:justify-center">
-        <Logo variant="full" className="h-16" asLink={false} />
+    <div
+      className="relative flex min-h-svh flex-col items-center justify-center px-4 py-8"
+      style={{
+        background:
+          "linear-gradient(135deg, #e8f0fe 0%, #f4f6f9 50%, #fef3e2 100%)",
+      }}
+    >
+      <div className="absolute right-6 top-6">
+        <Appearance />
       </div>
-      <div className="flex flex-col gap-4 p-6 md:p-10">
-        <div className="flex justify-end">
-          <Appearance />
+      <div className="w-full max-w-[400px] rounded-2xl border border-[#e8eaf6] bg-white px-9 py-10 shadow-[0_8px_32px_rgba(21,101,192,0.12)]">
+        <div className="mb-8 flex flex-col items-center gap-4 text-center">
+          <Logo variant="full" asLink={false} />
+          <div className="rounded-md bg-[#f0f4ff] px-3.5 py-1 text-[13px] tracking-wider text-primary">
+            {t("login.productChip")}
+          </div>
         </div>
-        <div className="flex flex-1 items-center justify-center">
-          <div className="w-full max-w-xs">{children}</div>
-        </div>
-        <Footer />
+        {children}
+      </div>
+      <div className="mt-6 w-full max-w-[400px] text-center">
+        <Footer className="border-0 py-0 px-0" />
       </div>
     </div>
   )

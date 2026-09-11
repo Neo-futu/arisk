@@ -9,7 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .deps import get_db, verify_api_key
-from .routers import data_management, indicators, investment, op_logs, portfolio_cockpit, portfolio_opt, positions, reports, review, risk, risk_rules, schedules, sql_assets, valuation
+from .routers import agents, data_management, indicators, investment, op_logs, portfolio_cockpit, portfolio_opt, positions, quant, reports, review, risk, risk_rules, risk_testing, schedules, sql_assets, valuation
 
 
 @asynccontextmanager
@@ -33,6 +33,9 @@ app.include_router(valuation.router, prefix="/valuation", tags=["估值與損益
 app.include_router(sql_assets.router, prefix="/sql-assets", tags=["SQL 資產庫"])
 app.include_router(portfolio_cockpit.router, prefix="/portfolio-cockpit", tags=["組合駕駛艙"])
 app.include_router(portfolio_opt.router, prefix="/portfolio-opt", tags=["組合優化"])
+app.include_router(risk_testing.router, prefix="/risk-testing", tags=["專業風險測試"])
+app.include_router(quant.router,     prefix="/quant",     tags=["Quant API"])
+app.include_router(agents.router,    prefix="/agents",    tags=["Agent Interface"])
 app.include_router(risk.router,      prefix="/risk",      tags=["風控"])
 app.include_router(risk_rules.router, prefix="/risk-rules", tags=["風控規則配置"])
 app.include_router(investment.router, prefix="/investment", tags=["投資風險分析"])

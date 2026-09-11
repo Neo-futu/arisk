@@ -3,7 +3,6 @@ import { Download, Wallet } from "lucide-react"
 import { useEffect, useState, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 
-import { FloatingAiChat } from "@/components/FloatingAiChat"
 import { FsiToolbar, FUNDS } from "@/components/FsiToolbar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -173,24 +172,6 @@ export function ValuationPnlPage() {
           {mode === "report" ? <ReportView report={report.data} loading={report.isFetching} error={report.isError} currency={currency} /> : null}
           {mode === "pnl" ? <PnlView pnl={pnl.data} loading={pnl.isFetching} error={pnl.isError} /> : null}
       </div>
-      <FloatingAiChat
-        title={t("valuation.aiArea")}
-        hint={t("valuation.aiHint")}
-        placeholder={t("valuation.aiPlaceholder")}
-        context={{ fund_id: fundId }}
-        buildPrompt={(q) => {
-          const summary = mode === "report"
-            ? { mode, fund: fundId, as_of: report.data?.as_of_date, totals: report.data?.totals, nav: report.data?.nav_summary, top: (report.data?.subjects ?? []).slice(0, 8).map((s) => ({ code: s.subject_code, mv: s.market_value, pnl: s.unrealized_pnl })) }
-            : { mode, fund: fundId, range: pnl.data ? `${pnl.data.start}~${pnl.data.end}` : null, summary: pnl.data?.summary, attr: (pnl.data?.attribution.items ?? []).slice(0, 8) }
-          return [
-            "你正在 ARISK 组合估值与损益模块协助投资风控人员。",
-            `当前视图：${mode === "report" ? "每日估值报表" : "阶段损益分析"}；基金：${fundId}。`,
-            "以下是当前页面数据摘要（只作分析，不得杜撰数据）：",
-            JSON.stringify(summary),
-            `用户问题：${q}`,
-          ].join("\n")
-        }}
-      />
     </div>
   )
 }

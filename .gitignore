@@ -30,3 +30,6 @@ iac/backend.*.hcl
 iac/.build/
 # tfvars 可能含环境差异值（如需共享请显式去掉忽略）
 *.auto.tfvars
+FinancePy/
+ORE/
+Riskfolio-Lib/

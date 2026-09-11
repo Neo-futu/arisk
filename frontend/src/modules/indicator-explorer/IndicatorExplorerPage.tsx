@@ -11,7 +11,6 @@ import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 
-import { FloatingAiChat } from "@/components/FloatingAiChat"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -238,7 +237,7 @@ export function IndicatorExplorerPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div id="quotes" className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="mb-2 flex items-center gap-2">
@@ -251,7 +250,7 @@ export function IndicatorExplorerPage() {
       </div>
 
       <div className="space-y-5">
-          <Card className="border-primary/20 bg-gradient-to-br from-primary/[0.06] to-transparent">
+          <Card id="catalog" className="scroll-mt-20 border-primary/20 bg-gradient-to-br from-primary/[0.06] to-transparent">
             <CardHeader>
               <ZoneTitle index="01" title={t("indicatorExplorer.parameters")} detail={t("indicatorExplorer.selectHint", { count: effectiveSelected.length, max: MAX_COMPARE })} />
             </CardHeader>
@@ -374,18 +373,6 @@ export function IndicatorExplorerPage() {
             </CardContent>
           </Card>
       </div>
-      <FloatingAiChat
-        title={t("indicatorExplorer.aiArea")}
-        hint={t("indicatorExplorer.aiHint")}
-        placeholder={t("indicatorExplorer.aiPlaceholder")}
-        buildPrompt={(q) => [
-          "你正在 ARISK 指標探索引擎協助投資分析人員。",
-          `週期：${period}；當前對比指標摘要（只作分析，不得杜撰數據）：`,
-          JSON.stringify(seriesData.map((s) => ({ id: s.indicator_id, name: s.name, unit: s.unit, country: s.country, latest: s.points[s.points.length - 1]?.value, first: s.points[0]?.value, count: s.points.length }))),
-          `用戶問題：${q}`,
-        ].join("\n")}
-      />
-
       {obsDialog.open && obsDialog.indicatorId ? (
         <ObservationDialog
           indicatorId={obsDialog.indicatorId}

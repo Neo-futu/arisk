@@ -14,6 +14,9 @@ from app.api.routes.chat import router as chat_router
 from app.api.routes.frontend_log import router as log_router
 from app.api.routes.fsi.router import router as fsi_router
 from app.api.routes.knowledge import router as knowledge_router
+from app.api.routes.risk_pretrade import router as risk_pretrade_router
+from app.api.routes.quant import router as quant_router
+from app.api.routes.agents import router as agents_router
 from app.api.routes.user_agent import router as user_agent_router
 from app.api.routes.user_custom_tool import router as user_tool_router
 from app.core.config import settings
@@ -38,6 +41,9 @@ api_router.include_router(knowledge_router,  prefix="/knowledge",    tags=["Know
 
 # ── FSI 業務路由（風控 / 持倉 / 合規，代理到 processing:8001） ─
 api_router.include_router(fsi_router, prefix="/fsi")
+api_router.include_router(risk_pretrade_router, prefix="/risk", tags=["Risk Limits / Pre-Trade"])
+api_router.include_router(quant_router, prefix="/quant", tags=["Quant API"])
+api_router.include_router(agents_router, prefix="/agents", tags=["Agent Interface"])
 
 if settings.ENVIRONMENT == "local":
     api_router.include_router(private.router)

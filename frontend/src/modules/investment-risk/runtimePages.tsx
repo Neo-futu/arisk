@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/table"
 import { fsiApi } from "@/fsiClient"
 import { exportCsv, HorizontalBarList, TrendLineChart } from "@/modules/investment-risk/dashboard-kit"
+import { EngineKpiPanel } from "@/modules/investment-risk/EngineKpiPanel"
 
 function defaultStartDate() {
   const result = new Date(`${lastTradeDate()}T00:00:00`)
@@ -74,11 +75,16 @@ export function RatesCreditRuntimePage() {
 
   return (
     <div className="space-y-6">
+      <span id="concentration-risk" className="scroll-mt-20" />
+      <span id="counterparty-risk" className="scroll-mt-20" />
       <div>
         <div className="mb-1 flex items-center gap-2"><Badge variant="outline">{t("investmentRisk.module.tag")}</Badge><span className="text-muted-foreground text-sm">{t("investmentRisk.module.ratesCreditLabel")}</span></div>
         <h1 className="text-2xl font-bold tracking-tight">{t("investmentRisk.module.topics.rates-credit.title")}</h1>
       </div>
       <FsiToolbar fundId={fundId} onFundChange={setFundId} asOfDate={asOfDate} onDateChange={setAsOfDate} onRefresh={() => refetch()} isFetching={isFetching} />
+      <EngineKpiPanel domain="rates_credit" fundId={fundId} asOfDate={asOfDate} />
+      <EngineKpiPanel domain="concentration" fundId={fundId} asOfDate={asOfDate} title={t("nav.concentrationRisk")} />
+      <EngineKpiPanel domain="counterparty" fundId={fundId} asOfDate={asOfDate} title={t("nav.counterpartyRisk")} />
       {isError && <Card className="border-destructive"><CardContent className="pt-4 text-sm text-destructive">{t("investmentRisk.module.ratesCreditLoadError")}</CardContent></Card>}
       {data && (
         <>
@@ -213,6 +219,7 @@ export function LiquidityStressRuntimePage() {
     <div className="space-y-6">
       <div><div className="mb-1 flex items-center gap-2"><Badge variant="outline">{t("investmentRisk.module.tag")}</Badge><span className="text-muted-foreground text-sm">{t("investmentRisk.module.liquidityStressLabel")}</span></div><h1 className="text-2xl font-bold tracking-tight">{t("investmentRisk.module.topics.liquidity-stress.title")}</h1></div>
       <FsiToolbar fundId={fundId} onFundChange={setFundId} asOfDate={asOfDate} onDateChange={setAsOfDate} onRefresh={() => refetch()} isFetching={isFetching} extra={extra} />
+      <EngineKpiPanel domain="liquidity" fundId={fundId} asOfDate={asOfDate} />
       {isError && <Card className="border-destructive"><CardContent className="pt-4 text-sm text-destructive">{t("investmentRisk.module.liquidityLoadError")}</CardContent></Card>}
       {data && (
         <>
@@ -361,9 +368,10 @@ export function PretradeBudgetRuntimePage() {
   )
 
   return (
-    <div className="space-y-6">
+    <div id="risk-budget" className="scroll-mt-20 space-y-6">
       <div><div className="mb-1 flex items-center gap-2"><Badge variant="outline">{t("investmentRisk.module.tag")}</Badge><span className="text-muted-foreground text-sm">{t("investmentRisk.module.pretradeBudgetLabel")}</span></div><h1 className="text-2xl font-bold tracking-tight">{t("investmentRisk.module.topics.pretrade-budget.title")}</h1></div>
       <FsiToolbar fundId={fundId} onFundChange={setFundId} asOfDate={asOfDate} onDateChange={setAsOfDate} onRefresh={() => refetch()} isFetching={isFetching} extra={extra} />
+      <EngineKpiPanel domain="risk_budget" fundId={fundId} asOfDate={asOfDate} />
       {isError && <Card className="border-destructive"><CardContent className="pt-4 text-sm text-destructive">{t("investmentRisk.module.pretradeLoadError")}</CardContent></Card>}
       {data && (
         <>
@@ -457,9 +465,11 @@ export function MacroDynamicsRuntimePage() {
   const extra = <div className="flex items-center gap-2"><span className="text-muted-foreground text-xs">{t("investmentRisk.module.startLabel")}</span><DatePicker value={startDate} onChange={setStartDate} /></div>
 
   return (
-    <div className="space-y-6">
+    <div id="market-risk" className="scroll-mt-20 space-y-6">
       <div><div className="mb-1 flex items-center gap-2"><Badge variant="outline">{t("investmentRisk.module.tag")}</Badge><span className="text-muted-foreground text-sm">{t("investmentRisk.module.macroDynamicsLabel")}</span></div><h1 className="text-2xl font-bold tracking-tight">{t("investmentRisk.module.topics.macro-dynamics.title")}</h1></div>
       <FsiToolbar fundId={fundId} onFundChange={setFundId} asOfDate={endDate} onDateChange={setEndDate} onRefresh={() => refetch()} isFetching={isFetching} extra={extra} />
+      <EngineKpiPanel domain="market_risk" fundId={fundId} asOfDate={endDate} />
+      <EngineKpiPanel domain="macro_dynamics" fundId={fundId} asOfDate={endDate} title={t("nav.macroDynamics")} />
       {isError && <Card className="border-destructive"><CardContent className="pt-4 text-sm text-destructive">{t("investmentRisk.module.macroLoadError")}</CardContent></Card>}
       {data && (
         <>
@@ -583,9 +593,11 @@ export function FactorBehaviorRuntimePage() {
   const extra = <div className="flex items-center gap-2"><span className="text-muted-foreground text-xs">{t("investmentRisk.module.startLabel")}</span><DatePicker value={startDate} onChange={setStartDate} /></div>
 
   return (
-    <div className="space-y-6">
+    <div id="factor-risk" className="scroll-mt-20 space-y-6">
       <div><div className="mb-1 flex items-center gap-2"><Badge variant="outline">{t("investmentRisk.module.tag")}</Badge><span className="text-muted-foreground text-sm">{t("investmentRisk.module.factorBehaviorLabel")}</span></div><h1 className="text-2xl font-bold tracking-tight">{t("investmentRisk.module.topics.factor-behavior.title")}</h1></div>
       <FsiToolbar fundId={fundId} onFundChange={setFundId} asOfDate={endDate} onDateChange={setEndDate} onRefresh={() => refetch()} isFetching={isFetching} extra={extra} />
+      <EngineKpiPanel domain="factor_risk" fundId={fundId} asOfDate={endDate} />
+      <EngineKpiPanel domain="factor_behavior" fundId={fundId} asOfDate={endDate} title={t("nav.factorBehavior")} />
       {isError && <Card className="border-destructive"><CardContent className="pt-4 text-sm text-destructive">{t("investmentRisk.module.factorLoadError")}</CardContent></Card>}
       {data && (
         <>

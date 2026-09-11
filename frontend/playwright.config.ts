@@ -38,9 +38,18 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
+        channel: process.env.PLAYWRIGHT_CHANNEL as 'chrome' | 'msedge' | undefined,
         storageState: 'playwright/.auth/user.json',
       },
       dependencies: ['setup'],
+    },
+    {
+      name: 'chromium-menu',
+      testMatch: /menu-architecture\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        channel: process.env.PLAYWRIGHT_CHANNEL as 'chrome' | 'msedge' | undefined,
+      },
     },
 
     // {
@@ -84,7 +93,7 @@ export default defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'bun run dev',
+    command: 'npm run dev',
     url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,
   },

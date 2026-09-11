@@ -1,5 +1,7 @@
 import { Languages } from "lucide-react"
-import { useTranslation } from "react-i18next"
+import { useEffect, useState } from "react"
+
+import i18n from "@/i18n"
 
 import {
   Select,
@@ -16,8 +18,17 @@ const normalizeLanguage = (language: string) => {
 }
 
 export function LanguageSwitcher() {
-  const { i18n } = useTranslation()
-  const value = normalizeLanguage(i18n.resolvedLanguage ?? i18n.language)
+  const [value, setValue] = useState(() => normalizeLanguage(i18n.resolvedLanguage ?? i18n.language ?? "zh-TW"))
+
+  useEffect(() => {
+    const handleLanguageChange = (nextLanguage: string) => {
+      setValue(normalizeLanguage(nextLanguage))
+    }
+    i18n.on("languageChanged", handleLanguageChange)
+    return () => {
+      i18n.off("languageChanged", handleLanguageChange)
+    }
+  }, [])
 
   return (
     <div className="flex items-center gap-2">

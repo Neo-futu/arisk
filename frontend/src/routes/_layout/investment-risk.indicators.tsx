@@ -21,6 +21,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { fsiApi, type PortfolioBasicInfo } from "@/fsiClient"
 import { exportCsv, HorizontalBarList, TrendLineChart } from "@/modules/investment-risk/dashboard-kit"
+import { EngineKpiPanel } from "@/modules/investment-risk/EngineKpiPanel"
 import { RISK_DOMAINS } from "@/modules/investment-risk/RiskDomainTabs"
 import { SqlViewButton } from "@/modules/investment-risk/SqlViewButton"
 
@@ -171,6 +172,8 @@ function RiskIndicatorsPage() {
 
   return (
     <div className="space-y-6">
+      <span id="risk-exposure" className="scroll-mt-20" />
+      <span id="leverage-derivatives-risk" className="scroll-mt-20" />
       <div>
         <div className="mb-1 flex items-center gap-2">
           <Badge variant="outline">{t("investmentRisk.tag")}</Badge>
@@ -195,6 +198,9 @@ function RiskIndicatorsPage() {
         isFetching={isFetching}
         extra={startPicker}
       />
+
+      <EngineKpiPanel domain="exposure" fundId={fundId} asOfDate={endDate} />
+      <EngineKpiPanel domain="leverage" fundId={fundId} asOfDate={endDate} title={t("nav.leverageDerivativesRisk")} />
 
       {startDate > endDate && <p className="text-sm text-destructive">{t("investmentRisk.indicators.dateRangeError")}</p>}
       {isFetching && <p className="text-muted-foreground animate-pulse text-sm">{t("investmentRisk.indicators.calculating")}</p>}

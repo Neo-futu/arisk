@@ -19,10 +19,10 @@ import { routeTree } from "./routeTree.gen"
 // ── 全局錯誤追蹤 ─────────────────────────────────────────────────
 window.addEventListener("error", (ev) => {
   logger.error("window", "uncaught_error", {
-    message:  ev.message,
+    message: ev.message,
     filename: ev.filename,
-    lineno:   ev.lineno,
-    colno:    ev.colno,
+    lineno: ev.lineno,
+    colno: ev.colno,
   })
 })
 window.addEventListener("unhandledrejection", (ev) => {
@@ -60,7 +60,7 @@ declare module "@tanstack/react-router" {
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+    <ThemeProvider defaultTheme="light" storageKey="arisk-ui-theme">
       <QueryClientProvider client={queryClient}>
         <RouterProvider router={router} />
         <Toaster richColors closeButton />

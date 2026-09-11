@@ -4,7 +4,6 @@ import { useState, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 
-import { FloatingAiChat } from "@/components/FloatingAiChat"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -160,17 +159,6 @@ export function SqlLibraryPage() {
             </Card>
           </div>
       </div>
-      <FloatingAiChat
-        title={t("sqlLibrary.aiArea")}
-        hint={t("sqlLibrary.aiHint")}
-        placeholder={t("sqlLibrary.aiPlaceholder")}
-        buildPrompt={(q) => [
-          "你正在 ARISK SQL 资产库协助分析人员理解与运用风控/业绩计算 SQL。",
-          "以下是所选 SQL 资产（作为参考上下文，勿杜撰表结构）：",
-          asset.data?.sql ? `### ${asset.data.title}\n\n\`\`\`sql\n${asset.data.sql}\n\`\`\`` : "（未选择 SQL）",
-          `用户问题：${q}`,
-        ].join("\n")}
-      />
     </div>
   )
 }

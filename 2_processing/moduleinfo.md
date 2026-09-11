@@ -28,7 +28,7 @@ FSI 風控業績平台六層架構的**第二層**，是平台的**計算核心*
 │       ├── data_management.py 數據管理 CRUD、模擬交易與前置風控
 │       ├── indicators.py     指標探索（DataJungle）：目錄/對比時序/CSV導出/可編輯維護
 │       ├── portfolio_cockpit.py 組合列表與駕駛艙：基本盤/MMF指標/狀態/sparkline（只讀）
-│       ├── portfolio_opt.py   組合優化：PyPortfolioOpt 有效前沿/BL/HRP + PNG 圖表（tools/performance/portfolio_optimizer.py）
+│       ├── portfolio_opt.py   組合優化：/analyze 仍走 PyPortfolioOpt；Wave 5 過閘優化與仿真倉由 4_business.portfolio_optimization 編排
 │       ├── positions.py      持倉查詢接口
 │       ├── sql_assets.py     SQL 資產庫：sql/{indicators,mmf} 目錄/正文/AI 上下文（查看用）
 │       ├── valuation.py      組合估值報表 + NAV 階段損益歸因（只讀計算）

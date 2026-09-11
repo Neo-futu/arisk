@@ -7,14 +7,14 @@ import { FALLBACK_AGENTS, FALLBACK_MODELS } from "./constants"
 import { parseToolCalls } from "./utils"
 import type { ChatMessage, SSEEvent, ToolCallRecord } from "./types"
 
-export function useChatSession() {
+export function useChatSession(initialAgentId?: string) {
   const { t } = useTranslation()
   const [sessions,          setSessions]          = useState<ChatSessionRecord[]>([])
   const [currentSessionId,  setCurrentSessionId]  = useState<string | null>(null)
   const [messages,          setMessages]          = useState<ChatMessage[]>([])
   const [streaming,         setStreaming]          = useState(false)
   const [input,             setInput]             = useState("")
-  const [agentId,           setAgentId]           = useState("general")
+  const [agentId,           setAgentId]           = useState(initialAgentId ?? "general")
   const [modelId,           setModelId]           = useState("claude-sonnet-4-6")
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef  = useRef<HTMLTextAreaElement>(null)
@@ -22,6 +22,10 @@ export function useChatSession() {
   const skillsRefreshPromiseRef = useRef<Promise<void> | null>(null)
 
   useEffect(() => { sessionIdRef.current = currentSessionId }, [currentSessionId])
+
+  useEffect(() => {
+    if (initialAgentId) setAgentId(initialAgentId)
+  }, [initialAgentId])
 
   useEffect(() => {
     skillsRefreshPromiseRef.current = fsiApi.refreshSkills()
@@ -35,7 +39,7 @@ export function useChatSession() {
     fsiApi.getMyAgentConfig()
       .then(r => {
         const cfg = r.data
-        if (cfg.default_agent_id) setAgentId(cfg.default_agent_id)
+        if (!initialAgentId && cfg.default_agent_id) setAgentId(cfg.default_agent_id)
         if (cfg.default_model_id) setModelId(cfg.default_model_id)
       })
       .catch(() => {}) // 加載失敗時保持系統默認值
@@ -43,7 +47,7 @@ export function useChatSession() {
     fsiApi.listChatSessions()
       .then(r => setSessions(r.data))
       .catch(() => {})
-  }, [])
+  }, [initialAgentId])
 
   // 拉取 Agent / 模型列表
   const { data: agentListRaw } = useQuery({ queryKey: ["agents-list"],  queryFn: () => fsiApi.listAgents().then(r => r.data),  staleTime: 60_000 })

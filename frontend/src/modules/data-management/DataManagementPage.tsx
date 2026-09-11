@@ -8,11 +8,10 @@ import {
   ShieldCheck,
   Trash2,
 } from "lucide-react"
-import { useMemo, useState, type ReactNode } from "react"
+import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 
-import { FloatingAiChat } from "@/components/FloatingAiChat"
 import { FsiToolbar, FUNDS, lastTradeDate } from "@/components/FsiToolbar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -112,10 +111,20 @@ function ZoneTitle({ index, title, detail, action }: { index: string; title: str
   )
 }
 
-export function DataManagementPage() {
+export function DataManagementPage({
+  initialSection = "positions",
+  lockedSection,
+  titleKey,
+  subtitleKey,
+}: {
+  initialSection?: WorkbenchSection
+  lockedSection?: WorkbenchSection
+  titleKey?: string
+  subtitleKey?: string
+}) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const [section, setSection] = useState<WorkbenchSection>("positions")
+  const [section, setSection] = useState<WorkbenchSection>(lockedSection ?? initialSection)
   const [fundId, setFundId] = useState(FUNDS[0].id)
   const [asOfDate, setAsOfDate] = useState(lastTradeDate)
   const [search, setSearch] = useState("")
@@ -124,6 +133,11 @@ export function DataManagementPage() {
   const [quoteDialog, setQuoteDialog] = useState<DialogState<MarketQuote>>(EMPTY_DIALOG)
   const [orderDialog, setOrderDialog] = useState<DialogState<SimulatedOrder>>(EMPTY_DIALOG)
   const [portfolioDialog, setPortfolioDialog] = useState<DialogState<PortfolioMaster>>(EMPTY_DIALOG)
+
+  useEffect(() => {
+    setSection(lockedSection ?? initialSection)
+    setSearch("")
+  }, [initialSection, lockedSection])
 
   const access = useQuery({
     queryKey: ["my-access-context"],
@@ -213,43 +227,6 @@ export function DataManagementPage() {
     return []
   }, [orders.data?.items, portfolios.data?.items, positions.data?.items, section])
 
-  const aiSummary = useMemo(() => {
-    if (section === "positions") {
-      return (positions.data?.items ?? []).slice(0, 12).map((row) => ({
-        code: row.subject_code,
-        name: row.subject_name,
-        market_value: row.market_value,
-        weight_pct: row.weight_pct,
-      }))
-    }
-    if (section === "market") {
-      return quoteItems.slice(0, 12).map((row) => ({
-        code: row.security_code,
-        market: row.market_id,
-        close: row.close_price,
-        change_pct: row.price_change_pct,
-      }))
-    }
-    if (section === "portfolios") {
-      return (portfolios.data?.items ?? []).slice(0, 20).map((row) => ({
-        port_id: row.port_id,
-        name: row.port_name,
-        type: row.port_type,
-        currency: row.base_currency,
-        is_mmf: row.is_mmf,
-        is_active: row.is_active,
-      }))
-    }
-    return (orders.data?.items ?? []).slice(0, 12).map((row) => ({
-      code: row.security_code,
-      side: row.trade_side,
-      amount: row.trade_amount,
-      status: row.status,
-      decision: row.decision,
-      breaches: row.breach_flags,
-    }))
-  }, [orders.data?.items, portfolios.data?.items, positions.data?.items, quoteItems, section])
-
   async function deletePosition(row: EditablePosition) {
     if (!window.confirm(t("dataManagement.confirmDelete"))) return
     try {
@@ -321,8 +298,8 @@ export function DataManagementPage() {
             <Badge className="gap-1"><Database className="h-3.5 w-3.5" />Data Foundation</Badge>
             <Badge variant="outline">Phase 1</Badge>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">{t("dataManagement.title")}</h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("dataManagement.subtitle")}</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t(titleKey ?? "dataManagement.title")}</h1>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t(subtitleKey ?? "dataManagement.subtitle")}</p>
         </div>
         <div className="flex flex-wrap gap-2 text-xs">
           <Badge variant="secondary"><Database className="mr-1 h-3 w-3" />{t("dataManagement.directDb")}</Badge>
@@ -337,14 +314,26 @@ export function DataManagementPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <Tabs value={section} onValueChange={(value) => {
+                if (lockedSection) return
                 setSection(value as WorkbenchSection)
                 setSearch("")
               }}>
-                <TabsList className="grid w-full max-w-2xl grid-cols-4">
-                  <TabsTrigger value="portfolios">{t("dataManagement.portfoliosTab")}</TabsTrigger>
-                  <TabsTrigger value="positions">{t("dataManagement.positionsTab")}</TabsTrigger>
-                  <TabsTrigger value="market">{t("dataManagement.marketTab")}</TabsTrigger>
-                  <TabsTrigger value="trades">{t("dataManagement.tradesTab")}</TabsTrigger>
+                <TabsList className={lockedSection ? "grid w-full max-w-xs grid-cols-1" : "grid w-full max-w-2xl grid-cols-4"}>
+                  {lockedSection ? (
+                    <TabsTrigger value={lockedSection} data-testid={`data-section-${lockedSection}`}>
+                      {lockedSection === "trades" ? t("dataManagement.tradesTab")
+                        : lockedSection === "market" ? t("dataManagement.marketTab")
+                          : lockedSection === "portfolios" ? t("dataManagement.portfoliosTab")
+                            : t("dataManagement.positionsTab")}
+                    </TabsTrigger>
+                  ) : (
+                    <>
+                      <TabsTrigger value="portfolios" data-testid="data-section-portfolios">{t("dataManagement.portfoliosTab")}</TabsTrigger>
+                      <TabsTrigger value="positions" data-testid="data-section-positions">{t("dataManagement.positionsTab")}</TabsTrigger>
+                      <TabsTrigger value="market" data-testid="data-section-market">{t("dataManagement.marketTab")}</TabsTrigger>
+                      <TabsTrigger value="trades" data-testid="data-section-trades">{t("dataManagement.tradesTab")}</TabsTrigger>
+                    </>
+                  )}
                 </TabsList>
               </Tabs>
               <FsiToolbar
@@ -470,20 +459,6 @@ export function DataManagementPage() {
             </CardContent>
           </Card>
       </div>
-      <FloatingAiChat
-        title={t("dataManagement.aiArea")}
-        hint={t("dataManagement.aiHint")}
-        placeholder={t("dataManagement.aiPlaceholder")}
-        context={{ fund_id: fundId, as_of_date: asOfDate }}
-        buildPrompt={(q) => [
-          "你正在 ARISK 數據管理中心協助投資風控人員。",
-          `當前模塊：${section}；基金：${fundId}；數據日期：${asOfDate}。`,
-          "以下是當前頁面可見數據摘要（只作分析，不得聲稱已執行交易）：",
-          JSON.stringify(aiSummary),
-          `用戶問題：${q}`,
-        ].join("\n")}
-      />
-
       {positionDialog.open ? (
         <PositionDialog
           fundId={fundId}
