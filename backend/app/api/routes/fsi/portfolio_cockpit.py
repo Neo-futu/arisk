@@ -17,13 +17,18 @@ async def overview(
     current_user: CurrentUser,
     session: SessionDep,
     client: ProcessingClient,
-    as_of_date: Annotated[date | None, Query(description="省略=各组合最新")] = None,
+    start_date: Annotated[date | None, Query(description="区间开始")] = None,
+    end_date: Annotated[date | None, Query(description="区间结束；省略时回退 as_of_date")] = None,
+    as_of_date: Annotated[date | None, Query(description="兼容旧参数，等同结束日期")] = None,
 ) -> Any:
     portfolios = list_accessible_portfolios(session, current_user)
     port_ids = ",".join(str(p["port_id"]) for p in portfolios)
+    ended = end_date or as_of_date
     if not port_ids:
         return {
-            "as_of_date": as_of_date.isoformat() if as_of_date else None,
+            "as_of_date": ended.isoformat() if ended else None,
+            "start_date": start_date.isoformat() if start_date else None,
+            "end_date": ended.isoformat() if ended else None,
             "summary": {
                 "total_portfolios": 0,
                 "with_data": 0,
@@ -37,8 +42,11 @@ async def overview(
         }
 
     params: dict[str, Any] = {"port_ids": port_ids}
-    if as_of_date is not None:
-        params["as_of_date"] = str(as_of_date)
+    if start_date is not None:
+        params["start_date"] = str(start_date)
+    if ended is not None:
+        params["end_date"] = str(ended)
+        params["as_of_date"] = str(ended)
     response = await client.get("/portfolio-cockpit/overview", params=params)
     if response.status_code != 200:
         raise HTTPException(status_code=response.status_code, detail=response.text)

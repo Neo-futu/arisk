@@ -1,4 +1,4 @@
-<!-- 更新时间：2026-09-10（北京时间）｜生成模型：Cursor Grok 4.6 -->
+<!-- 更新时间：2026-09-11（北京时间）｜生成模型：Cursor Composer -->
 
 # 在平台上按切片开发完善 RiskEngine
 
@@ -529,3 +529,41 @@ OTC 下一格 **利率 × IRS × RATE +1bp × DV01**：夹具 `IRS5Y`，`resolve
 MMF 下一格：`view="PRODUCT"` 与 `LOOK_THROUGH` PV 相等；指标用 `liquidity().mmf()` 的 WAM/WAL，不是 DV01；情景用 `redemption(20.0)`。
 
 组合层格子（VaR、Governance）只在表 §1.7 第 1–9 行产品格已绿之后做。
+
+---
+
+## 5. 可独立运行的闭环脚本
+
+路径：
+
+- 引擎包（人工开发）：`3_riskengine/scripts/riskengine/`
+  - `config.py` — 引入、参数、夹具 / **DB 真实组合**（`load_portfolio_snapshot`）
+  - `objects.py` — `Engine` / `BoundEngine` / `SliceSpec`
+  - `main.py` — BoundEngine 示例运行
+- 启动器：`3_riskengine/scripts/run_riskengine.py`
+- 闭环（嵌入引擎）：`3_riskengine/scripts/platform_workflow.py`
+
+```bash
+# 夹具
+python 3_riskengine/scripts/run_riskengine.py
+python 3_riskengine/scripts/run_riskengine.py --check
+python 3_riskengine/scripts/run_riskengine.py --book otc
+
+# 平台 DB 真实组合（与线上同一 loader）
+python 3_riskengine/scripts/run_riskengine.py --list-funds
+python 3_riskengine/scripts/run_riskengine.py --fund-id BHMMF001 --as-of-date 2026-09-01
+python 3_riskengine/scripts/run_riskengine.py --fund-id BHMMF001 --as-of-date 2026-09-01 --check
+python 3_riskengine/scripts/run_riskengine.py --fund-id BHMMF001 --as-of-date 2026-09-01 --market-source db
+python 3_riskengine/scripts/run_riskengine.py --fund-id BHMMF001 --as-of-date 2026-09-01 --market-source openbb
+# 需要时才开回退（默认 false，便于排查缺失行情）
+python 3_riskengine/scripts/run_riskengine.py --fund-id BHMMF001 --as-of-date 2026-09-01 --market-source db --market-fallback --market-fallback-source openbb
+
+# 闭环
+python 3_riskengine/scripts/platform_workflow.py
+python 3_riskengine/scripts/platform_workflow.py --fund-id BHMMF001 --as-of-date 2026-09-01
+```
+
+`book.market()` 返回 **单位行情**（主源 `--market-source db|openbb`），不是持仓市值。默认 **`fallback=false`**，缺失行情原样暴露在 `missing` / `[MARKET]`；仅当显式 `--market-fallback` 时用 `--market-fallback-source` 补齐。OpenBB 经 `5_integrations`，不进 RiskEngine 内核。
+
+改定价/指标/情景：改 `riskengine/objects.py` 的 `BoundEngine`。`platform_workflow` 通过 `import riskengine` 嵌入。
+

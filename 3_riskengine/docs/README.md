@@ -1,4 +1,4 @@
-<!-- 更新时间：2026-09-10（北京时间）｜生成模型：Cursor Grok 4.6 -->
+<!-- 更新时间：2026-09-11（北京时间）｜生成模型：Cursor Grok 4.6 -->
 
 # RiskEngine 文档目录
 
@@ -10,7 +10,7 @@
 | [代码和说明](codebase-guide.md) | 开发 | 目录、模块职责、关键函数、血缘字段 |
 | [产品与金融业务](products-and-business.md) | 业务 / 产品 / 风控 | 全部 ProductKind、指标、风险流程、报表 |
 | [开发细化](development-playbook.md) | 开发 + 业务一起迭代 | 如何加产品、指标、流程、报表；红线与测试 |
-| [平台切片开发](platform-incremental-verification.md) | 开发 + 业务 | 枚举资产/产品/指标/情景/估值；索引；单切片实现示例 |
+| [平台切片开发](platform-incremental-verification.md) | 开发 + 业务 | 枚举；索引；单切片。引擎包 `scripts/riskengine/`，闭环 `scripts/platform_workflow.py` |
 | [目标架构](target-architecture.md) | 架构 | FinancePy / ORE / Riskfolio 能力矩阵与路由 |
 
 **边界（全部文档共用）：**

@@ -1,4 +1,4 @@
-<!-- 更新时间：2026-09-10（北京时间）｜生成模型：Cursor Grok 4.6 -->
+<!-- 更新时间：2026-09-11（北京时间）｜生成模型：Cursor Grok 4.6 -->
 
 # 3_riskengine — 统一量化与风险计算平台
 
@@ -6,7 +6,7 @@
 
 RiskEngine 是 ARISK **自主**的统一 Quantitative Finance & Risk Engine，不是第三方库的薄封装。它负责统一对象、接口、估值、风险因子、情景、结果与验证。FinancePy / Riskfolio / ORE 只通过 `adapters/` 接入。
 
-目标架构与三库能力矩阵、路由表、分阶段计划见 [`docs/target-architecture.md`](docs/target-architecture.md)。给人用的说明（架构接口、代码、产品业务、开发细化、平台切片开发）见 [`docs/README.md`](docs/README.md)。
+目标架构与三库能力矩阵、路由表、分阶段计划见 [`docs/target-architecture.md`](docs/target-architecture.md)。给人用的说明见 [`docs/README.md`](docs/README.md)。开发用引擎包：[`scripts/riskengine/`](scripts/riskengine/)（`config` / `objects` / `main`）；启动器 [`scripts/run_riskengine.py`](scripts/run_riskengine.py)；闭环 [`scripts/platform_workflow.py`](scripts/platform_workflow.py)。
 
 ```
 4_business

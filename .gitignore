@@ -30,6 +30,8 @@ iac/backend.*.hcl
 iac/.build/
 # tfvars 可能含环境差异值（如需共享请显式去掉忽略）
 *.auto.tfvars
-FinancePy/
-ORE/
-Riskfolio-Lib/
+# 仅忽略仓库根目录的第三方参考源码（勿用无前缀规则：
+# Windows 上 gitignore 大小写不敏感，ORE/ 会误排除 3_riskengine/adapters/ore）
+/FinancePy/
+/ORE/
+/Riskfolio-Lib/

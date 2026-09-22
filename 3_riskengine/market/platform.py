@@ -10,6 +10,8 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .asof import DEFAULT_MARKET_FALLBACK, DEFAULT_MARKET_FALLBACK_SOURCE, DEFAULT_MARKET_SOURCE
+
 CANONICAL_TABLES = {
     "Market": "fsi.mktdata_*",
     "Portfolio": "fsi.para_portfolio",
@@ -44,10 +46,27 @@ async def load_portfolio_snapshot(
     as_of_date: date,
     db: AsyncSession,
     lookback_days: int = 500,
+    *,
+    market_source: str = DEFAULT_MARKET_SOURCE,
+    market_lookback_days: int = 30,
+    market_fallback: bool = DEFAULT_MARKET_FALLBACK,
+    market_fallback_source: str | None = DEFAULT_MARKET_FALLBACK_SOURCE,
 ) -> Any:
-    """Compose the existing ARISK snapshot. SQL lives in risk_testing loaders."""
+    """Compose the existing ARISK snapshot and attach as-of market quotes."""
 
     from importlib import import_module
 
+    from .asof import attach_market_panel, load_asof_market_panel
+
     loader = import_module("2_processing.tools.risk_testing.loader")
-    return await loader.load_portfolio_snapshot(fund_id, as_of_date, db, lookback_days)
+    snapshot = await loader.load_portfolio_snapshot(fund_id, as_of_date, db, lookback_days)
+    panel = await load_asof_market_panel(
+        db,
+        snapshot,
+        source=market_source,
+        lookback_days=market_lookback_days,
+        fallback=market_fallback,
+        fallback_source=market_fallback_source,
+    )
+    attach_market_panel(snapshot, panel)
+    return snapshot
