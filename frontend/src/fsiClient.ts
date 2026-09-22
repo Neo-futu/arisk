@@ -527,6 +527,13 @@ export interface RiskTestingHoldings {
   holdings: RiskTestingHolding[]
 }
 
+export interface PortfolioNavPoint {
+  date: string | null
+  net_asset: number | null
+  unit_nav: number | null
+  day_return: number | null
+}
+
 export interface PortfolioCockpitItem {
   port_id: string
   port_name: string
@@ -543,6 +550,7 @@ export interface PortfolioCockpitItem {
   acc_unit_nav: number | null
   day_return: number | null
   return_rate_7d: number | null
+  period_return?: number | null
   wam_days: number | null
   wal_days: number | null
   wam_limit_days: number | null
@@ -552,6 +560,7 @@ export interface PortfolioCockpitItem {
   status: "ok" | "warn" | "breach"
   has_data: boolean
   sparkline: number[]
+  history?: PortfolioNavPoint[]
 }
 
 export interface PortfolioCockpitOverview {
@@ -1789,9 +1798,13 @@ export const fsiApi = {
   },
 
   // ── 组合驾驶舱（Module 2.1） ────────────────────────────
-  getPortfolioCockpit(opts?: { asOfDate?: string }) {
+  getPortfolioCockpit(opts?: { startDate?: string; endDate?: string; asOfDate?: string }) {
+    const endDate = opts?.endDate ?? opts?.asOfDate
     return axios.get<PortfolioCockpitOverview>(`${BASE}/api/v1/fsi/portfolio-cockpit/overview`, {
-      params: opts?.asOfDate ? { as_of_date: opts.asOfDate } : undefined,
+      params: {
+        ...(opts?.startDate ? { start_date: opts.startDate } : {}),
+        ...(endDate ? { end_date: endDate, as_of_date: endDate } : {}),
+      },
       headers: authHeaders(),
     })
   },

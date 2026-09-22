@@ -1,33 +1,58 @@
 """Build FinancePy-style Market from an ARISK portfolio snapshot.
 
-Curve callables are bound to the FinancePy adapter when the engine is provided.
-Products never import financepy / ORE / riskfolio.
+``Market.prices`` are **unit market quotes** (close / dirty / NAV), never position
+``market_value``. Prefer ``snapshot.market_panel`` loaded from ``fsi.mktdata_*``
+(+ optional OpenBB gaps). Curve callables bind to FinancePy / ORE adapters.
 """
 from __future__ import annotations
 
 from typing import Any
 
 from ..core.contracts import Market
+from .asof import AsOfMarketPanel, attach_market_panel, panel_from_positions
+
+
+def _panel_of(snapshot: Any) -> AsOfMarketPanel:
+    panel = getattr(snapshot, "market_panel", None)
+    if isinstance(panel, AsOfMarketPanel):
+        return panel
+    derived = panel_from_positions(snapshot)
+    attach_market_panel(snapshot, derived)
+    return derived
 
 
 def market_from_snapshot(snapshot: Any, engine: Any | None = None) -> Market:
-    prices: dict[str, float] = {}
-    fx: dict[str, float] = {}
-    for position in getattr(snapshot, "positions", ()):
-        code = str(position.security_code)
-        prices[code] = float(position.market_value)
-        fx[str(position.currency)] = float(getattr(position, "fx_rate", 1.0) or 1.0)
-    fx.setdefault(str(snapshot.reporting_currency), 1.0)
+    panel = _panel_of(snapshot)
+    quality = panel.quality()
+    vols: dict[str, float] = {}
+    for position in getattr(snapshot, "positions", ()) or ():
+        meta = getattr(position, "metadata", None) or {}
+        vol = meta.get("historical_volatility")
+        if vol is not None:
+            vols[str(position.security_code)] = float(vol)
+
     market = Market(
         valuation_date=snapshot.as_of_date,
-        prices=prices,
-        fx=fx,
+        prices=dict(panel.prices),
+        fx=dict(panel.fx),
+        volatility=vols,
         macro={
             "nav": float(snapshot.net_asset),
             "fund_id": getattr(snapshot, "fund_id", ""),
             "reporting_currency": str(snapshot.reporting_currency),
+            "market_data_kind": "quotes",
+            "bond_risk": dict(panel.bond_risk),
+            "quote_dates": {k: v.isoformat() for k, v in panel.quote_dates.items()},
+            "sources": dict(panel.sources),
+            "fields": dict(panel.fields),
+            "data_quality": quality,
+            "warnings": list(panel.warnings),
+            "missing": list(panel.missing),
+            "stale": list(panel.stale),
+            "abnormal": list(panel.abnormal),
         },
     )
+
     adapter = getattr(engine, "financepy", None) if engine is not None else None
     ore = getattr(engine, "ore", None) if engine is not None else None
     as_of = snapshot.as_of_date
