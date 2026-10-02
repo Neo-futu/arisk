@@ -88,6 +88,24 @@
       "start_cell": "A2",
       "header": false,
       "description": "T+1流動性六大來源：現金/自然到期/回購淨差/可融資/債券變現/存款提取"
+    },
+    {
+      "id": "06_10",
+      "name": "SFC壓力測試持倉明細",
+      "sql": "10_sfc_stress.sql",
+      "sheet": "SFC壓力測試原始",
+      "start_cell": "A2",
+      "header": false,
+      "description": "SFC MMF壓力測試：雙場景(Normal/Stressed)持倉明細，含ADTV變現係數/利率衝擊/5檔時間桶，落庫sfc_liquidity_stress/compliance，A1=表頭，數據A2起"
+    },
+    {
+      "id": "06_11",
+      "name": "SFC流動性分層與合規",
+      "sql": "11_sfc_compliance_summary.sql",
+      "sheet": "SFC壓力測試",
+      "start_cell": "A6",
+      "header": false,
+      "description": "SFC文檔§1 Indicative Liquidity Profile：5檔分層(1D/2-7D/8-30D/31-90D/>90D)×雙場景 + DLA≥7.5%/WLA≥15%合規，寫入B6起（前置：06_10）"
     }
   ]
 }

@@ -122,6 +122,7 @@ CREATE TABLE IF NOT EXISTS fsi.balance_deposit (
     fx_rate           NUMERIC(16,8),
     weight_pct        NUMERIC(10,6),
     is_overnight      BOOLEAN             NOT NULL DEFAULT FALSE,
+    is_penalty_on_early_redeem BOOLEAN    NOT NULL DEFAULT FALSE, -- 提前支取有罰息=True（不可無損早破）；T_Balance_Deposit.IsInterestPenalty
     bank_branch_name  VARCHAR(200),                -- 銀行支行名稱；T_Balance_Deposit.BankBranchName
     loaded_at         TIMESTAMPTZ         NOT NULL DEFAULT NOW(),
     PRIMARY KEY (evaluate_date, port_id, deposit_id)
@@ -129,6 +130,7 @@ CREATE TABLE IF NOT EXISTS fsi.balance_deposit (
 COMMENT ON TABLE  fsi.balance_deposit IS '定期存款持倉：銀行定存明細，流動性分析和信用集中度計算';
 COMMENT ON COLUMN fsi.balance_deposit.bank_group IS '銀行集團名，計算集團敞口（如「工銀集團」含各子公司）';
 COMMENT ON COLUMN fsi.balance_deposit.is_overnight IS 'True計入MMF每日流動資產（SFC守則≥7.5%）';
+COMMENT ON COLUMN fsi.balance_deposit.is_penalty_on_early_redeem IS 'True=提前支取有罰息（SFC壓力測試視為不可早破，僅合約到期變現）';
 COMMENT ON COLUMN fsi.balance_deposit.remaining_days IS '剩餘天數，資料庫自動計算';
 
 CREATE INDEX IF NOT EXISTS idx_bal_dep_port_date ON fsi.balance_deposit(port_id, evaluate_date DESC);
