@@ -14,7 +14,6 @@ IR_IDS = (
     "factor-risk",
     "market-risk",
     "rates-credit",
-    "fx-asset-risk",
     "liquidity-risk",
     "concentration-risk",
     "counterparty-risk",

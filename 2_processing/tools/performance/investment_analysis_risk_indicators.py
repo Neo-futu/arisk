@@ -11,11 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .investment_analysis_common import (
     _benchmark_id,
-    _daily_returns,
     _date_value,
     _equity_beta,
+    _nav_daily_returns,
     _nav_history,
     _number,
+    _resolve_nav_period,
     _return_between,
 )
 
@@ -27,9 +28,37 @@ async def compute_risk_indicators(
     db: AsyncSession,
 ) -> dict[str, Any]:
     """計算區間收益率、波動率、最大回撤、股票換手率和股票 Beta。"""
-    history = await _nav_history(db, fund_id, period_end, period_start)
+    resolved = await _resolve_nav_period(db, fund_id, period_start, period_end)
+    if resolved is None:
+        return {
+            "fund_id": fund_id,
+            "period_start": period_start,
+            "period_end": period_end,
+            "resolved_period_start": None,
+            "resolved_period_end": None,
+            "data_as_of": None,
+            "interval_return_pct": None,
+            "annualized_volatility_pct": None,
+            "max_drawdown_pct": None,
+            "max_drawdown_start": None,
+            "max_drawdown_end": None,
+            "sample_size": 0,
+            "equity_turnover": {
+                "buy_amount": 0.0,
+                "sell_amount": 0.0,
+                "average_equity_balance": 0.0,
+                "period_turnover_pct": None,
+                "annualized_turnover_pct": None,
+                "method": "單邊換手率=min(買入額,賣出額)/區間日均股票餘額",
+            },
+            "equity_beta": {"value": None, "benchmark_id": None, "sample_size": 0, "constituents": []},
+            "message": "指定結束日及之前無可用 NAV 數據",
+        }
+
+    effective_start, effective_end, latest_nav = resolved
+    history = await _nav_history(db, fund_id, effective_end, effective_start)
     points = [(_date_value(row["evaluate_date"]), _number(row["nav"])) for row in history]
-    returns = list(_daily_returns(points).values())
+    returns = list(_nav_daily_returns(history).values())
     interval_return = _return_between(points)
     annualized_volatility = (
         statistics.stdev(returns) * math.sqrt(252) if len(returns) >= 2 else None
@@ -79,7 +108,7 @@ async def compute_risk_indicators(
             GROUP BY t.buy_amount, t.sell_amount
             """
         ),
-        {"fund_id": fund_id, "start": period_start, "end": period_end},
+        {"fund_id": fund_id, "start": effective_start, "end": effective_end},
     )
     turnover_row = dict(turnover_result.mappings().first() or {})
     buy_amount = _number(turnover_row.get("buy_amount"))
@@ -87,16 +116,26 @@ async def compute_risk_indicators(
     average_balance = _number(turnover_row.get("average_equity_balance"))
     one_way_amount = min(buy_amount, sell_amount)
     period_turnover = one_way_amount / average_balance if average_balance else None
-    calendar_days = max((period_end - period_start).days + 1, 1)
+    calendar_days = max((effective_end - effective_start).days + 1, 1)
     annualized_turnover = period_turnover * 365 / calendar_days if period_turnover is not None else None
 
-    benchmark_id = await _benchmark_id(db, fund_id, period_end)
-    equity_beta = await _equity_beta(db, fund_id, benchmark_id, period_start, period_end)
+    benchmark_id = await _benchmark_id(db, fund_id, effective_end)
+    equity_beta = await _equity_beta(db, fund_id, benchmark_id, effective_start, effective_end)
+
+    message = None
+    if effective_end != period_end or effective_start != period_start:
+        message = (
+            f"請求區間 {period_start}~{period_end} 已對齊到庫內 NAV 窗口 "
+            f"{effective_start}~{effective_end}（最近數據日 {latest_nav}）"
+        )
 
     return {
         "fund_id": fund_id,
         "period_start": period_start,
         "period_end": period_end,
+        "resolved_period_start": effective_start,
+        "resolved_period_end": effective_end,
+        "data_as_of": latest_nav,
         "interval_return_pct": interval_return * 100.0 if interval_return is not None else None,
         "annualized_volatility_pct": annualized_volatility * 100.0 if annualized_volatility is not None else None,
         "max_drawdown_pct": drawdown * 100.0 if points else None,
@@ -112,4 +151,5 @@ async def compute_risk_indicators(
             "method": "單邊換手率=min(買入額,賣出額)/區間日均股票餘額",
         },
         "equity_beta": equity_beta,
+        "message": message,
     }

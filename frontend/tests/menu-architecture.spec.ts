@@ -212,8 +212,8 @@ test("preserved routes remain directly accessible", async ({ page }) => {
 
   await page.goto("/portfolio-opt#construction")
   await expect(page.locator("#construction")).toBeVisible()
-  await page.goto("/investment-risk/overview#asset-risk")
-  await expect(page.locator("#asset-risk")).toBeVisible()
+  await page.goto("/investment-risk/overview#exposure-overview")
+  await expect(page.locator("#exposure-overview")).toBeVisible()
 })
 
 test("first-level menus own their routes and do not open sibling groups", async ({ page }) => {
@@ -279,7 +279,8 @@ test("workbench homepage shows greeting, todos and feature entries", async ({ pa
   await page.goto("/")
 
   await expect(page.getByTestId("home-workbench")).toBeVisible()
-  await expect(page.getByRole("heading", { name: /你好，Admin/ })).toBeVisible()
+  await expect(page.getByRole("heading", { name: "工作台" })).toBeVisible()
+  await expect(page.getByText(/你好，Admin/)).toBeVisible()
   await expect(page.getByTestId("home-shortcut-portfolio-cockpit")).toBeVisible()
   await expect(page.getByTestId("home-shortcut-investment-risk")).toBeVisible()
   await expect(page.getByText("平台状态总览")).toBeVisible()

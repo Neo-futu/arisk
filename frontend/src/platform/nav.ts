@@ -6,7 +6,6 @@ export const INVESTMENT_RISK_NAV = [
   { id: "factor-risk", titleKey: "nav.factorRisk", path: "/investment-risk/factor-behavior#factor-risk" },
   { id: "market-risk", titleKey: "nav.marketRisk", path: "/investment-risk/macro-dynamics#market-risk" },
   { id: "rates-credit", titleKey: "nav.ratesCreditRisk", path: "/investment-risk/rates-credit" },
-  { id: "fx-asset-risk", titleKey: "nav.fxAssetRisk", path: "/investment-risk/overview#asset-risk" },
   { id: "liquidity-risk", titleKey: "nav.liquidityRisk", path: "/investment-risk/liquidity-stress" },
   { id: "concentration-risk", titleKey: "nav.concentrationRisk", path: "/investment-risk/rates-credit#concentration-risk" },
   { id: "counterparty-risk", titleKey: "nav.counterpartyRisk", path: "/investment-risk/rates-credit#counterparty-risk" },

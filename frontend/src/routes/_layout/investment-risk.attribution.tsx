@@ -21,6 +21,7 @@ import {
 import { fsiApi, type SecurityPnl } from "@/fsiClient"
 import { exportCsv, TrendLineChart } from "@/modules/investment-risk/dashboard-kit"
 import { EngineKpiPanel } from "@/modules/investment-risk/EngineKpiPanel"
+import { EquityBetaContributionCard } from "@/modules/investment-risk/EquityBetaContributionCard"
 
 export const Route = createFileRoute("/_layout/investment-risk/attribution")({
   component: PerformanceAttributionPage,
@@ -75,6 +76,12 @@ function PerformanceAttributionPage() {
   const attributionSeries = useQuery({
     queryKey: ["performance-attribution-timeseries", fundId, startDate, endDate],
     queryFn: () => fsiApi.getPerformanceAttributionTimeseries(fundId, startDate, endDate).then((response) => response.data),
+    enabled: startDate <= endDate,
+    retry: 1,
+  })
+  const equityBetaQuery = useQuery({
+    queryKey: ["performance-attribution-equity-beta", fundId, startDate, endDate],
+    queryFn: () => fsiApi.getRiskIndicators(fundId, startDate, endDate).then((response) => response.data),
     enabled: startDate <= endDate,
     retry: 1,
   })
@@ -284,6 +291,20 @@ function PerformanceAttributionPage() {
               </Table>
             </CardContent>
           </Card>
+
+          {equityBetaQuery.data?.equity_beta ? (
+            <EquityBetaContributionCard
+              fundId={fundId}
+              asOfDate={endDate}
+              portfolioBeta={equityBetaQuery.data.equity_beta.value}
+              benchmarkId={equityBetaQuery.data.equity_beta.benchmark_id}
+              constituents={equityBetaQuery.data.equity_beta.constituents ?? []}
+              applicable={
+                (equityBetaQuery.data.equity_beta.constituents?.length ?? 0) > 0 ||
+                equityBetaQuery.data.equity_beta.value != null
+              }
+            />
+          ) : null}
         </>
       )}
     </div>

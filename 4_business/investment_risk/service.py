@@ -82,6 +82,7 @@ async def kpi_pack_for_fund(
 compute_portfolio_basic_info = _analysis.compute_portfolio_basic_info
 compute_portfolio_overview = _analysis.compute_portfolio_overview
 compute_portfolio_overview_timeseries = _analysis.compute_portfolio_overview_timeseries
+compute_security_holdings = _analysis.compute_security_holdings
 compute_risk_indicators = _analysis.compute_risk_indicators
 compute_risk_indicator_timeseries = _analysis.compute_risk_indicator_timeseries
 compute_performance_attribution = _analysis.compute_performance_attribution
@@ -91,3 +92,5 @@ compute_liquidity_stress_testing = _analysis.compute_liquidity_stress_testing
 compute_pretrade_risk_budget = _analysis.compute_pretrade_risk_budget
 compute_macro_market_dynamics = _analysis.compute_macro_market_dynamics
 compute_factor_behavior_risk = _analysis.compute_factor_behavior_risk
+compute_risk_metric_board = _analysis.compute_risk_metric_board
+read_reported_exposure = _analysis.read_reported_exposure

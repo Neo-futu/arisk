@@ -694,8 +694,15 @@ WHERE port_id = 'BHMMF001'
 
 ### SQL-RI-02 風險時序
 
+> 取數來源：`fsi.balance_portfolio_nav`。滾動波動率 / 回撤 / 滾動 VaR 在 Processing
+> `compute_risk_indicator_timeseries`（Python）中計算：優先使用 `day_return`，
+> 否則用 NAV 比；窗口 20 日、年化係數 √252。
+
 ```sql
-SELECT evaluate_date, COALESCE(acc_unit_nav, unit_nav) AS nav
+SELECT evaluate_date,
+       COALESCE(acc_unit_nav, unit_nav) AS nav,
+       day_return,
+       net_asset
 FROM fsi.balance_portfolio_nav
 WHERE port_id = 'BHMMF001'
   AND evaluate_date BETWEEN '2026-01-01' AND '2026-06-25'

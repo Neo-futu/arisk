@@ -1,13 +1,14 @@
 /**
  * FsiToolbar — 所有 FSI 頁面共用的基金選擇 + 日期選擇 + 刷新工具欄
+ * 日期控件与组合驾驶舱一致：原生 date input，支持键盘输入与日历选择。
  */
 import { RefreshCw } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { useEffect, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 
-import { DatePicker } from "@/components/DatePicker"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import {
   Select,
   SelectContent,
@@ -82,7 +83,7 @@ export function FsiToolbar({
   }, [authorizedFunds, fundId, onFundChange])
 
   return (
-    <div className="flex flex-wrap items-center gap-3">
+    <div className="flex flex-wrap items-end gap-3">
       <Select value={fundId} onValueChange={onFundChange}>
         <SelectTrigger className="w-56">
           <SelectValue placeholder={t("toolbar.selectFund")} />
@@ -98,25 +99,48 @@ export function FsiToolbar({
 
       {startDate !== undefined && onStartDateChange ? (
         <div className="space-y-1">
-          {startDateLabel ? <div className="text-xs text-muted-foreground">{startDateLabel}</div> : null}
-          <DatePicker value={startDate} onChange={onStartDateChange} />
+          <div className="text-xs text-muted-foreground">
+            {startDateLabel ?? t("platform.startDate")}
+          </div>
+          <Input
+            type="date"
+            className="h-9 w-40"
+            value={startDate}
+            onChange={(event) => onStartDateChange(event.target.value)}
+          />
         </div>
       ) : null}
 
       <div className="space-y-1">
-        {asOfDateLabel ? <div className="text-xs text-muted-foreground">{asOfDateLabel}</div> : null}
-        <DatePicker value={asOfDate} onChange={onDateChange} />
+        {(asOfDateLabel || startDate !== undefined) ? (
+          <div className="text-xs text-muted-foreground">
+            {asOfDateLabel ?? t("platform.endDate")}
+          </div>
+        ) : null}
+        <Input
+          type="date"
+          className="h-9 w-40"
+          value={asOfDate}
+          onChange={(event) => onDateChange(event.target.value)}
+        />
       </div>
 
       <Button
         variant="outline"
         size="icon"
+        className="h-9 w-9 shrink-0"
         onClick={onRefresh}
         disabled={isFetching}
         title={t("toolbar.reload")}
       >
         <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
       </Button>
+      <span
+        className={`inline-flex h-9 min-w-16 items-center text-sm text-muted-foreground ${isFetching ? "animate-pulse" : "invisible"}`}
+        aria-live="polite"
+      >
+        {t("toolbar.loading")}
+      </span>
 
       {extra}
     </div>

@@ -5,7 +5,6 @@ import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import { FUNDS, FsiToolbar, lastTradeDate } from "@/components/FsiToolbar"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -19,7 +18,6 @@ import {
 } from "@/components/ui/table"
 import { fsiApi } from "@/fsiClient"
 import { exportCsv, HorizontalBarList, TrendLineChart } from "@/modules/investment-risk/dashboard-kit"
-import { EngineKpiPanel } from "@/modules/investment-risk/EngineKpiPanel"
 
 export const Route = createFileRoute("/_layout/investment-risk/overview")({
   component: PortfolioOverviewPage,
@@ -166,12 +164,8 @@ function PortfolioOverviewPage() {
   return (
     <div className="space-y-6">
       <div>
-        <div className="mb-1 flex items-center gap-2">
-          <Badge variant="outline">{t("investmentRisk.tag")}</Badge>
-          <span className="text-muted-foreground text-sm">{t("investmentRisk.overview.title")}</span>
-        </div>
-        <h1 className="text-2xl font-bold tracking-tight">{t("investmentRisk.overview.title")}</h1>
-        <p className="text-muted-foreground text-sm">
+        <h1 className="text-2xl font-bold">{t("investmentRisk.overview.title")}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           {t("investmentRisk.overview.subtitle")}
         </p>
       </div>
@@ -185,11 +179,6 @@ function PortfolioOverviewPage() {
         isFetching={isFetching}
       />
 
-      <EngineKpiPanel domain="overview" fundId={fundId} asOfDate={asOfDate} />
-
-      <section id="asset-risk" className="scroll-mt-20 space-y-4">
-      <EngineKpiPanel domain="fx" fundId={fundId} asOfDate={asOfDate} title={t("nav.fxAssetRisk")} />
-      {isFetching && <p className="text-muted-foreground animate-pulse text-sm">{t("investmentRisk.common.loading")}</p>}
       {isError && (
         <Card className="border-destructive">
           <CardContent className="pt-4 text-sm text-destructive">
@@ -200,20 +189,17 @@ function PortfolioOverviewPage() {
 
       {data && (
         <>
-          {data.snapshot_dates && (data.snapshot_dates.stock || data.snapshot_dates.bond || data.snapshot_dates.asset) ? (
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <span>{t("investmentRisk.overview.snapshotDates")}</span>
-              {data.snapshot_dates.asset ? <Badge variant="outline">{t("investmentRisk.overview.snapshotAsset", { date: data.snapshot_dates.asset })}</Badge> : null}
-              {data.snapshot_dates.stock ? <Badge variant="outline">{t("investmentRisk.overview.snapshotStock", { date: data.snapshot_dates.stock })}</Badge> : null}
-              {data.snapshot_dates.bond ? <Badge variant="outline">{t("investmentRisk.overview.snapshotBond", { date: data.snapshot_dates.bond })}</Badge> : null}
-            </div>
-          ) : null}
-
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <MetricCard label={t("investmentRisk.overview.fund")} value={data.portfolio.port_name || fundId} detail={data.portfolio.portfolio_type ?? "—"} />
             <MetricCard label={t("investmentRisk.overview.netAsset")} value={money(data.portfolio.net_asset, currency)} detail={t("investmentRisk.overview.dataDate", { date: data.portfolio.data_date ?? "—" })} />
             <MetricCard label={t("investmentRisk.overview.unitNav")} value={data.portfolio.unit_nav == null ? "—" : Number(data.portfolio.unit_nav).toFixed(4)} detail={t("investmentRisk.overview.accNav", { value: data.portfolio.acc_unit_nav == null ? "—" : Number(data.portfolio.acc_unit_nav).toFixed(4) })} />
-            <MetricCard label={t("investmentRisk.overview.dayReturn")} value={percent(data.portfolio.day_return == null ? null : Number(data.portfolio.day_return) * 100, 3)} detail={t("investmentRisk.overview.periodCount", { count: data.performance.length })} />
+            <MetricCard
+              label={t("investmentRisk.overview.dayReturn")}
+              value={percent(data.portfolio.day_return == null ? null : Number(data.portfolio.day_return) * 100, 3)}
+              detail={t("investmentRisk.overview.dayReturnHint", {
+                date: data.portfolio.data_date ?? "—",
+              })}
+            />
           </div>
 
           <div className="grid gap-6 xl:grid-cols-2">
@@ -225,6 +211,7 @@ function PortfolioOverviewPage() {
                 <TrendLineChart
                   values={(overviewSeries.data?.points ?? []).map((row) => row.cumulative_return_pct ?? 0)}
                   labels={(overviewSeries.data?.points ?? []).map((row) => String(row.date).slice(5))}
+                  valueFormatter={(value) => `${value.toFixed(2)}%`}
                 />
               </CardContent>
             </Card>
@@ -407,7 +394,6 @@ function PortfolioOverviewPage() {
           </Card>
         </>
       )}
-      </section>
     </div>
   )
 }

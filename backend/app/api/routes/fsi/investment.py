@@ -65,6 +65,20 @@ async def get_portfolio_overview_timeseries(
     )
 
 
+@router.get("/holdings/{fund_id}", summary="個券層面完整持倉明細")
+async def get_security_holdings(
+    fund_id: str,
+    as_of_date: Annotated[date, Query(description="估值日期 YYYY-MM-DD")],
+    _user: PortfolioViewer,
+    client: ProcessingClient,
+) -> Any:
+    return await _proxy(
+        client,
+        f"/investment/holdings/{fund_id}",
+        {"as_of_date": str(as_of_date)},
+    )
+
+
 @router.get("/risk-indicators/{fund_id}", summary="投資風險指標")
 async def get_risk_indicators(
     fund_id: str,
@@ -91,6 +105,37 @@ async def get_risk_indicator_timeseries(
     return await _proxy(
         client,
         f"/investment/risk-indicators-timeseries/{fund_id}",
+        {"start": str(start), "end": str(end)},
+    )
+
+
+@router.get("/reported-exposure/{fund_id}", summary="整體風險敞口（報表層）")
+async def get_reported_exposure(
+    fund_id: str,
+    as_of_date: Annotated[date, Query(description="估值日期 YYYY-MM-DD")],
+    _user: PortfolioViewer,
+    client: ProcessingClient,
+) -> Any:
+    # 報表層讀取 svc_risk_exposure / svc_risk_snapshot。
+    return await _proxy(
+        client,
+        f"/investment/reported-exposure/{fund_id}",
+        {"as_of_date": str(as_of_date)},
+    )
+
+
+@router.get("/risk-metric-board/{fund_id}", summary="六大類風控指標看板")
+async def get_risk_metric_board(
+    fund_id: str,
+    start: Annotated[date, Query(description="區間開始日期")],
+    end: Annotated[date, Query(description="區間結束日期")],
+    _user: PortfolioViewer,
+    client: ProcessingClient,
+) -> Any:
+    # 六大类指标：信用/停牌/条款/风格/发行人主体走独立行情表。
+    return await _proxy(
+        client,
+        f"/investment/risk-metric-board/{fund_id}",
         {"start": str(start), "end": str(end)},
     )
 

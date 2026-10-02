@@ -15,6 +15,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { fsiApi } from "@/fsiClient"
 import { HorizontalBarList } from "@/modules/investment-risk/dashboard-kit"
+import { EquityBetaContributionCard } from "@/modules/investment-risk/EquityBetaContributionCard"
 import { SqlViewButton } from "@/modules/investment-risk/SqlViewButton"
 
 function pct(value: number | null | undefined, digits = 2) {
@@ -61,7 +62,14 @@ function AttributionDomain({ fundId, startDate, endDate }: DomainProps) {
     enabled: startDate <= endDate,
     retry: 1,
   })
+  const betaQuery = useQuery({
+    queryKey: ["domain-attribution-equity-beta", fundId, startDate, endDate],
+    queryFn: () => fsiApi.getRiskIndicators(fundId, startDate, endDate).then((r) => r.data),
+    enabled: startDate <= endDate,
+    retry: 1,
+  })
   const data = query.data
+  const equityBeta = betaQuery.data?.equity_beta
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -113,6 +121,18 @@ function AttributionDomain({ fundId, startDate, endDate }: DomainProps) {
           </div>
         </>
       )}
+      {equityBeta ? (
+        <EquityBetaContributionCard
+          fundId={fundId}
+          asOfDate={endDate}
+          portfolioBeta={equityBeta.value}
+          benchmarkId={equityBeta.benchmark_id}
+          constituents={equityBeta.constituents ?? []}
+          applicable={(equityBeta.constituents?.length ?? 0) > 0 || equityBeta.value != null}
+        />
+      ) : betaQuery.isFetching ? (
+        <p className="text-muted-foreground animate-pulse text-sm">{t("investmentRisk.domains.loading")}</p>
+      ) : null}
     </div>
   )
 }

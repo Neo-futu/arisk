@@ -1,6 +1,6 @@
 # ARISK 数据库结构概览
 
-> 更新时间：2026-09-01 北京时间 | 生成模型：GPT-5.6 Sol
+> 更新时间：2026-09-29 北京时间 | 生成模型：Grok 4.7
 >
 > 本文只做**导航概览**，指向权威源；表结构以下列 SQL / 迁移文件为准，勿在此复述细节。
 
@@ -31,6 +31,10 @@ arisk 使用**单一 PostgreSQL 实例（`fsi_risk` 库）**，两个 schema 共
 | `014_risk_rule_applications.sql` | 风控规则应用 |
 | `015_risk_rule_permissions.sql` | 风控规则权限 |
 | `016_data_management_workbench.sql` | 模拟交易、前置风控结果与数据管理审计闭环 |
+| `018_risk_metric_extensions.sql` | 投资者 sponsor、发行人舆情、关联方 |
+| `019_am_category_tables.sql` | 固收信用、停牌、保护条款、权益风格、发行人主体 |
+| `020_portfolio_benchmark.sql` | 组合基准关联、恒生指数行情、跟踪误差控制线 |
+| `021_risk_metric_report.sql` | 六大类风控指标报表：看板头与分项指标 |
 
 seed 数据见 `1_datastorage/postgres/seeds/`。
 

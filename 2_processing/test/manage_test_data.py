@@ -183,10 +183,12 @@ async def handle_balance_bond(db: AsyncSession, action: str, port_id: str, eval_
             text("""
                 INSERT INTO fsi.balance_bond (
                     evaluate_date, port_id, security_code, security_name,
+                    asset_subtype, issuer_name,
                     market_value, total_market_value, debt_rating, issuer_rating,
                     currency, quantity, cost, loaded_at
                 ) VALUES (
                     :eval_date, :port_id, 'CN0002001234', '26國債01',
+                    'BOND_GOVT', '中國財政部',
                     10000000.00, 10000000.00, 'AAA', 'AAA',
                     'CNY', 100000, 9950000.00, CURRENT_TIMESTAMP
                 );

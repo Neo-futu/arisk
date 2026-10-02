@@ -23,6 +23,14 @@ export function formatKpiResult(result: unknown): string {
   }
   if (typeof result === "object") {
     const row = result as Record<string, unknown>
+    // Duration: { weighted_years, fixed_income_mv }
+    if (typeof row.weighted_years === "number") {
+      return `${row.weighted_years.toFixed(3)} yr`
+    }
+    // Leverage prefers pct when present (avoid showing ratio as amount)
+    if (typeof row.pct === "number" && typeof row.amount !== "number") {
+      return `${row.pct.toFixed(2)}%`
+    }
     if (typeof row.amount === "number") {
       return row.amount.toLocaleString("zh-HK", { maximumFractionDigits: 0 })
     }
@@ -51,6 +59,8 @@ function chartValue(report: InvestmentKpiReport): number {
   if (typeof result === "number") return Math.abs(result)
   if (result && typeof result === "object") {
     const row = result as Record<string, unknown>
+    if (typeof row.weighted_years === "number") return Math.abs(row.weighted_years)
+    if (typeof row.pct === "number") return Math.abs(row.pct)
     if (typeof row.amount === "number") return Math.abs(row.amount)
     if (typeof row.ratio === "number") return Math.abs(row.ratio) * 100
     if (typeof row.return === "number") return Math.abs(row.return) * 100
@@ -60,50 +70,139 @@ function chartValue(report: InvestmentKpiReport): number {
   return 0
 }
 
+function kpiDetail(report: InvestmentKpiReport): string {
+  const result = report.result
+  if (result && typeof result === "object") {
+    const row = result as Record<string, unknown>
+    if (typeof row.weighted_years === "number" && typeof row.fixed_income_mv === "number") {
+      return `FI MV ${row.fixed_income_mv.toLocaleString("zh-HK", { maximumFractionDigits: 0 })}`
+    }
+    if (typeof row.amount === "number" && typeof row.pct_nav === "number") {
+      return `${row.pct_nav.toFixed(2)}% NAV`
+    }
+    if (typeof row.ratio === "number" && typeof row.pct === "number") {
+      return `ratio ${row.ratio.toFixed(4)}`
+    }
+  }
+  return report.formula || report.engine || "—"
+}
+
+/** 后端 KPI 英文名 → 界面本地化；缺映射时回退原文 */
+export function localizeKpiName(
+  kpi: string,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string {
+  const names = t("engine.kpiNames", { returnObjects: true })
+  if (names && typeof names === "object" && !Array.isArray(names)) {
+    const label = (names as Record<string, string>)[kpi]
+    if (label) return label
+  }
+  return kpi
+}
+
 export function EngineKpiPanel({
   domain,
   fundId,
   asOfDate,
   title,
+  variant = "full",
+  badgeLabel,
 }: {
   domain: string
   fundId: string
   asOfDate: string
   title?: string
+  /** full = table+adapters；metrics = 与组合概况卡片一致的 KPI 水位 */
+  variant?: "full" | "metrics"
+  badgeLabel?: string
 }) {
   const { t } = useTranslation()
+  const useReportLayer = variant === "metrics" && domain === "overview"
   const catalog = useQuery({
     queryKey: ["investment-kpi-catalog"],
     queryFn: () => fsiApi.getInvestmentKpiCatalog().then((response) => response.data),
     staleTime: 300_000,
+    enabled: !useReportLayer,
+    retry: 1,
+  })
+  const reported = useQuery({
+    queryKey: ["reported-exposure", fundId, asOfDate],
+    queryFn: () => fsiApi.getReportedExposure(fundId, asOfDate).then((response) => response.data),
+    enabled: useReportLayer,
     retry: 1,
   })
   const pack = useQuery({
     queryKey: ["investment-kpi-pack", fundId, asOfDate],
     queryFn: () => fsiApi.getInvestmentKpiPack(fundId, asOfDate).then((response) => response.data),
+    enabled: !useReportLayer,
     retry: 1,
   })
 
   const reports = useMemo(() => {
+    if (useReportLayer) return reported.data?.kpis ?? []
     const domainPack = pack.data?.domains?.[domain]
     if (domainPack?.kpis) return Object.values(domainPack.kpis)
     const ids = catalog.data?.domains?.[domain] ?? []
     return ids
       .map((kpiId) => pack.data?.kpis?.[kpiId])
       .filter((item): item is InvestmentKpiReport => Boolean(item))
-  }, [catalog.data?.domains, domain, pack.data?.domains, pack.data?.kpis])
+  }, [catalog.data?.domains, domain, pack.data?.domains, pack.data?.kpis, reported.data?.kpis, useReportLayer])
 
   const chartItems = reports.map((report) => ({
-    label: report.kpi,
+    label: localizeKpiName(report.kpi, t),
     value: chartValue(report),
   }))
+
+  const heading = title ?? t("engine.kpiPackTitle", { domain })
+  const showBadge = badgeLabel !== undefined
+  const badge = badgeLabel ?? t("engine.viaRiskEngine")
+
+  if (variant === "metrics") {
+    return (
+      <Card data-testid={`engine-kpi-${domain}`}>
+        <CardHeader>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <CardTitle className="text-base">{heading}</CardTitle>
+            {showBadge ? <Badge variant="outline">{badge}</Badge> : null}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {(useReportLayer ? reported.isError : pack.isError) ? (
+            <p className="text-sm text-destructive">{t("engine.kpiLoadError")}</p>
+          ) : null}
+          {!(useReportLayer ? reported.isFetching : pack.isFetching) && !(useReportLayer ? reported.isError : pack.isError) && !reports.length ? (
+            <p className="text-sm text-muted-foreground">{t("platform.empty")}</p>
+          ) : null}
+          {reports.length ? (
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {reports.map((report) => (
+                <div
+                  key={report.kpi}
+                  className="rounded-lg border px-4 py-3"
+                  data-testid={`engine-kpi-metric-${report.kpi}`}
+                >
+                  <p className="text-muted-foreground text-xs">{localizeKpiName(report.kpi, t)}</p>
+                  <p className="mt-1 truncate text-xl font-semibold font-mono">
+                    {formatKpiResult(report.result)}
+                  </p>
+                  <p className="text-muted-foreground mt-1 truncate text-xs" title={kpiDetail(report)}>
+                    {kpiDetail(report)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <Card data-testid={`engine-kpi-${domain}`}>
       <CardHeader className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <CardTitle className="text-base">{title ?? t("engine.kpiPackTitle", { domain })}</CardTitle>
-          <Badge variant="outline">{t("engine.viaRiskEngine")}</Badge>
+          <CardTitle className="text-base">{heading}</CardTitle>
+          <Badge variant="outline">{badge}</Badge>
         </div>
         <AdapterStatusBar
           adapters={catalog.data?.adapters ?? pack.data?.adapters}
@@ -132,7 +231,7 @@ export function EngineKpiPanel({
                 <TableBody>
                   {reports.map((report) => (
                     <TableRow key={report.kpi}>
-                      <TableCell className="font-medium">{report.kpi}</TableCell>
+                      <TableCell className="font-medium">{localizeKpiName(report.kpi, t)}</TableCell>
                       <TableCell className="font-mono text-xs">{formatKpiResult(report.result)}</TableCell>
                       <TableCell className="text-xs">{report.engine}</TableCell>
                       <TableCell className="max-w-md text-xs text-muted-foreground">{report.formula}</TableCell>
