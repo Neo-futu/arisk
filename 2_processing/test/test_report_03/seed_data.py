@@ -263,6 +263,23 @@ def seed(conn):
         """, (TEST_DATE,pid,rid,rtype,cpid,cpname,pldg,ccy,vd,md,
               princ,rate,idays,md,wt*100))
 
+    # ── balance_cash（活期現金，約佔 NAV 7%，與 asset 匯總一致）──
+    cash_accounts = [
+        ("BHMMF001", "CASH_HSBC_HKD", "HSBC Current Account", "HSBC", "HKD", 120_000_000, 4.437),
+        ("BHMMF001", "CASH_BOCHK_HKD", "BOCHK Current Account", "BOCHK", "HKD", 69_315_000, 2.563),
+        ("BHMMF002", "CASH_SCB_HKD", "SCB Current Account", "SCB", "HKD", 80_000_000, 4.320),
+        ("BHMMF002", "CASH_HSBC_HKD", "HSBC Current Account", "HSBC", "HKD", 49_640_000, 2.680),
+    ]
+    for pid, aid, aname, bank, ccy, amt, wt in cash_accounts:
+        cur.execute("""
+            INSERT INTO fsi.balance_cash
+                (evaluate_date, port_id, cash_account_id, account_name,
+                 bank_id, currency, amount, amount_base_ccy, fx_rate,
+                 weight_pct, loaded_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,1.0,%s,NOW())
+            ON CONFLICT DO NOTHING
+        """, (TEST_DATE, pid, aid, aname, bank, ccy, amt, amt, wt))
+
     # ── balance_valuation_sheet ───────────────────────────────
     subjects = [
         ("100201","現金及活期存款"),

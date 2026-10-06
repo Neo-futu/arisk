@@ -46,12 +46,12 @@
     },
     {
       "id": "06_05",
-      "name": "影子定價偏離度分析",
+      "name": "基金VNAV定價成本影子價值久期拆解",
       "sql": "05_deviation_analysis.sql",
-      "sheet": "影子定价偏离度原始",
+      "sheet": "基金原始成本影子价值原始",
       "start_cell": "A2",
       "header": false,
-      "description": "當前偏離度 + 低/中/高壓情景測試 + 各品種成本/市值/久期"
+      "description": "VNAV口徑：各品種成本/影子價值(市值)/久期拆解（SFC香港MMF為VNAV市值法估值，無攤余成本偏離度概念），A1=表頭，數據A2起"
     },
     {
       "id": "06_06",
@@ -88,6 +88,51 @@
       "start_cell": "A2",
       "header": false,
       "description": "T+1流動性六大來源：現金/自然到期/回購淨差/可融資/債券變現/存款提取"
+    },
+    {
+      "id": "06_10",
+      "name": "SFC壓力測試持倉明細",
+      "sql": "10_sfc_stress.sql",
+      "sheet": "SFC壓力測試原始",
+      "start_cell": "A2",
+      "header": false,
+      "description": "SFC壓力測試：雙場景持倉明細，含ADTV/利率衝擊/5檔時間桶，落庫sfc_liquidity_stress/compliance，A1=表頭，數據A2起"
+    },
+    {
+      "id": "06_11",
+      "name": "SFC流動性分層表（綜述·表一）",
+      "sql": "11_sfc_bucket_summary.sql",
+      "sheet": "SFC壓力測試",
+      "start_cell": "A6",
+      "header": false,
+      "description": "綜述表一：5檔分層×雙場景(合計=100%)，寫入A6起（R5表頭），7列（前置：06_10）"
+    },
+    {
+      "id": "06_12",
+      "name": "SFC流動性分層（口徑A詳表）",
+      "sql": "12_sfc_bucket_profile.sql",
+      "sheet": "SFC流動性分層",
+      "start_cell": "A5",
+      "header": false,
+      "description": "口徑A詳表：全額市值按完全變現天數歸5檔桶，A4=表頭，數據A5起（前置：06_10）"
+    },
+    {
+      "id": "06_13",
+      "name": "SFC DLA/WLA覆蓋能力（口徑B詳表）",
+      "sql": "13_sfc_dla_wla.sql",
+      "sheet": "SFC_DLA_WLA合規",
+      "start_cell": "A5",
+      "header": false,
+      "description": "口徑B詳表：資產類別貢獻拆分+合規匯總，A4=表頭，數據A5起（前置：06_10）"
+    },
+    {
+      "id": "06_14",
+      "name": "SFC DLA/WLA合規表（綜述·表二）",
+      "sql": "14_sfc_dla_wla_summary.sql",
+      "sheet": "SFC壓力測試",
+      "start_cell": "A14",
+      "header": false,
+      "description": "綜述表二：DLA/WLA%+合規狀態×雙場景，寫入A14起（R13表頭），5列（前置：06_10）"
     }
   ]
 }

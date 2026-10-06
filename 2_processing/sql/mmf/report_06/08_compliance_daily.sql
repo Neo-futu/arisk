@@ -182,6 +182,7 @@ bond_cd_wam AS (
 
 SELECT
     p.port_name,
+    n.port_id,
     ROUND(n.net_asset / 100000000, 4)                       AS net_asset_100m,
     ROUND(n.income_per_10k, 4)                              AS income_per_10k,
     ROUND(COALESCE(mc.max_credit_ratio,0), 4)               AS max_single_credit_pct,

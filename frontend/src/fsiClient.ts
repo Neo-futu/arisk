@@ -412,6 +412,14 @@ export interface InvestmentKpiReport {
   engine_version?: string
 }
 
+export interface ReportedExposureResult {
+  fund_id: string
+  as_of_date: string
+  report_date?: string | null
+  source: string
+  kpis: InvestmentKpiReport[]
+}
+
 export interface InvestmentKpiPack {
   fund_id: string
   as_of_date: string
@@ -822,10 +830,48 @@ export interface PortfolioOverviewTimeseriesResult {
   }>
 }
 
+export interface SecurityHolding {
+  security_code: string
+  security_name: string
+  asset_class: string
+  sub_asset_class?: string | null
+  currency: string
+  market_value_base: number
+  weight_pct: number
+  quantity: number | null
+  issuer_name: string | null
+  sector: string | null
+  rating: string | null
+  maturity_date: string | null
+  coupon_rate: number | null
+  ytm: number | null
+  duration: number | null
+  unrealized_pnl: number | null
+}
+
+export interface SecurityHoldingsResult {
+  fund_id: string
+  as_of_date: string
+  count: number
+  snapshot_dates?: Record<string, string | null>
+  holdings: SecurityHolding[]
+  by_asset_class: Array<{
+    asset_class: string
+    count: number
+    market_value_base: number
+    weight_pct: number
+    holdings: SecurityHolding[]
+  }>
+}
+
 export interface RiskIndicatorsResult {
   fund_id: string
   period_start: string
   period_end: string
+  resolved_period_start?: string | null
+  resolved_period_end?: string | null
+  data_as_of?: string | null
+  message?: string | null
   interval_return_pct: number | null
   annualized_volatility_pct: number | null
   max_drawdown_pct: number | null
@@ -854,10 +900,51 @@ export interface RiskIndicatorsResult {
   }
 }
 
+export interface RiskMetricItem {
+  id: string
+  name: string
+  group?: string | null
+  value: number | string | null
+  unit: string | null
+  status: "computed" | "derived" | "unavailable"
+  note?: string | null
+  detail?: string | null
+}
+
+export interface RiskMetricBoardCategory {
+  id: string
+  name: string
+  name_en?: string
+  metrics: RiskMetricItem[]
+}
+
+export interface RiskMetricBoardResult {
+  fund_id: string
+  period_start: string
+  period_end: string
+  resolved_period_start?: string | null
+  resolved_period_end?: string | null
+  data_as_of?: string | null
+  benchmark_id?: string | null
+  source?: "computed" | "report" | null
+  message?: string | null
+  summary: {
+    computed: number
+    derived: number
+    unavailable: number
+    total: number
+  }
+  categories: RiskMetricBoardCategory[]
+}
+
 export interface RiskIndicatorTimeseriesResult {
   fund_id: string
   period_start: string
   period_end: string
+  resolved_period_start?: string | null
+  resolved_period_end?: string | null
+  data_as_of?: string | null
+  message?: string | null
   points: Array<{
     date: string
     nav: number
@@ -1862,6 +1949,14 @@ export const fsiApi = {
     )
   },
 
+  /** 投資風險分析：個券層面完整持倉 */
+  getSecurityHoldings(fundId: string, asOfDate: string) {
+    return axios.get<SecurityHoldingsResult>(
+      `${BASE}/api/v1/fsi/investment/holdings/${fundId}`,
+      { params: { as_of_date: asOfDate }, headers: authHeaders() },
+    )
+  },
+
   /** 風控指標 SQL 片段目錄（查看SQL） */
   getIndicatorSqlCatalog() {
     return axios.get<{ items: IndicatorSql[] }>(
@@ -1882,6 +1977,14 @@ export const fsiApi = {
   getRiskIndicatorTimeseries(fundId: string, start: string, end: string) {
     return axios.get<RiskIndicatorTimeseriesResult>(
       `${BASE}/api/v1/fsi/investment/risk-indicators-timeseries/${fundId}`,
+      { params: { start, end }, headers: authHeaders() },
+    )
+  },
+
+  /** 投資風險分析：六大類風控指標看板 */
+  getRiskMetricBoard(fundId: string, start: string, end: string) {
+    return axios.get<RiskMetricBoardResult>(
+      `${BASE}/api/v1/fsi/investment/risk-metric-board/${fundId}`,
       { params: { start, end }, headers: authHeaders() },
     )
   },
@@ -1977,6 +2080,14 @@ export const fsiApi = {
     return axios.get<InvestmentKpiCatalog>(`${BASE}/api/v1/fsi/investment/kpi-catalog`, {
       headers: authHeaders(),
     })
+  },
+
+  /** 整體風險敞口：報表層 svc_risk_exposure，不跑 RiskEngine KPI 包 */
+  getReportedExposure(fundId: string, asOfDate: string) {
+    return axios.get<ReportedExposureResult>(
+      `${BASE}/api/v1/fsi/investment/reported-exposure/${fundId}`,
+      { params: { as_of_date: asOfDate }, headers: authHeaders() },
+    )
   },
 
   getInvestmentKpiPack(fundId: string, asOfDate: string, options?: { confidence?: number; lookbackDays?: number }) {

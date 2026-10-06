@@ -78,7 +78,8 @@ async def _nav_history(
             f"""
             SELECT evaluate_date,
                    MAX(COALESCE(acc_unit_nav, unit_nav)) AS nav,
-                   MAX(net_asset) AS net_asset
+                   MAX(net_asset) AS net_asset,
+                   MAX(day_return) AS day_return
             FROM fsi.balance_portfolio_nav
             WHERE port_id = :fund_id
               AND evaluate_date <= :end
@@ -90,6 +91,77 @@ async def _nav_history(
         {"fund_id": fund_id, "start": start, "end": end},
     )
     return [dict(row) for row in rows.mappings().all() if row["nav"] is not None]
+
+
+def _nav_daily_returns(history: list[dict[str, Any]]) -> dict[date, float]:
+    """日收益率：優先使用庫內 day_return（貨基 unit_nav≈1 時更準），否則用 NAV 比。"""
+    result: dict[date, float] = {}
+    previous_nav: float | None = None
+    for row in history:
+        point_date = _date_value(row["evaluate_date"])
+        nav = _number(row.get("nav"))
+        stored = row.get("day_return")
+        if stored is not None:
+            result[point_date] = _number(stored)
+        elif previous_nav:
+            result[point_date] = nav / previous_nav - 1.0
+        previous_nav = nav
+    return result
+
+
+async def _latest_nav_date(
+    db: AsyncSession,
+    fund_id: str,
+    as_of: date,
+) -> date | None:
+    """最近一筆 NAV 估值日（≤ as_of）。"""
+    result = await db.execute(
+        text(
+            """
+            SELECT MAX(evaluate_date) AS value
+            FROM fsi.balance_portfolio_nav
+            WHERE port_id = :fund_id
+              AND evaluate_date <= :as_of
+              AND COALESCE(acc_unit_nav, unit_nav) IS NOT NULL
+            """
+        ),
+        {"fund_id": fund_id, "as_of": as_of},
+    )
+    value = result.scalar_one_or_none()
+    return _date_value(value) if value is not None else None
+
+
+async def _resolve_nav_period(
+    db: AsyncSession,
+    fund_id: str,
+    period_start: date,
+    period_end: date,
+) -> tuple[date, date, date] | None:
+    """把請求區間對齊到庫內實際有 NAV 的窗口。
+
+    返回 (effective_start, effective_end, latest_nav_date)；
+    若 as_of 之前完全無 NAV，返回 None。
+    """
+    latest = await _latest_nav_date(db, fund_id, period_end)
+    if latest is None:
+        return None
+    effective_end = min(period_end, latest)
+    span_days = max((period_end - period_start).days, 0)
+    effective_start = effective_end - timedelta(days=span_days)
+    # 若仍無點（極端缺口），放寬起點到 earliest available ≤ end
+    probe = await _nav_history(db, fund_id, effective_end, effective_start)
+    if not probe:
+        history = await _nav_history(db, fund_id, effective_end, None)
+        if not history:
+            return None
+        # 取結束日前、長度約等於請求窗口的可用序列
+        dates = [_date_value(row["evaluate_date"]) for row in history]
+        effective_start = dates[0]
+        for item in dates:
+            if item >= effective_end - timedelta(days=span_days):
+                effective_start = item
+                break
+    return effective_start, effective_end, latest
 
 
 def _performance_periods(history: list[dict[str, Any]]) -> list[dict[str, Any]]:

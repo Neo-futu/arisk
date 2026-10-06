@@ -241,9 +241,15 @@ export function HomePage() {
 
   return (
     <div className="space-y-5" data-testid="home-workbench">
-      <h1 className="text-xl font-semibold tracking-tight">
-        {t("home.hello", { user: displayName })}
-      </h1>
+      <div>
+        <h1 className="text-2xl font-bold">{t("home.title")}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {t("home.subtitle")}
+        </p>
+        <p className="mt-2 text-base font-medium tracking-tight">
+          {t("home.hello", { user: displayName })}
+        </p>
+      </div>
 
       <Card>
         <CardHeader className="pb-3">

@@ -15,8 +15,9 @@ WITH params AS (
 
 SELECT
     p.port_name,
-    issuer_name,
-    holding_type
+    t.port_id,
+    t.issuer_name,
+    t.holding_type
 FROM (
     -- 信用債發行人
     SELECT DISTINCT
@@ -42,4 +43,4 @@ FROM (
       AND r.counterparty_name IS NOT NULL
 ) t
 JOIN fsi.para_portfolio p ON p.port_id = t.port_id
-ORDER BY p.port_name, holding_type, issuer_name;
+ORDER BY p.port_name, t.port_id, t.holding_type, t.issuer_name;
