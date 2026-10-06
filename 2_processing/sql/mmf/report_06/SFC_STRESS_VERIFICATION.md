@@ -1,93 +1,138 @@
-# SFC 香港 MMF 壓力測試 — 開發與驗證報告
+# SFC 香港 MMF 壓力測試 — 開發與驗證報告（v2：三源行情 + 雙口徑拆分）
 
 > 對應文檔：`2_processing/sql/mmf/doc/lmt-mmf-test-sfc.docx`
-> （Indicative Liquidity Profile + Basis of Liquidity Classification）
-> 驗證日期：2026-10-02 · 估值日：2026-06-25 · 組合：BHMMF001 / BHMMF002
+> 驗證日期：2026-10-05 · 估值日：2026-06-25 · 組合：BHMMF001 / BHMMF002
+> v2 增量：ADTV 三源行情管道（Excel/yfinance/OpenBB/Wind）+ 口徑 A/B 拆分為獨立 sheet/SQL
 
-## 一、背景與差距
+## 一、雙口徑定義（為什麼有兩個口徑）
 
-### 1.1 既有實現（report_03_mmf 17/42/44 SQL + liquidity_stress.py）
-
-| 項目 | 既有實現 | SFC 文檔要求 |
+| | 口徑 A：流動性分層 | 口徑 B：DLA/WLA 覆蓋能力 |
 |---|---|---|
-| 利率衝擊 | +50bp 久期近似 `mv × (1 - dur × 0.005)` | ✅ 保留（行業標準久期近似法） |
-| 變現係數 | 按資產類別硬編碼（GOVT=0.2/CD=0.2/CORP=0.8） | ⚠️ 保留為靜態兼容口徑 |
-| ADTV 市場交易量 | **無**（僅類別固定變現天數映射） | ❌ 需 30 日 ADTV × 10% 參與率 |
-| 5 檔流動性分層 | **無**（僅個券明細） | ❌ 需 1D/2-7D/8-30D/31-90D/>90D 雙場景 |
-| 存款早破 | 引用不存在的 `is_penalty_on_early_redeem` 列（SQL 報錯） | ❌ 需零早破 Stressed 假設 |
-| DLA/WLA | 僅 Normal 場景 | ❌ 需雙場景均 ≥7.5%/15% |
+| 回答的問題 | 「整個組合若全部變現，各時間段能變現多少？」（結構形態） | 「1 日/5 日內的贖回，真實能拿到多少錢覆蓋？」（覆蓋能力） |
+| 計算 | 每筆持倉**全額市值**按「完全變現天數」歸 5 档桶：⌈市值 ÷ (ADTV×10%×(1−折扣))⌉ | **ADTV 約束下實際可變現額**：MIN(市值, ADTV×10%×(1−折扣)) + 現金/隔夜/到期額 |
+| 輸出 | 5 档桶佔組合資產 %，雙場景各求和=100%（SFC 文檔 §1 表格） | DLA%≥7.5% / WLA%≥15%（UT Code §8.2(n)，雙場景） |
+| 關鍵差異 | 一筆市值 1 億、日可賣 100 萬的債 → 歸 GT90D（⌈100⌉=100 天） | 同一筆債 → 1 日只認 100 萬（市場深度上限） |
+| 用途 | 投資者/監管披露（Indicative Liquidity Profile） | 贖回壓力測試 / LMT 觸發判斷 |
+| SQL / Sheet | `12_sfc_bucket_profile.sql` → 「SFC流動性分層」 | `13_sfc_dla_wla.sql` → 「SFC_DLA_WLA合規」 |
 
-### 1.2 本次新增（report_06 SFC 壓力測試模塊）
+兩口徑共享持倉明細（`10_sfc_stress.sql` 落庫 `fsi.sfc_liquidity_stress`），僅匯總視角不同。
 
-1. **ADTV 行情表** `fsi.mktdata_adtv`：30 日平均日成交額（Wind/MCP 入庫更新，無行情時 PROXY 代理值：品種典型換手率 × 持倉市值）
-2. **參數配置表** `fsi.sfc_liquidity_bucket_def`：8 類資產 × 2 場景（市場參與率 10%、ADTV 折扣 Stressed 50%、存款早破比例、買賣價差 bp、靜態變現係數）
-3. **明細結果表** `fsi.sfc_liquidity_stress`：持倉 × 場景級（50 行/估值日）
-4. **合規匯總表** `fsi.sfc_liquidity_compliance`：組合 × 場景級（5 檔分層 + DLA/WLA）
-5. **SQL**：`10_sfc_stress.sql`（計算+落庫+返回明細）、`11_sfc_compliance_summary.sql`（展示層數據）
-6. **Excel**：`Template.xlsx` 新增「SFC壓力測試原始」（明細）+「SFC壓力測試」（SFC 文檔表格版式）兩個 sheet
-7. **修復**：`balance_deposit` 補 `is_penalty_on_early_redeem` 列（4 個既有 SQL 06_01/06_04/06_08/06_09 因此恢復可用）
+## 二、ADTV 三源行情管道
 
-## 二、業務邏輯（雙口徑）
+### 2.1 數據鏈路
 
-### 2.1 口徑 A：流動性分層（SFC 文檔 §1(i)，非累計、資產端 sum to 100%）
+```
+fsi.mktdata_security_quotes（日級原始行情；WIND/YFINANCE/OPENBB 逐日報價）
+    └─ fsi.fn_compute_adtv_30d(d) 聚合：過去30日算術平均，≥5日樣本
+       → fsi.mktdata_adtv (data_source='MARKET')
 
-每筆持倉全額市值歸入「完全變現所需天數」桶：
+Excel 手工導入（已平均的 ADTV 估計值）
+    └─ 直接入 fsi.mktdata_adtv (data_source='EXCEL')
 
-| 資產 | Normal 天數 | Stressed 天數 |
-|---|---|---|
-| 現金 | 0（1D） | 0（1D） |
-| 隔夜存款 / 逆回購 | 1（1D） | 1（1D） |
-| 可早破存款 | 0（1D） | 合約剩餘天數（**零早破**） |
-| 有罰息定存 | 合約剩餘天數（§2(a)） | 合約剩餘天數 |
-| 債券/CD（≤5 日到期） | 到期天數 | 到期天數 |
-| 債券/CD（二級變現） | `⌈市值 / (ADTV×10%)⌉` | `⌈市值 / (ADTV×10%×50%)⌉`（**變現天數翻倍**） |
+022a 種子（品種典型換手率 × 持倉市值）
+    └─ fsi.mktdata_adtv (data_source='PROXY')
 
-### 2.2 口徑 B：DLA / WLA（UT Code §8.2(n) 雙場景硬約束）
+優先級：MARKET > EXCEL > PROXY
+  · MARKET 聚合後自動 DELETE 同證券 EXCEL 行
+  · EXCEL upsert 直接覆蓋 PROXY 行
+```
 
-- `realizable_1d = MIN(市值, ADTV×10%×(1-折扣)) + 現金 + 隔夜 + 1 日到期`
-- `realizable_5d = MIN(市值, ADTV×10%×(1-折扣)×5) + 現金 + 隔夜 + 5 日到期 + 可早破存款`
-- DLA% ≥ 7.5%、WLA% ≥ 15%（Normal 與 Stressed 均須滿足）
+### 2.2 三源導入工具（`2_processing/tools/mmf/import_adtv.py`）
 
-### 2.3 利率變化（+50bp）與變現係數
+| 源 | 命令 | 覆蓋範圍 | 驗證結果 |
+|---|---|---|---|
+| Excel 手工 | `--source excel --make-template/--file` | 全部品種兜底（模板預填持倉清單） | ✅ 3 證券導入，40032.HK=290萬生效 |
+| yfinance | `--source yfinance` | 港交所掛牌品種（代碼映射 `fsi.para_security_alias`） | ✅ 0700.HK 32 行，ADTV=154.9 億（25 日樣本） |
+| OpenBB | `--source openbb` | 同 yfinance（provider=yfinance），備用通道 | ✅ 33 行，結果與 yfinance 一致 |
+| Wind (MCP) | `--source wind` | 場外債券/CD 專業源（4_mcp wind_get_price） | ✅ 通道就緒（需 Wind 帳號+alias 映射） |
 
-- `stressed_mv = mv × (1 - duration × 50/10000)`；存款/現金/逆回購利率敏感度為 0
-- `stressed_loss_adj = stressed_loss × liq_ratio_static`（GOVT/CD=0.2、CORP=0.8、FLOAT=0.05、DEPOSIT=0）
+### 2.3 品種覆蓋現實
 
-## 三、驗證結果（6 項核心斷言全部通過）
+- **CMU 債券/銀行間 CD**（.CMU 後綴）：Yahoo 無行情（場外品種）→ Excel 手工或 Wind
+- **港交所掛牌票據/ETF/股票**：yfinance/OpenBB 可取
+- 全部證券至少有 PROXY 代理值兜底，壓力測試永不出空值
 
-| # | 斷言 | 結果 |
-|---|---|---|
-| 1 | 雙場景 DLA/WLA 合規 | ✅ 4/4 合規（BHMMF001: 24.7/26.0 → 15.5/16.1；BHMMF002: 28.2/29.7 → 17.2/17.9） |
-| 2 | Stressed DLA < Normal DLA | ✅ -9.28pct / -10.99pct（符合壓力收緊預期） |
-| 3 | 信用債 Stressed 推至 GT90D | ✅ 3 只 0.6166 億：31-90D → GT90D（變現天數 50d→100d 翻倍） |
-| 4 | 存款 Normal 早破(1D) vs Stressed 零早破 | ✅ 定存 1D→31-90D/GT90D 且 1 日可變現歸零；隔夜存款保持 1D |
-| 5 | 利率損失與修正損失 | ✅ 如 BNYHFN26213.CMU：損失 111.38 萬 × 0.8 = 89.11 萬 |
-| 6 | ADTV 50% haircut 精確生效 | ✅ 全部證券 Stressed/Normal tradable_size 比值 = 0.500 |
+## 三、驗證結果
 
-### 輸出文件
+### 3.1 行情管道（3 斷言通過）
+
+| 斷言 | 結果 |
+|---|---|
+| yfinance 抓取→原始表→聚合 MARKET | ✅ 0700.HK ADTV=15,488,987,782（sample_days=25） |
+| Excel 手工→EXCEL 源覆蓋 PROXY | ✅ 40032.HK 2,770,000(PROXY) → 2,900,000(EXCEL) |
+| MARKET 覆蓋 EXCEL/PROXY | ✅ fn_compute_adtv_30d 內 DELETE 同證券低優先級行 |
+
+### 3.2 雙口徑輸出（report_06 全 13 查詢成功）
+
+**口徑 A（SFC流動性分層 sheet，每場景 5 行合計=100%）**：
+- BHMMF001 Normal：1D 67.3% / 2-7D 11.8% / 8-30D 7.1% / 31-90D 13.8% / GT90D 0%
+- BHMMF001 Stressed：1D 37.7%（存款零早破跌出 1D）/ GT90D 19.1%（信用債 ADTV 折扣變現天數翻倍）
+- 每組合×場景固定 5 行（空桶補 0），符合 SFC 文檔表格版式
+
+**口徑 B（SFC_DLA_WLA合規 sheet，資產類別貢獻拆分+合規匯總）**：
+- BHMMF001 Normal：DLA=24.74% / WLA=26.02% → 合規
+- BHMMF001 Stressed：DLA=15.46% / WLA=16.10% → 合規
+- Stressed 場景 DLA 貢獻：CASH 44.7% + REV_REPO 42.5% + 隔夜存款 11.8% = 99%（債券貢獻 <1%，ADTV 約束生效）
+- 定存 Stressed 零早破：DEPOSIT 1 日可變現從 3 億 → 5,000 萬（僅剩隔夜）
+
+### 3.3 輸出文件
 
 `2_processing/sql/mmf/output/report_06/report_06_BHMMF001_BHMMF002_20260625.xlsx`
 
-- 「SFC壓力測試原始」sheet：50 行 × 28 列（25 持倉 × 雙場景），含市值/久期/利率衝擊/ADTV/參與率/折扣/可變現規模/1日5日可變現額/時間桶/變現係數/修正損失
-- 「SFC壓力測試」sheet：SFC 文檔 §1 版式 — 5 檔分層 × 雙場景（組合×場景行）+ DLA/WLA 合規狀態 + Note(i)-(iv) 與方法論說明
-- 其餘 9 個既有查詢（06_01~06_09）全部正常（4 個因補列修復）
+| Sheet | 內容 |
+|---|---|
+| SFC壓力測試原始 | 50 行持倉×場景明細（28 列，含三源 ADTV 與來源標記） |
+| SFC流動性分層 | 口徑 A：5 档桶×雙場景，每場景合計=100% |
+| SFC_DLA_WLA合規 | 口徑 B：資產類別 DLA/WLA 貢獻拆分 + 合規匯總行 |
+| SFC壓力測試 | 綜述頁：雙口徑總覽 + LMT 治理 + 方法論說明 |
 
-### 回歸驗證
+## 四、schema 增量（023/023a）
 
-`report_03_mmf`（17 壓力測試持倉 / 42 壓力結果 / 44 SFC 合規 / 45 集中度）全部通過，無回歸。
+- `fsi.mktdata_security_quotes` — 證券日級原始行情（quote_date, security_code, source 唯一）
+- `fsi.mktdata_adtv_import_log` — 導入審計日誌（rows/securities/adtv_total/file_name 可回溯）
+- `fsi.fn_compute_adtv_30d(d DATE, days INT DEFAULT 30)` — 市場源聚合函數（同日多源按 WIND>YFINANCE>OPENBB 取優先級，≥5 日樣本）
+- `fsi.para_security_alias` — 證券代碼 ↔ Yahoo/Wind ticker 映射（023a 種子預填港交所品種）
 
-## 四、生產接入（Wind/MCP 行情）
-
-1. 行情管道每日 `INSERT INTO fsi.mktdata_adtv (adtv_date, security_code, adtv_30d, sample_days, data_source) VALUES (..., 'WIND') ON CONFLICT DO UPDATE`（30 日 turnover 算術平均）
-2. 未入庫證券自動回退 PROXY 代理值（`data_source='PROXY'`，明細表 adtv_source 列可審計）
-3. 壓力參數調整直接改 `fsi.sfc_liquidity_bucket_def`（如參與率、折扣、價差），無需改 SQL
-
-## 五、運行方式
+## 五、日常運行
 
 ```bash
-# 建表（冪等）
-python 1_datastorage/postgres/migrations/migrate.py   # 022/022a 已納入 schema 目錄
-# 生成報表（含 SFC 壓力測試 sheet）
+# 1. 行情更新（三選一或組合）
 cd 2_processing/tools/mmf
+python import_adtv.py --source excel --make-template adtv.xlsx --date 2026-06-25  # 生成模板
+python import_adtv.py --source excel --file adtv.xlsx --date 2026-06-25           # 手工導入
+python import_adtv.py --source yfinance --date 2026-06-25                         # 公開行情
+python import_adtv.py --source openbb --date 2026-06-25                           # 備用通道
+python import_adtv.py --source wind --date 2026-06-25                             # Wind 專業源
+python import_adtv.py --aggregate --date 2026-06-25                               # 僅重新聚合
+
+# 2. 生成報表（含雙口徑 SFC sheet）
 python run_report.py --report report_06 --port BHMMF001,BHMMF002 --date 2026-06-25
 ```
+
+Wind 生產接入：在 `fsi.para_security_alias` 維護 Wind code 映射（如 'CN0002001234','WIND','260012.IB'），確保 WIND_USERNAME/WIND_PASSWORD 環境變量後執行 `--source wind`。
+
+---
+
+# 生產驗證記錄（2026-10-05 v3：真實券 + OpenBB/Bloomberg 混合鏈路）
+
+## 持倉真實化
+- 每資產類別：ETF（OpenBB 逐日行情驗證通道）+ 單只債券（Bloomberg 導出兜底）
+- 12 債券（8 ETF + 4 單債 CUSIP：US912828FT00 美國2Y國債 / US037833BL17 Apple2042 / US594921BO55 Microsoft2033 / HKGB2026 港府債）+ 4 CD（PROXY 兜底）
+
+## 三源行情鏈路（生產驗證）
+| 源 | 證券 | 結果 |
+|---|---|---|
+| OpenBB（openbb_fetcher.py：多provider fallback+重試+並發+覆蓋報告） | 8 ETF | ✅ 264行 25日樣本，8/8 成功 |
+| EXCEL 逐日（Bloomberg 導出格式，--source excel-daily） | 4 單債 | ✅ 88行 19日樣本 |
+| PROXY（品種換手率代理） | 4 CD（場外本無公開行情） | ✅ 兜底生效 |
+
+## SFC 文檔逐條驗證（估值日 2026-06-25）
+1. §1 表格還原：雙場景 5 檔合計=100.00% ✓（BHMMF001 Normal 75.04/12.78/0/6.38/5.81；Stressed 46.00/12.78/0/23.80/17.42）
+2. §1(ii) DLA≥7.5%/WLA≥15% 雙場景：4/4 合規 ✓（BHMMF001: 27.64/28.24 → 18.49/18.97）
+3. §1(iii) 變現規模=ADTV 約束可覆蓋額 ✓
+4. §1(iv) Stressed 假設：零早破（定存 1.5億→0、31-90D 桶）✓；50% haircut（LQD 285M→142.5M）✓；價差擴大（Apple債 1500→7500元）✓
+5. §2(a) 10% ADTV 參與率 + 30 日 ADTV：全券 10% ✓，真實 ADTV（美國2Y國債 495億/Apple債 3.4億）✓
+6. §2(b) LMT 治理與方法論：Note(i)-(iv) + Basis of Liquidity Classification 完整 ✓
+
+## 輸出
+output/report_06/report_06_BHMMF001_BHMMF002_20260625.xlsx（25 sheet：15 展示層 + 10 原始層；SFC 4 表）

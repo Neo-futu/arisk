@@ -131,6 +131,7 @@ deposit_early AS (
 
 SELECT
     p.port_name,
+    p.port_id,
     ROUND(COALESCE(c.cash,0)        / 100000000, 4) AS cash_100m,
     ROUND(COALESCE(nm.mv,0)         / 100000000, 4) AS natural_mature_100m,
     ROUND(COALESCE(rn.mv,0)         / 100000000, 4) AS repo_net_100m,

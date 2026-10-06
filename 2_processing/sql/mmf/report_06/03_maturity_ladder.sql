@@ -21,7 +21,18 @@ base AS (
         remaining_days,
         mv
     FROM (
-        -- 存款（含活期）
+        -- 現金（活期存款，T+0 可用）
+        SELECT
+            ca.port_id,
+            '现金' AS asset_type,
+            0 AS remaining_days,
+            COALESCE(ca.amount, 0) * 100 AS mv
+        FROM fsi.balance_cash ca
+        WHERE ca.port_id = ANY(params.port_ids) AND ca.evaluate_date = params.evaluate_date
+
+        UNION ALL
+
+        -- 存款（定期，含隔夜）
         SELECT
             d.port_id,
             '存款' AS asset_type,
@@ -151,11 +162,13 @@ pivot AS (
 SELECT * FROM (
     SELECT
         p.port_name,
+        pv.port_id,
         pv.asset_type,
         pv.d1, pv.d2, pv.d3, pv.d4, pv.d5, pv.d6, pv.d7, pv.d8, pv.d9, pv.d10,
         pv.d11, pv.d12, pv.d13, pv.d14, pv.d15, pv.d16, pv.d17, pv.d18, pv.d19, pv.d20,
         pv.d21_m1, pv.m1_m3, pv.m3_m6, pv.m6_m9, pv.m9_1y, pv.y1_plus,
         CASE pv.asset_type
+            WHEN '现金' THEN '现金'
             WHEN '存款' THEN '存款'
             WHEN '存款證CD' THEN '存款'
             WHEN '逆回購' THEN '回购'
@@ -172,6 +185,7 @@ SELECT * FROM (
     -- 合計行
     SELECT
         p.port_name,
+        pv.port_id,
         '合計' AS asset_type,
         SUM(pv.d1), SUM(pv.d2), SUM(pv.d3), SUM(pv.d4), SUM(pv.d5),
         SUM(pv.d6), SUM(pv.d7), SUM(pv.d8), SUM(pv.d9), SUM(pv.d10),
@@ -183,4 +197,4 @@ SELECT * FROM (
     JOIN fsi.para_portfolio p ON p.port_id = pv.port_id
     GROUP BY p.port_name, pv.port_id
 ) t
-ORDER BY port_name, CASE asset_type WHEN '合計' THEN 99 ELSE 0 END, asset_type;
+ORDER BY port_name, port_id, CASE asset_type WHEN '合計' THEN 99 ELSE 0 END, asset_type;

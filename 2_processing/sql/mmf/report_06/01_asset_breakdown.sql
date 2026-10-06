@@ -67,6 +67,7 @@ cd_detail AS (
 )
 
 SELECT
+    p.port_name,
     o.port_id,
     ROUND(o.cash         / 100000000, 4) AS cash_100m,
     ROUND(o.deposit      / 100000000, 4) AS deposit_100m,
@@ -81,6 +82,7 @@ SELECT
     ROUND(COALESCE(c.cd_below_aaplus, 0)    / 100000000, 4) AS cd_below_aaplus_100m,
     ROUND(COALESCE(b.credit_below_aaplus, 0)/ 100000000, 4) AS credit_below_aaplus_100m
 FROM outline o
+JOIN fsi.para_portfolio p ON p.port_id = o.port_id
 LEFT JOIN deposit_breakable d ON d.port_id = o.port_id
 LEFT JOIN bond_detail       b ON b.port_id = o.port_id
 LEFT JOIN cd_detail         c ON c.port_id = o.port_id

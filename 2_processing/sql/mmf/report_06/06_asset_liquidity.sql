@@ -95,7 +95,7 @@ repo_outflow AS (
     GROUP BY r.port_id
 )
 
-SELECT p.port_name, t.asset_type, t.d1, t.d2, t.d3, t.d4, t.d5, t.d6, t.d7
+SELECT p.port_name, t.port_id, t.d1, t.d2, t.d3, t.d4, t.d5, t.d6, t.d7, t.asset_type
 FROM (
     SELECT port_id, asset_type, d1, d2, d3, d4, d5, d6, d7 FROM govt_bond
     UNION ALL SELECT port_id, asset_type, d1, d2, d3, d4, d5, d6, d7 FROM credit_bond

@@ -54,40 +54,46 @@ data AS (
     LEFT JOIN deposit d  ON d.port_id = tt.port_id AND d.bank_id = tt.bank_id
     LEFT JOIN cd      c  ON c.port_id = tt.port_id AND c.bank_id = tt.bank_id
     LEFT JOIN (
-        -- 取每個機構最常見名稱
+        -- 取每個機構最常見名稱（限定估值日，裸 SQL 亦可獨立運行）
         SELECT DISTINCT ON (bank_id) bank_id, bank_name FROM (
-            SELECT issuer_id AS bank_id, issuer_name AS bank_name FROM fsi.balance_cd
-            WHERE evaluate_date = params.evaluate_date
+            SELECT b2.issuer_id AS bank_id, b2.issuer_name AS bank_name
+            FROM fsi.balance_cd b2, params
+            WHERE b2.evaluate_date = params.evaluate_date
             UNION
-            SELECT bank_id, bank_name FROM fsi.balance_deposit
-            WHERE evaluate_date = params.evaluate_date
+            SELECT d2.bank_id, d2.bank_name
+            FROM fsi.balance_deposit d2, params
+            WHERE d2.evaluate_date = params.evaluate_date
         ) bn_raw
     ) bn ON bn.bank_id = tt.bank_id
 )
 
 -- 明細行
 SELECT
-    port_id,
-    bank_id,
-    bank_name,
-    ROUND(deposit_cost / 100000000, 4) AS deposit_100m,
-    ROUND(cd_cost      / 100000000, 4) AS cd_100m,
-    ROUND(total_cost   / 100000000, 4) AS total_100m,
-    rk
-FROM data
+    p.port_name,
+    d.port_id,
+    d.bank_id,
+    d.bank_name,
+    ROUND(d.deposit_cost / 100000000, 4) AS deposit_100m,
+    ROUND(d.cd_cost      / 100000000, 4) AS cd_100m,
+    ROUND(d.total_cost   / 100000000, 4) AS total_100m,
+    d.rk
+FROM data d
+JOIN fsi.para_portfolio p ON p.port_id = d.port_id
 
 UNION ALL
 
 -- 合計行（每個 port 一行）
 SELECT
-    port_id,
+    p.port_name,
+    d.port_id,
     'TOTAL' AS bank_id,
     '合計'  AS bank_name,
-    ROUND(SUM(deposit_cost) / 100000000, 4),
-    ROUND(SUM(cd_cost)      / 100000000, 4),
-    ROUND(SUM(total_cost)   / 100000000, 4),
-    NULL    AS rk
-FROM data
-GROUP BY port_id
+    ROUND(SUM(d.deposit_cost) / 100000000, 4),
+    ROUND(SUM(d.cd_cost)      / 100000000, 4),
+    ROUND(SUM(d.total_cost)   / 100000000, 4),
+    NULL
+FROM data d
+JOIN fsi.para_portfolio p ON p.port_id = d.port_id
+GROUP BY p.port_name, d.port_id
 
-ORDER BY port_id, rk;
+ORDER BY port_name, port_id, rk;
