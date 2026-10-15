@@ -1,20 +1,10 @@
 import { useQuery } from "@tanstack/react-query"
-import { Download } from "lucide-react"
+import { useMemo } from "react"
 import { useTranslation } from "react-i18next"
 
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { fsiApi, type RiskMetricBoardCategory, type RiskMetricItem } from "@/fsiClient"
-import { exportCsv } from "@/modules/investment-risk/dashboard-kit"
+import { WorkbenchTable, type WorkbenchColumn } from "@/platform/WorkbenchTable"
 
 function formatValue(metric: RiskMetricItem): string {
   if (metric.value == null || metric.value === "") return "—"
@@ -65,47 +55,35 @@ function GroupTable({
   metrics: RiskMetricItem[]
 }) {
   const { t } = useTranslation()
-
-  function exportRows() {
-    exportCsv(
-      `risk-metrics-${fundId}-${endDate}-${categoryName}-${group}.csv`,
-      [t("investmentRisk.metricBoard.colMetric"), t("investmentRisk.metricBoard.colValue"), t("investmentRisk.metricBoard.colNote")],
-      metrics.map((metric) => [metric.name, metric.value ?? "", metricNote(metric)]),
-    )
-  }
+  const columns = useMemo<WorkbenchColumn<RiskMetricItem>[]>(() => [
+    { key: "name", header: t("investmentRisk.metricBoard.colMetric"), accessor: (row) => row.name },
+    {
+      key: "value",
+      header: t("investmentRisk.metricBoard.colValue"),
+      align: "right",
+      accessor: (row) => (typeof row.value === "number" ? row.value : String(row.value ?? "")),
+      cell: (row) => <span className="font-mono tabular-nums">{formatValue(row)}</span>,
+      exportValue: (row) => row.value ?? "",
+    },
+    {
+      key: "note",
+      header: t("investmentRisk.metricBoard.colNote"),
+      accessor: (row) => metricNote(row) || "—",
+      cell: (row) => <span className="text-muted-foreground text-xs">{metricNote(row) || "—"}</span>,
+    },
+  ], [t])
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <CardTitle className="text-base">{group}</CardTitle>
-          <Button variant="outline" size="sm" onClick={exportRows}>
-            <Download className="mr-2 h-4 w-4" />
-            {t("investmentRisk.common.export")}
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t("investmentRisk.metricBoard.colMetric")}</TableHead>
-              <TableHead className="text-right">{t("investmentRisk.metricBoard.colValue")}</TableHead>
-              <TableHead>{t("investmentRisk.metricBoard.colNote")}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {metrics.map((metric) => (
-              <TableRow key={metric.id}>
-                <TableCell className="font-medium">{metric.name}</TableCell>
-                <TableCell className="text-right font-mono tabular-nums">{formatValue(metric)}</TableCell>
-                <TableCell className="text-muted-foreground text-xs">{metricNote(metric) || "—"}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+    <WorkbenchTable
+      title={group}
+      rows={metrics}
+      columns={columns}
+      rowId={(row) => row.id}
+      exportFilename={`risk-metrics-${fundId}-${endDate}-${categoryName}-${group}.csv`}
+      initialSortKey="name"
+      selectable={false}
+      bodyClassName="h-[320px] overflow-auto rounded-lg border"
+    />
   )
 }
 

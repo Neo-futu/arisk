@@ -107,6 +107,7 @@ export function EngineKpiPanel({
   title,
   variant = "full",
   badgeLabel,
+  embed = false,
 }: {
   domain: string
   fundId: string
@@ -115,6 +116,8 @@ export function EngineKpiPanel({
   /** full = table+adapters；metrics = 与组合概况卡片一致的 KPI 水位 */
   variant?: "full" | "metrics"
   badgeLabel?: string
+  /** 嵌入外层 Card 时不重复包一层 Card */
+  embed?: boolean
 }) {
   const { t } = useTranslation()
   const useReportLayer = variant === "metrics" && domain === "overview"
@@ -158,6 +161,40 @@ export function EngineKpiPanel({
   const badge = badgeLabel ?? t("engine.viaRiskEngine")
 
   if (variant === "metrics") {
+    const body = (
+      <>
+        {(useReportLayer ? reported.isError : pack.isError) ? (
+          <p className="text-sm text-destructive">{t("engine.kpiLoadError")}</p>
+        ) : null}
+        {!(useReportLayer ? reported.isFetching : pack.isFetching) && !(useReportLayer ? reported.isError : pack.isError) && !reports.length ? (
+          <p className="text-sm text-muted-foreground">{t("platform.empty")}</p>
+        ) : null}
+        {reports.length ? (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {reports.map((report) => (
+              <div
+                key={report.kpi}
+                className="rounded-lg border px-4 py-3"
+                data-testid={`engine-kpi-metric-${report.kpi}`}
+              >
+                <p className="text-muted-foreground text-xs">{localizeKpiName(report.kpi, t)}</p>
+                <p className="mt-1 truncate text-xl font-semibold font-mono">
+                  {formatKpiResult(report.result)}
+                </p>
+                <p className="text-muted-foreground mt-1 truncate text-xs" title={kpiDetail(report)}>
+                  {kpiDetail(report)}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </>
+    )
+
+    if (embed) {
+      return <div data-testid={`engine-kpi-${domain}`}>{body}</div>
+    }
+
     return (
       <Card data-testid={`engine-kpi-${domain}`}>
         <CardHeader>
@@ -166,33 +203,7 @@ export function EngineKpiPanel({
             {showBadge ? <Badge variant="outline">{badge}</Badge> : null}
           </div>
         </CardHeader>
-        <CardContent>
-          {(useReportLayer ? reported.isError : pack.isError) ? (
-            <p className="text-sm text-destructive">{t("engine.kpiLoadError")}</p>
-          ) : null}
-          {!(useReportLayer ? reported.isFetching : pack.isFetching) && !(useReportLayer ? reported.isError : pack.isError) && !reports.length ? (
-            <p className="text-sm text-muted-foreground">{t("platform.empty")}</p>
-          ) : null}
-          {reports.length ? (
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {reports.map((report) => (
-                <div
-                  key={report.kpi}
-                  className="rounded-lg border px-4 py-3"
-                  data-testid={`engine-kpi-metric-${report.kpi}`}
-                >
-                  <p className="text-muted-foreground text-xs">{localizeKpiName(report.kpi, t)}</p>
-                  <p className="mt-1 truncate text-xl font-semibold font-mono">
-                    {formatKpiResult(report.result)}
-                  </p>
-                  <p className="text-muted-foreground mt-1 truncate text-xs" title={kpiDetail(report)}>
-                    {kpiDetail(report)}
-                  </p>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </CardContent>
+        <CardContent>{body}</CardContent>
       </Card>
     )
   }

@@ -1,22 +1,15 @@
 import { useQuery } from "@tanstack/react-query"
-import type { ReactElement } from "react"
+import { useMemo, type ReactElement } from "react"
 import { useTranslation } from "react-i18next"
 
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { fsiApi } from "@/fsiClient"
 import { HorizontalBarList } from "@/modules/investment-risk/dashboard-kit"
 import { EquityBetaContributionCard } from "@/modules/investment-risk/EquityBetaContributionCard"
 import { SqlViewButton } from "@/modules/investment-risk/SqlViewButton"
+import { WorkbenchTable, type WorkbenchColumn } from "@/platform/WorkbenchTable"
 
 function pct(value: number | null | undefined, digits = 2) {
   return value == null ? "—" : `${Number(value).toFixed(digits)}%`
@@ -53,7 +46,6 @@ export interface DomainProps {
   endDate: string
 }
 
-// ── 業績歸因 ────────────────────────────────────────────────────
 function AttributionDomain({ fundId, startDate, endDate }: DomainProps) {
   const { t } = useTranslation()
   const query = useQuery({
@@ -70,6 +62,46 @@ function AttributionDomain({ fundId, startDate, endDate }: DomainProps) {
   })
   const data = query.data
   const equityBeta = betaQuery.data?.equity_beta
+  const contributionColumns = useMemo<WorkbenchColumn<{ asset_class: string; net_pnl: number; contribution_pct: number | null }>[]>(() => [
+    { key: "asset_class", header: t("investmentRisk.domains.assetClass"), filterable: true, accessor: (row) => row.asset_class },
+    {
+      key: "net_pnl",
+      header: t("investmentRisk.domains.netPnl"),
+      align: "right",
+      accessor: (row) => row.net_pnl,
+      cell: (row) => <span className={`font-mono ${row.net_pnl < 0 ? "text-destructive" : "text-emerald-600"}`}>{money(row.net_pnl)}</span>,
+    },
+    {
+      key: "contribution_pct",
+      header: t("investmentRisk.domains.contributionPct"),
+      align: "right",
+      accessor: (row) => row.contribution_pct,
+      cell: (row) => <span className="font-mono">{pct(row.contribution_pct, 2)}</span>,
+    },
+  ], [t])
+  const pnlColumns = useMemo<WorkbenchColumn<{ security_code: string | null; security_name: string; sector: string; net_pnl: number; _rowKey?: string }>[]>(() => [
+    {
+      key: "security_name",
+      header: t("investmentRisk.domains.security"),
+      accessor: (row) => row.security_name,
+      cell: (row) => (
+        <span className="font-medium">
+          {row.security_name}
+          <span className="ml-1 text-xs text-muted-foreground">{row.security_code}</span>
+        </span>
+      ),
+      exportValue: (row) => `${row.security_name} ${row.security_code ?? ""}`.trim(),
+    },
+    { key: "sector", header: t("investmentRisk.domains.sector"), filterable: true, accessor: (row) => row.sector },
+    {
+      key: "net_pnl",
+      header: t("investmentRisk.domains.netPnl"),
+      align: "right",
+      accessor: (row) => row.net_pnl,
+      cell: (row) => <span className={`font-mono ${row.net_pnl < 0 ? "text-destructive" : "text-emerald-600"}`}>{money(row.net_pnl)}</span>,
+    },
+  ], [t])
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -87,37 +119,31 @@ function AttributionDomain({ fundId, startDate, endDate }: DomainProps) {
             <Kpi label={t("investmentRisk.domains.selectionEffect")} value={pct(data.summary.selection_effect_pct, 3)} />
             <Kpi label={t("investmentRisk.domains.interactionEffect")} value={pct(data.summary.interaction_effect_pct, 3)} />
           </div>
-          <Card>
-            <CardHeader><CardTitle className="text-base">{t("investmentRisk.domains.assetContribution")}</CardTitle></CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader><TableRow><TableHead>{t("investmentRisk.domains.assetClass")}</TableHead><TableHead className="text-right">{t("investmentRisk.domains.netPnl")}</TableHead><TableHead className="text-right">{t("investmentRisk.domains.contributionPct")}</TableHead></TableRow></TableHeader>
-                <TableBody>
-                  {data.asset_contribution.map((row) => (
-                    <TableRow key={row.asset_class}>
-                      <TableCell className="font-medium">{row.asset_class}</TableCell>
-                      <TableCell className={`text-right font-mono ${row.net_pnl < 0 ? "text-destructive" : "text-emerald-600"}`}>{money(row.net_pnl)}</TableCell>
-                      <TableCell className="text-right font-mono">{pct(row.contribution_pct, 2)}</TableCell>
-                    </TableRow>
-                  ))}
-                  {!data.asset_contribution.length && <EmptyRow columns={3} />}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <WorkbenchTable
+            title={t("investmentRisk.domains.assetContribution")}
+            rows={data.asset_contribution}
+            columns={contributionColumns}
+            rowId={(row) => row.asset_class}
+            exportFilename={`attribution-asset-${fundId}-${endDate}.csv`}
+            initialSortKey="contribution_pct"
+          />
           <div className="grid gap-4 xl:grid-cols-2">
-            <Card>
-              <CardHeader><CardTitle className="text-base">{t("investmentRisk.domains.topWinners")}</CardTitle></CardHeader>
-              <CardContent>
-                <PnlTable rows={data.top_winners} />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-base">{t("investmentRisk.domains.topLosers")}</CardTitle></CardHeader>
-              <CardContent>
-                <PnlTable rows={data.top_losers} />
-              </CardContent>
-            </Card>
+            <WorkbenchTable
+              title={t("investmentRisk.domains.topWinners")}
+              rows={data.top_winners.map((row, index) => ({ ...row, _rowKey: `winner-${row.security_code ?? row.security_name}-${index}` }))}
+              columns={pnlColumns}
+              rowId={(row) => row._rowKey ?? row.security_code ?? row.security_name}
+              exportFilename={`attribution-winners-${fundId}-${endDate}.csv`}
+              initialSortKey="net_pnl"
+            />
+            <WorkbenchTable
+              title={t("investmentRisk.domains.topLosers")}
+              rows={data.top_losers.map((row, index) => ({ ...row, _rowKey: `loser-${row.security_code ?? row.security_name}-${index}` }))}
+              columns={pnlColumns}
+              rowId={(row) => row._rowKey ?? row.security_code ?? row.security_name}
+              exportFilename={`attribution-losers-${fundId}-${endDate}.csv`}
+              initialSortKey="net_pnl"
+            />
           </div>
         </>
       )}
@@ -137,26 +163,6 @@ function AttributionDomain({ fundId, startDate, endDate }: DomainProps) {
   )
 }
 
-function PnlTable({ rows }: { rows: Array<{ security_code: string | null; security_name: string; sector: string; net_pnl: number; contribution_pct: number | null }> }) {
-  const { t } = useTranslation()
-  return (
-    <Table>
-      <TableHeader><TableRow><TableHead>{t("investmentRisk.domains.security")}</TableHead><TableHead>{t("investmentRisk.domains.sector")}</TableHead><TableHead className="text-right">{t("investmentRisk.domains.netPnl")}</TableHead></TableRow></TableHeader>
-      <TableBody>
-        {rows.map((row, index) => (
-          <TableRow key={`${row.security_code ?? index}`}>
-            <TableCell className="font-medium">{row.security_name}<span className="ml-1 text-xs text-muted-foreground">{row.security_code}</span></TableCell>
-            <TableCell>{row.sector}</TableCell>
-            <TableCell className={`text-right font-mono ${row.net_pnl < 0 ? "text-destructive" : "text-emerald-600"}`}>{money(row.net_pnl)}</TableCell>
-          </TableRow>
-        ))}
-        {!rows.length && <EmptyRow columns={3} />}
-      </TableBody>
-    </Table>
-  )
-}
-
-// ── 利率與信用 ──────────────────────────────────────────────────
 function RatesCreditDomain({ fundId, asOfDate }: DomainProps) {
   const { t } = useTranslation()
   const query = useQuery({
@@ -165,6 +171,23 @@ function RatesCreditDomain({ fundId, asOfDate }: DomainProps) {
     retry: 1,
   })
   const data = query.data
+  const issuerColumns = useMemo<WorkbenchColumn<{ issuer: string; market_value: number; weight_pct: number }>[]>(() => [
+    { key: "issuer", header: t("investmentRisk.domains.issuer"), accessor: (row) => row.issuer },
+    {
+      key: "market_value",
+      header: t("investmentRisk.domains.marketValue"),
+      align: "right",
+      accessor: (row) => row.market_value,
+      cell: (row) => <span className="font-mono">{money(row.market_value)}</span>,
+    },
+    {
+      key: "weight_pct",
+      header: t("investmentRisk.domains.weight"),
+      align: "right",
+      accessor: (row) => row.weight_pct,
+      cell: (row) => <span className="font-mono">{pct(row.weight_pct)}</span>,
+    },
+  ], [t])
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -183,7 +206,7 @@ function RatesCreditDomain({ fundId, asOfDate }: DomainProps) {
           </div>
           <div className="grid gap-4 xl:grid-cols-2">
             <Card>
-              <CardHeader><CardTitle className="text-base">{t("investmentRisk.domains.krdBuckets")}</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-base">{t("investmentRisk.domains.tsdBuckets")}</CardTitle></CardHeader>
               <CardContent>
                 <HorizontalBarList items={data.krd_buckets.map((b) => ({ label: b.bucket, value: b.weight_pct_bond }))} formatter={(v) => pct(v, 2)} />
               </CardContent>
@@ -195,31 +218,20 @@ function RatesCreditDomain({ fundId, asOfDate }: DomainProps) {
               </CardContent>
             </Card>
           </div>
-          <Card>
-            <CardHeader><CardTitle className="text-base">{t("investmentRisk.domains.issuerConcentration")}</CardTitle></CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader><TableRow><TableHead>{t("investmentRisk.domains.issuer")}</TableHead><TableHead className="text-right">{t("investmentRisk.domains.marketValue")}</TableHead><TableHead className="text-right">{t("investmentRisk.domains.weight")}</TableHead></TableRow></TableHeader>
-                <TableBody>
-                  {data.issuer_concentration.top_issuers.map((row) => (
-                    <TableRow key={row.issuer}>
-                      <TableCell className="font-medium">{row.issuer}</TableCell>
-                      <TableCell className="text-right font-mono">{money(row.market_value)}</TableCell>
-                      <TableCell className="text-right font-mono">{pct(row.weight_pct)}</TableCell>
-                    </TableRow>
-                  ))}
-                  {!data.issuer_concentration.top_issuers.length && <EmptyRow columns={3} />}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <WorkbenchTable
+            title={t("investmentRisk.domains.issuerConcentration")}
+            rows={data.issuer_concentration.top_issuers}
+            columns={issuerColumns}
+            rowId={(row) => row.issuer}
+            exportFilename={`rates-issuers-${fundId}-${asOfDate}.csv`}
+            initialSortKey="weight_pct"
+          />
         </>
       )}
     </div>
   )
 }
 
-// ── 流動性與壓力測試 ────────────────────────────────────────────
 function LiquidityDomain({ fundId, asOfDate }: DomainProps) {
   const { t } = useTranslation()
   const query = useQuery({
@@ -228,6 +240,30 @@ function LiquidityDomain({ fundId, asOfDate }: DomainProps) {
     retry: 1,
   })
   const data = query.data
+  const ladderColumns = useMemo<WorkbenchColumn<{ asset_class: string; market_value: number; ttl_days: number; cumulative_pct_nav: number | null }>[]>(() => [
+    { key: "asset_class", header: t("investmentRisk.domains.assetClass"), filterable: true, accessor: (row) => row.asset_class },
+    {
+      key: "market_value",
+      header: t("investmentRisk.domains.marketValue"),
+      align: "right",
+      accessor: (row) => row.market_value,
+      cell: (row) => <span className="font-mono">{money(row.market_value)}</span>,
+    },
+    {
+      key: "ttl_days",
+      header: t("investmentRisk.domains.ttlDays"),
+      align: "right",
+      accessor: (row) => row.ttl_days,
+      cell: (row) => <span className="font-mono">{num(row.ttl_days, 1)}</span>,
+    },
+    {
+      key: "cumulative_pct_nav",
+      header: t("investmentRisk.domains.cumulativePctNav"),
+      align: "right",
+      accessor: (row) => row.cumulative_pct_nav,
+      cell: (row) => <span className="font-mono">{pct(row.cumulative_pct_nav)}</span>,
+    },
+  ], [t])
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -249,32 +285,20 @@ function LiquidityDomain({ fundId, asOfDate }: DomainProps) {
               {data.breach_flags.map((flag) => <Badge key={flag} variant="destructive">{flag}</Badge>)}
             </div>
           ) : null}
-          <Card>
-            <CardHeader><CardTitle className="text-base">{t("investmentRisk.domains.liquidityLadder")}</CardTitle></CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader><TableRow><TableHead>{t("investmentRisk.domains.assetClass")}</TableHead><TableHead className="text-right">{t("investmentRisk.domains.marketValue")}</TableHead><TableHead className="text-right">{t("investmentRisk.domains.ttlDays")}</TableHead><TableHead className="text-right">{t("investmentRisk.domains.cumulativePctNav")}</TableHead></TableRow></TableHeader>
-                <TableBody>
-                  {data.liquidity_ladder.map((row) => (
-                    <TableRow key={row.asset_class}>
-                      <TableCell className="font-medium">{row.asset_class}</TableCell>
-                      <TableCell className="text-right font-mono">{money(row.market_value)}</TableCell>
-                      <TableCell className="text-right font-mono">{num(row.ttl_days, 1)}</TableCell>
-                      <TableCell className="text-right font-mono">{pct(row.cumulative_pct_nav)}</TableCell>
-                    </TableRow>
-                  ))}
-                  {!data.liquidity_ladder.length && <EmptyRow columns={4} />}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <WorkbenchTable
+            title={t("investmentRisk.domains.liquidityLadder")}
+            rows={data.liquidity_ladder}
+            columns={ladderColumns}
+            rowId={(row) => row.asset_class}
+            exportFilename={`liquidity-ladder-${fundId}-${asOfDate}.csv`}
+            initialSortKey="ttl_days"
+          />
         </>
       )}
     </div>
   )
 }
 
-// ── 宏觀與市場動態 ──────────────────────────────────────────────
 function MacroDomain({ fundId, startDate, endDate }: DomainProps) {
   const { t } = useTranslation()
   const query = useQuery({
@@ -284,6 +308,23 @@ function MacroDomain({ fundId, startDate, endDate }: DomainProps) {
     retry: 1,
   })
   const data = query.data
+  const macroColumns = useMemo<WorkbenchColumn<{ index_code: string; period_return_pct: number | null; annualized_volatility_pct: number | null }>[]>(() => [
+    { key: "index_code", header: t("investmentRisk.domains.index"), accessor: (row) => row.index_code, cell: (row) => <span className="font-mono">{row.index_code}</span> },
+    {
+      key: "period_return_pct",
+      header: t("investmentRisk.domains.periodReturn"),
+      align: "right",
+      accessor: (row) => row.period_return_pct,
+      cell: (row) => <span className="font-mono">{pct(row.period_return_pct, 3)}</span>,
+    },
+    {
+      key: "annualized_volatility_pct",
+      header: t("investmentRisk.domains.fundVol"),
+      align: "right",
+      accessor: (row) => row.annualized_volatility_pct,
+      cell: (row) => <span className="font-mono">{pct(row.annualized_volatility_pct, 2)}</span>,
+    },
+  ], [t])
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -298,24 +339,14 @@ function MacroDomain({ fundId, startDate, endDate }: DomainProps) {
             <Kpi label={t("investmentRisk.domains.fundVol")} value={pct(data.fund_regime.annualized_volatility_pct, 2)} />
             <Kpi label={t("investmentRisk.domains.macroCount")} value={String(data.macro_indicators.length)} />
           </div>
-          <Card>
-            <CardHeader><CardTitle className="text-base">{t("investmentRisk.domains.macroQuotes")}</CardTitle></CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader><TableRow><TableHead>{t("investmentRisk.domains.index")}</TableHead><TableHead className="text-right">{t("investmentRisk.domains.periodReturn")}</TableHead><TableHead className="text-right">{t("investmentRisk.domains.fundVol")}</TableHead></TableRow></TableHeader>
-                <TableBody>
-                  {data.macro_indicators.map((row) => (
-                    <TableRow key={row.index_code}>
-                      <TableCell className="font-mono">{row.index_code}</TableCell>
-                      <TableCell className="text-right font-mono">{pct(row.period_return_pct, 3)}</TableCell>
-                      <TableCell className="text-right font-mono">{pct(row.annualized_volatility_pct, 2)}</TableCell>
-                    </TableRow>
-                  ))}
-                  {!data.macro_indicators.length && <EmptyRow columns={3} />}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <WorkbenchTable
+            title={t("investmentRisk.domains.macroQuotes")}
+            rows={data.macro_indicators}
+            columns={macroColumns}
+            rowId={(row) => row.index_code}
+            exportFilename={`macro-quotes-${fundId}-${endDate}.csv`}
+            initialSortKey="period_return_pct"
+          />
           <Card>
             <CardHeader><CardTitle className="text-base">{t("investmentRisk.domains.fundVsMarket")}</CardTitle></CardHeader>
             <CardContent>
@@ -328,7 +359,6 @@ function MacroDomain({ fundId, startDate, endDate }: DomainProps) {
   )
 }
 
-// ── 因子與行為風險 ──────────────────────────────────────────────
 function FactorDomain({ fundId, startDate, endDate }: DomainProps) {
   const { t } = useTranslation()
   const query = useQuery({
@@ -338,6 +368,34 @@ function FactorDomain({ fundId, startDate, endDate }: DomainProps) {
     retry: 1,
   })
   const data = query.data
+  const crowdingColumns = useMemo<WorkbenchColumn<{ security_code: string; security_name: string; weight_pct: number; crowding_ratio: number | null }>[]>(() => [
+    {
+      key: "security_name",
+      header: t("investmentRisk.domains.security"),
+      accessor: (row) => row.security_name,
+      cell: (row) => (
+        <span className="font-medium">
+          {row.security_name}
+          <span className="ml-1 text-xs text-muted-foreground">{row.security_code}</span>
+        </span>
+      ),
+      exportValue: (row) => `${row.security_name} ${row.security_code}`,
+    },
+    {
+      key: "weight_pct",
+      header: t("investmentRisk.domains.weight"),
+      align: "right",
+      accessor: (row) => row.weight_pct,
+      cell: (row) => <span className="font-mono">{pct(row.weight_pct, 2)}</span>,
+    },
+    {
+      key: "crowding_ratio",
+      header: t("investmentRisk.domains.crowdingRatio"),
+      align: "right",
+      accessor: (row) => row.crowding_ratio,
+      cell: (row) => <span className="font-mono">{num(row.crowding_ratio, 3)}</span>,
+    },
+  ], [t])
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -365,24 +423,14 @@ function FactorDomain({ fundId, startDate, endDate }: DomainProps) {
                 <HorizontalBarList items={data.sector_concentration.weights.map((w) => ({ label: w.sector, value: w.weight_pct }))} formatter={(v) => pct(v, 2)} />
               </CardContent>
             </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-base">{t("investmentRisk.domains.crowdingTop")}</CardTitle></CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader><TableRow><TableHead>{t("investmentRisk.domains.security")}</TableHead><TableHead className="text-right">{t("investmentRisk.domains.weight")}</TableHead><TableHead className="text-right">{t("investmentRisk.domains.crowdingRatio")}</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    {data.trading_behavior.crowding_top.map((row) => (
-                      <TableRow key={row.security_code}>
-                        <TableCell className="font-medium">{row.security_name}<span className="ml-1 text-xs text-muted-foreground">{row.security_code}</span></TableCell>
-                        <TableCell className="text-right font-mono">{pct(row.weight_pct, 2)}</TableCell>
-                        <TableCell className="text-right font-mono">{num(row.crowding_ratio, 3)}</TableCell>
-                      </TableRow>
-                    ))}
-                    {!data.trading_behavior.crowding_top.length && <EmptyRow columns={3} />}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+            <WorkbenchTable
+              title={t("investmentRisk.domains.crowdingTop")}
+              rows={data.trading_behavior.crowding_top}
+              columns={crowdingColumns}
+              rowId={(row) => row.security_code}
+              exportFilename={`factor-crowding-${fundId}-${endDate}.csv`}
+              initialSortKey="weight_pct"
+            />
           </div>
         </>
       )}
@@ -390,7 +438,6 @@ function FactorDomain({ fundId, startDate, endDate }: DomainProps) {
   )
 }
 
-// ── 前置試算 ────────────────────────────────────────────────────
 function PretradeDomain({ fundId, asOfDate }: DomainProps) {
   const { t } = useTranslation()
   const query = useQuery({
@@ -402,6 +449,44 @@ function PretradeDomain({ fundId, asOfDate }: DomainProps) {
   })
   const data = query.data
   const decisionVariant = data?.decision === "BLOCK" ? "destructive" : data?.decision === "ALLOW_WITH_WARNING" ? "secondary" : "default"
+  const limitRows = data
+    ? [
+        {
+          id: "duration",
+          metric: t("investmentRisk.domains.durationRow"),
+          current: num(data.current.duration_years, 2),
+          projected: num(data.projected.duration_years, 2),
+          limit: num(data.limits.duration_years, 2),
+        },
+        {
+          id: "issuer",
+          metric: t("investmentRisk.domains.issuerPctRow"),
+          current: pct(data.current.issuer_pct_nav),
+          projected: pct(data.projected.issuer_pct_nav),
+          limit: pct(data.limits.issuer_pct_nav),
+        },
+        {
+          id: "te",
+          metric: t("investmentRisk.domains.trackingErrorRow"),
+          current: "—",
+          projected: pct(data.projected.tracking_error_proxy_pct),
+          limit: pct(data.limits.tracking_error_proxy_pct),
+        },
+        {
+          id: "dv01",
+          metric: t("investmentRisk.domains.dv01Row"),
+          current: money(data.current.portfolio_dv01),
+          projected: money(data.projected.portfolio_dv01),
+          limit: "—",
+        },
+      ]
+    : []
+  const limitColumns = useMemo<WorkbenchColumn<(typeof limitRows)[number]>[]>(() => [
+    { key: "metric", header: t("investmentRisk.domains.metric"), accessor: (row) => row.metric },
+    { key: "current", header: t("investmentRisk.domains.current"), align: "right", accessor: (row) => row.current, cell: (row) => <span className="font-mono">{row.current}</span> },
+    { key: "projected", header: t("investmentRisk.domains.projected"), align: "right", accessor: (row) => row.projected, cell: (row) => <span className="font-mono">{row.projected}</span> },
+    { key: "limit", header: t("investmentRisk.domains.limitCol"), align: "right", accessor: (row) => row.limit, cell: (row) => <span className="font-mono">{row.limit}</span> },
+  ], [t])
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -415,52 +500,20 @@ function PretradeDomain({ fundId, asOfDate }: DomainProps) {
             <Badge variant={decisionVariant}>{t("investmentRisk.domains.decision", { value: data.decision })}</Badge>
             {data.breach_flags.map((f) => <Badge key={f} variant="destructive">{f}</Badge>)}
           </div>
-          <Card>
-            <CardHeader><CardTitle className="text-base">{t("investmentRisk.domains.durationLimits")}</CardTitle></CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader><TableRow><TableHead>{t("investmentRisk.domains.metric")}</TableHead><TableHead className="text-right">{t("investmentRisk.domains.current")}</TableHead><TableHead className="text-right">{t("investmentRisk.domains.projected")}</TableHead><TableHead className="text-right">{t("investmentRisk.domains.limitCol")}</TableHead></TableRow></TableHeader>
-                <TableBody>
-                  <TableRow>
-                    <TableCell className="font-medium">{t("investmentRisk.domains.durationRow")}</TableCell>
-                    <TableCell className="text-right font-mono">{num(data.current.duration_years, 2)}</TableCell>
-                    <TableCell className="text-right font-mono">{num(data.projected.duration_years, 2)}</TableCell>
-                    <TableCell className="text-right font-mono">{num(data.limits.duration_years, 2)}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell className="font-medium">{t("investmentRisk.domains.issuerPctRow")}</TableCell>
-                    <TableCell className="text-right font-mono">{pct(data.current.issuer_pct_nav)}</TableCell>
-                    <TableCell className="text-right font-mono">{pct(data.projected.issuer_pct_nav)}</TableCell>
-                    <TableCell className="text-right font-mono">{pct(data.limits.issuer_pct_nav)}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell className="font-medium">{t("investmentRisk.domains.trackingErrorRow")}</TableCell>
-                    <TableCell className="text-right font-mono">—</TableCell>
-                    <TableCell className="text-right font-mono">{pct(data.projected.tracking_error_proxy_pct)}</TableCell>
-                    <TableCell className="text-right font-mono">{pct(data.limits.tracking_error_proxy_pct)}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell className="font-medium">{t("investmentRisk.domains.dv01Row")}</TableCell>
-                    <TableCell className="text-right font-mono">{money(data.current.portfolio_dv01)}</TableCell>
-                    <TableCell className="text-right font-mono">{money(data.projected.portfolio_dv01)}</TableCell>
-                    <TableCell className="text-right font-mono">—</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <WorkbenchTable
+            title={t("investmentRisk.domains.durationLimits")}
+            rows={limitRows}
+            columns={limitColumns}
+            rowId={(row) => row.id}
+            exportFilename={`pretrade-limits-${fundId}-${asOfDate}.csv`}
+            selectable={false}
+          />
         </>
       )}
     </div>
   )
 }
 
-function EmptyRow({ columns }: { columns: number }) {
-  const { t } = useTranslation()
-  return <TableRow><TableCell colSpan={columns} className="h-16 text-center text-muted-foreground">{t("investmentRisk.common.empty")}</TableCell></TableRow>
-}
-
-/** 六大業務域，供風險指標頁組合進統一 Tab 使用。 */
 export const RISK_DOMAINS: ReadonlyArray<{
   key: string
   label: string

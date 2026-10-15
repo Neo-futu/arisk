@@ -130,11 +130,13 @@ async def chat(req: ChatRequest):
     messages = [{"role": "user", "content": req.message}]
     result_parts: list[str] = []
     tool_calls_used: list[dict] = []
+    selected_model = req.model or DEFAULT_MODEL
 
     async for event in run_agent(
         messages=messages,
         agent_name=req.agent,
         context=req.context,
+        model=selected_model,
     ):
         if event["type"] == "text":
             result_parts.append(event["content"])
@@ -149,7 +151,7 @@ async def chat(req: ChatRequest):
         "reply":       "".join(result_parts),
         "agent":       req.agent,
         "tool_calls":  tool_calls_used,
-        "model":       os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
+        "model":       selected_model,
     }
 
 

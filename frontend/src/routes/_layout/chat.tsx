@@ -16,7 +16,7 @@ function ChatPage() {
   const chat = useChatSession(agent)
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] gap-0">
+    <div className="flex h-[calc(100vh-8rem)] min-h-0 gap-0 overflow-hidden">
       {/* 左側：對話區 */}
       <ChatArea
         messages={chat.messages}
@@ -32,6 +32,7 @@ function ChatPage() {
         sendMessage={chat.sendMessage}
         newChat={chat.newChat}
         bottomRef={chat.bottomRef}
+        listRef={chat.listRef}
         inputRef={chat.inputRef}
       />
 

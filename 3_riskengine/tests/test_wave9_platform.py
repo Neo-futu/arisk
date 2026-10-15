@@ -119,5 +119,7 @@ def test_workbench_and_copilot_exist() -> None:
     assert "formatPageContext" in context
     assert "Current Module" in context
     assert "Risk Metrics" in context
-    assert "chatV2" in copilot
-    assert "invokeAgents" in copilot
+    assert "streamAgentChat" in copilot
+    assert "platform-copilot" in copilot
+    assert "copilot-model-selector" in copilot
+    assert "FALLBACK_MODELS" in copilot

@@ -26,6 +26,7 @@ interface Props {
   sendMessage: () => void
   newChat:     () => void
   bottomRef:   NullableRef<HTMLDivElement>
+  listRef:     NullableRef<HTMLDivElement>
   inputRef:    NullableRef<HTMLTextAreaElement>
 }
 
@@ -33,7 +34,7 @@ export function ChatArea({
   messages, streaming, input, setInput,
   agentId, setAgentId, modelId, setModelId,
   agentList, modelList, sendMessage, newChat,
-  bottomRef, inputRef,
+  bottomRef, listRef, inputRef,
 }: Props) {
   const { t } = useTranslation()
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -41,9 +42,9 @@ export function ChatArea({
   }
 
   return (
-    <div className="flex flex-1 flex-col min-w-0">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {/* 頂欄 */}
-      <div className="relative z-10 flex flex-wrap items-center gap-2 border-b pb-3 mb-3">
+      <div className="relative z-10 mb-3 flex shrink-0 flex-wrap items-center gap-2 border-b pb-3">
         <Bot className="h-5 w-5 text-primary shrink-0" />
         <h1 className="text-lg font-bold tracking-tight">{t("chat.title")}</h1>
 
@@ -93,7 +94,7 @@ export function ChatArea({
       </div>
 
       {/* 消息列表 */}
-      <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+      <div ref={listRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain pr-1">
         {messages.length === 0 && (
           <div className="flex h-full flex-col items-center justify-center gap-4 text-center text-muted-foreground">
             <Bot className="h-12 w-12 opacity-30" />
@@ -116,7 +117,7 @@ export function ChatArea({
       </div>
 
       {/* 輸入欄 */}
-      <div className="border-t pt-3 mt-3">
+      <div className="mt-3 shrink-0 border-t pt-3">
         <div className="flex items-end gap-2">
           <textarea
             ref={inputRef} value={input}

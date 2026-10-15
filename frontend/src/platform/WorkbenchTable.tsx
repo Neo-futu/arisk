@@ -1,4 +1,4 @@
-/** Framework data grid: date range, refresh, sort, filter, selection, export. */
+/** Framework data grid: optional date range/refresh, sort, filter, selection, export. */
 import { ChevronDown, ChevronUp, Download, RefreshCw, Search } from "lucide-react"
 import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
@@ -73,39 +73,58 @@ export function WorkbenchTable<T>({
   loading = false,
   error,
   emptyText,
-  selectedIds,
+  selectedIds: controlledSelectedIds,
   onSelectedIdsChange,
   onViewChange,
   exportFilename = "export.csv",
   rowPicker,
   initialSortKey = null,
+  selectable = true,
+  toolbarExtra,
+  /** 表体容器 class；默认固定高度，筛选后也不改变页面布局 */
+  bodyClassName,
+  /** 嵌入外层固定高度容器：铺满父级、隐藏标题，表体 flex 填满剩余空间 */
+  embedded = false,
 }: {
   title: string
   rows: T[]
   columns: WorkbenchColumn<T>[]
   rowId: (row: T) => string
-  dateRange: WorkbenchDateRange
-  onDateRangeChange: (next: WorkbenchDateRange) => void
-  onRefresh: () => void
+  dateRange?: WorkbenchDateRange
+  onDateRangeChange?: (next: WorkbenchDateRange) => void
+  onRefresh?: () => void
   refreshing?: boolean
   loading?: boolean
   error?: string | null
   emptyText?: string
-  selectedIds: string[]
-  onSelectedIdsChange: (ids: string[]) => void
+  selectedIds?: string[]
+  onSelectedIdsChange?: (ids: string[]) => void
   onViewChange?: (view: WorkbenchView<T>) => void
   exportFilename?: string
   rowPicker?: { label: string; text: (row: T) => string }
   initialSortKey?: string | null
+  selectable?: boolean
+  toolbarExtra?: ReactNode
+  bodyClassName?: string
+  embedded?: boolean
 }) {
+  const resolvedBodyClassName =
+    bodyClassName ??
+    (embedded
+      ? "min-h-0 flex-1 overflow-auto rounded-lg border"
+      : "h-[360px] overflow-auto rounded-lg border")
   const { t } = useTranslation()
   const [query, setQuery] = useState("")
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({})
   const [pickedIds, setPickedIds] = useState<string[]>([])
   const [sortKey, setSortKey] = useState<string | null>(initialSortKey)
   const [sortDesc, setSortDesc] = useState(true)
-  const rangeInvalid = dateRange.startDate > dateRange.endDate
+  const [internalSelectedIds, setInternalSelectedIds] = useState<string[]>([])
+  const selectedIds = controlledSelectedIds ?? internalSelectedIds
+  const setSelectedIds = onSelectedIdsChange ?? setInternalSelectedIds
+  const rangeInvalid = dateRange ? dateRange.startDate > dateRange.endDate : false
   const filterable = columns.filter((column) => column.filterable)
+  const showDateRange = Boolean(dateRange && onDateRangeChange)
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase()
@@ -155,28 +174,32 @@ export function WorkbenchTable<T>({
   }
 
   return (
-    <Card>
-      <CardHeader className="space-y-3">
-        <CardTitle className="text-base">{title}</CardTitle>
+    <Card className={embedded ? "flex h-full flex-col border-0 shadow-none" : undefined}>
+      <CardHeader className={embedded ? "shrink-0 space-y-2 p-0 pb-3" : "space-y-3"}>
+        {embedded ? null : <CardTitle className="text-base">{title}</CardTitle>}
         <div className="flex flex-wrap items-end gap-2">
-          <div className="space-y-1">
-            <Label className="text-xs">{t("platform.startDate")}</Label>
-            <Input
-              type="date"
-              className="h-9 w-40"
-              value={dateRange.startDate}
-              onChange={(event) => onDateRangeChange({ ...dateRange, startDate: event.target.value })}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">{t("platform.endDate")}</Label>
-            <Input
-              type="date"
-              className="h-9 w-40"
-              value={dateRange.endDate}
-              onChange={(event) => onDateRangeChange({ ...dateRange, endDate: event.target.value })}
-            />
-          </div>
+          {showDateRange && dateRange && onDateRangeChange ? (
+            <>
+              <div className="space-y-1">
+                <Label className="text-xs">{t("platform.startDate")}</Label>
+                <Input
+                  type="date"
+                  className="h-9 w-40"
+                  value={dateRange.startDate}
+                  onChange={(event) => onDateRangeChange({ ...dateRange, startDate: event.target.value })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">{t("platform.endDate")}</Label>
+                <Input
+                  type="date"
+                  className="h-9 w-40"
+                  value={dateRange.endDate}
+                  onChange={(event) => onDateRangeChange({ ...dateRange, endDate: event.target.value })}
+                />
+              </div>
+            </>
+          ) : null}
           {rowPicker ? (
             <div className="space-y-1">
               <Label className="text-xs">{rowPicker.label}</Label>
@@ -234,6 +257,7 @@ export function WorkbenchTable<T>({
               </div>
             )
           })}
+          {toolbarExtra}
           <div className="relative min-w-48 flex-1">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input className="h-9 pl-8" value={query} placeholder={t("platform.search")} onChange={(event) => setQuery(event.target.value)} />
@@ -242,80 +266,90 @@ export function WorkbenchTable<T>({
             <Button variant="outline" size="sm" disabled={!visible.length} onClick={exportRows}>
               <Download className="mr-1 h-4 w-4" />{t("platform.export")}
             </Button>
-            <Button variant="outline" size="sm" onClick={onRefresh} disabled={refreshing || rangeInvalid}>
-              <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-              {t("platform.refresh")}
-            </Button>
+            {onRefresh ? (
+              <Button variant="outline" size="sm" onClick={onRefresh} disabled={refreshing || rangeInvalid}>
+                <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+                {t("platform.refresh")}
+              </Button>
+            ) : null}
           </div>
         </div>
       </CardHeader>
-      <CardContent>
-        {loading ? <p className="py-6 text-center text-sm text-muted-foreground">{t("platform.loading")}</p> : null}
-        {error ? <p className="py-6 text-center text-sm text-destructive">{error}</p> : null}
-        <div className="max-h-[440px] overflow-auto rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10">
-                  <Checkbox
-                    checked={allChecked}
-                    onCheckedChange={(checked) => onSelectedIdsChange(checked === true ? visible.map(rowId) : [])}
-                    aria-label={title}
-                  />
-                </TableHead>
-                {columns.map((column) => {
-                  const active = sortKey === column.key
-                  const Icon = active && !sortDesc ? ChevronUp : ChevronDown
-                  return (
-                    <TableHead key={column.key} className={column.align === "right" ? "text-right" : ""} aria-sort={active ? (sortDesc ? "descending" : "ascending") : "none"}>
-                      {column.sortable === false ? column.header : (
-                        <button
-                          type="button"
-                          className={`inline-flex items-center gap-1 font-medium hover:text-primary ${column.align === "right" ? "ml-auto" : ""}`}
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            toggleSort(column.key)
-                          }}
-                        >
-                          {column.header}
-                          <Icon className={`h-3.5 w-3.5 ${active ? "text-primary" : "text-muted-foreground/50"}`} />
-                        </button>
-                      )}
+      <CardContent className={embedded ? "flex min-h-0 flex-1 flex-col p-0" : undefined}>
+        {error ? <p className="mb-3 text-sm text-destructive">{error}</p> : null}
+        <div className={resolvedBodyClassName}>
+          {loading ? (
+            <p className="flex h-full items-center justify-center text-sm text-muted-foreground">{t("platform.loading")}</p>
+          ) : !visible.length ? (
+            <p className="flex h-full items-center justify-center text-sm text-muted-foreground">{emptyText ?? t("platform.empty")}</p>
+          ) : (
+            <Table>
+              <TableHeader className="sticky top-0 z-10 bg-background">
+                <TableRow>
+                  {selectable ? (
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={allChecked}
+                        onCheckedChange={(checked) => setSelectedIds(checked === true ? visible.map(rowId) : [])}
+                        aria-label={title}
+                      />
                     </TableHead>
+                  ) : null}
+                  {columns.map((column) => {
+                    const active = sortKey === column.key
+                    const Icon = active && !sortDesc ? ChevronUp : ChevronDown
+                    return (
+                      <TableHead key={column.key} className={column.align === "right" ? "text-right" : ""} aria-sort={active ? (sortDesc ? "descending" : "ascending") : "none"}>
+                        {column.sortable === false ? column.header : (
+                          <button
+                            type="button"
+                            className={`inline-flex items-center gap-1 font-medium hover:text-primary ${column.align === "right" ? "ml-auto" : ""}`}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              toggleSort(column.key)
+                            }}
+                          >
+                            {column.header}
+                            <Icon className={`h-3.5 w-3.5 ${active ? "text-primary" : "text-muted-foreground/50"}`} />
+                          </button>
+                        )}
+                      </TableHead>
+                    )
+                  })}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {visible.map((row) => {
+                  const id = rowId(row)
+                  const checked = selectedIds.includes(id)
+                  return (
+                    <TableRow
+                      key={id}
+                      data-state={checked ? "selected" : undefined}
+                      className={selectable ? "cursor-pointer" : undefined}
+                      onClick={selectable ? () => setSelectedIds(checked ? selectedIds.filter((item) => item !== id) : [...selectedIds, id]) : undefined}
+                    >
+                      {selectable ? (
+                        <TableCell onClick={(event) => event.stopPropagation()}>
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={(next) => setSelectedIds(next === true ? [...selectedIds, id] : selectedIds.filter((item) => item !== id))}
+                            aria-label={id}
+                          />
+                        </TableCell>
+                      ) : null}
+                      {columns.map((column) => (
+                        <TableCell key={column.key} className={column.align === "right" ? "text-right" : ""}>
+                          {column.cell ? column.cell(row) : String(column.accessor(row) ?? "—")}
+                        </TableCell>
+                      ))}
+                    </TableRow>
                   )
                 })}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {visible.map((row) => {
-                const id = rowId(row)
-                const checked = selectedIds.includes(id)
-                return (
-                  <TableRow
-                    key={id}
-                    data-state={checked ? "selected" : undefined}
-                    className="cursor-pointer"
-                    onClick={() => onSelectedIdsChange(checked ? selectedIds.filter((item) => item !== id) : [...selectedIds, id])}
-                  >
-                    <TableCell onClick={(event) => event.stopPropagation()}>
-                      <Checkbox
-                        checked={checked}
-                        onCheckedChange={(next) => onSelectedIdsChange(next === true ? [...selectedIds, id] : selectedIds.filter((item) => item !== id))}
-                        aria-label={id}
-                      />
-                    </TableCell>
-                    {columns.map((column) => (
-                      <TableCell key={column.key} className={column.align === "right" ? "text-right" : ""}>
-                        {column.cell ? column.cell(row) : String(column.accessor(row) ?? "—")}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
+              </TableBody>
+            </Table>
+          )}
         </div>
-        {!loading && !visible.length ? <p className="py-6 text-center text-sm text-muted-foreground">{emptyText ?? t("platform.empty")}</p> : null}
       </CardContent>
     </Card>
   )

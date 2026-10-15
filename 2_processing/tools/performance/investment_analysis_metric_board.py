@@ -896,17 +896,17 @@ async def _extension_metrics(
 
 _METRIC_GROUPS: dict[str, dict[str, str]] = {
     "market": {
-        "nav_unit": "收益与净值",
-        "interval_return": "收益与净值",
-        "day_return": "收益与净值",
-        "benchmark_return": "收益与净值",
-        "active_return": "收益与净值",
-        "security_pnl": "收益与净值",
-        "annualized_vol": "风险调整",
-        "max_drawdown": "风险调整",
-        "sharpe": "风险调整",
-        "info_ratio": "风险调整",
-        "tracking_error": "风险调整",
+        "nav_unit": "组合风险",
+        "interval_return": "组合风险",
+        "day_return": "组合风险",
+        "benchmark_return": "组合风险",
+        "active_return": "组合风险",
+        "security_pnl": "组合风险",
+        "annualized_vol": "组合风险",
+        "max_drawdown": "组合风险",
+        "sharpe": "组合风险",
+        "info_ratio": "组合风险",
+        "tracking_error": "组合风险",
         "equity_beta": "权益与风格",
         "turnover": "权益与风格",
         "style_momentum": "权益与风格",
@@ -1121,7 +1121,9 @@ async def _load_metric_report(
     ).mappings().all()
     if not rows:
         return None
-    return _board_from_rows(fund_id, period_start, period_end, dict(header), [dict(row) for row in rows], "report")
+    payload = _board_from_rows(fund_id, period_start, period_end, dict(header), [dict(row) for row in rows], "report")
+    _stamp_groups(payload["categories"])
+    return payload
 
 
 async def _save_metric_report(db: AsyncSession, payload: dict[str, Any]) -> None:

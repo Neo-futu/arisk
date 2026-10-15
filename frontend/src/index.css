@@ -114,8 +114,17 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* 预留滚动条槽位，避免菜单/页内 Tab 切换时内容因滚动条显隐而左右跳动 */
+  html {
+    scrollbar-gutter: stable;
+  }
   body {
     @apply bg-background text-foreground;
+  }
+  /* Radix removeScroll 补偿宽度会导致主内容左移；已用 scrollbar-gutter，禁止再改 padding */
+  body[data-scroll-locked] {
+    margin-right: 0 !important;
+    padding-right: 0 !important;
   }
   button,
   [role="button"] {

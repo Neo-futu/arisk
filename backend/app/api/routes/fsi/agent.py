@@ -40,6 +40,7 @@ class ChatV2Request(BaseModel):
     message: str
     agent:   str = "risk-analyst"
     context: dict | None = None
+    model:   str | None = None
 
 
 class VarSkillRequest(BaseModel):
@@ -123,7 +124,7 @@ async def list_agents_v2(_user: CurrentUser) -> Any:
 
 _STATIC_MODELS = [
     # Anthropic Claude
-    {"id": "claude-sonnet-4-6",           "label": "Claude Sonnet 4.6（推薦）",           "provider": "anthropic",   "default": True},
+    {"id": "claude-sonnet-4-6",           "label": "Claude Sonnet 4.6（推薦）",           "provider": "anthropic",   "default": False},
     {"id": "claude-opus-4-5",             "label": "Claude Opus 4.5（最強）",             "provider": "anthropic",   "default": False},
     {"id": "claude-haiku-4-5-20251001",   "label": "Claude Haiku 4.5（最快）",            "provider": "anthropic",   "default": False},
     # Google Gemini
@@ -138,9 +139,17 @@ _STATIC_MODELS = [
     # DeepSeek
     {"id": "deepseek-chat",               "label": "DeepSeek Chat V3（推薦）",             "provider": "deepseek",    "default": False},
     {"id": "deepseek-reasoner",           "label": "DeepSeek R1（推理增強）",              "provider": "deepseek",    "default": False},
-    # xAI Grok via OpenRouter
-    {"id": "x-ai/grok-4.20",             "label": "xAI Grok 4.20（最新旗艦）",            "provider": "openrouter",  "default": False},
-    {"id": "x-ai/grok-4.3",              "label": "xAI Grok 4.3",                        "provider": "openrouter",  "default": False},
+    # Cursor Agent SDK（配置了 CURSOR_API_KEY 时作为默认）
+    {"id": "auto-smart",                 "label": "Cursor Auto（Router）",                "provider": "cursor",      "default": True},
+    {"id": "composer-2.5",               "label": "Cursor Composer 2.5",                 "provider": "cursor",      "default": False},
+    # OpenRouter（可选 OPENROUTER_API_KEY）
+    {"id": "x-ai/grok-4.20",             "label": "xAI Grok 4.20（OpenRouter）",          "provider": "openrouter",  "default": False},
+    {"id": "x-ai/grok-4.3",              "label": "xAI Grok 4.3（OpenRouter）",           "provider": "openrouter",  "default": False},
+    {"id": "anthropic/claude-sonnet-4",  "label": "Claude Sonnet 4（via OpenRouter）",    "provider": "openrouter",  "default": False},
+    {"id": "anthropic/claude-opus-4",    "label": "Claude Opus 4（via OpenRouter）",      "provider": "openrouter",  "default": False},
+    {"id": "openai/gpt-4o",              "label": "GPT-4o（via OpenRouter）",             "provider": "openrouter",  "default": False},
+    {"id": "openai/gpt-4o-mini",         "label": "GPT-4o Mini（via OpenRouter）",        "provider": "openrouter",  "default": False},
+    {"id": "google/gemini-2.0-flash-001","label": "Gemini 2.0 Flash（via OpenRouter）",   "provider": "openrouter",  "default": False},
 ]
 
 

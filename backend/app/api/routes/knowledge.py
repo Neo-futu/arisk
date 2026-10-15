@@ -303,9 +303,8 @@ async def _call_llm_for_skill(model_id: str, prompt: str) -> str | None:
         if not m:
             return "auto"
         m = m.lower()
-        if m.startswith("x-ai/") or m.startswith("grok"):
-            return "openrouter"
-        if m.startswith("qwen") or m.startswith("mistral"):
+        # vendor/model → OpenRouter（含 anthropic/claude-*、openai/gpt-*）
+        if "/" in m or m.startswith("x-ai/") or m.startswith("grok") or m.startswith("qwen") or m.startswith("mistral"):
             return "openrouter"
         if m.startswith("claude"):
             return "anthropic"

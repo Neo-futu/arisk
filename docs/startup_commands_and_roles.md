@@ -391,8 +391,9 @@ Invoke-RestMethod -Method Post `
 | 功能 | 環境變量 | 說明 |
 |---|---|---|
 | Anthropic Claude | `ANTHROPIC_API_KEY` | Chat 默認模型，需設置 |
-| xAI Grok（via OpenRouter）| `OPENROUTER_API_KEY` | 香港可用，無地區限制 |
-| OpenAI GPT | `OPENAI_API_KEY` | 香港 403，需代理 |
+| Cursor Agent（Router / Composer）| `CURSOR_API_KEY` + `CURSOR_MODEL` | `crsr_...`；`CURSOR_MODEL=auto-smart`（可加 `CURSOR_OPTIMIZE_FOR=balanced`） |
+| OpenRouter（Claude/GPT/Gemini/Grok）| `OPENROUTER_API_KEY` | 可選 `sk-or-v1-...` |
+| OpenAI GPT 直連 | `OPENAI_API_KEY` | 可選 |
 | Google Gemini | `GEMINI_API_KEY` | 需確認配額 |
 | Kimi（月之暗面）| `MOONSHOT_API_KEY` | OpenAI 兼容接口 |
 | DeepSeek | `DEEPSEEK_API_KEY` | OpenAI 兼容接口 |

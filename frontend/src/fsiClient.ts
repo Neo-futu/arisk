@@ -2550,7 +2550,7 @@ export const fsiApi = {
     return axios.get<Array<{
       id: string
       label: string
-      provider: "anthropic" | "openai" | "gemini" | "moonshot" | "deepseek" | "openrouter"
+      provider: "anthropic" | "openai" | "gemini" | "moonshot" | "deepseek" | "openrouter" | "cursor"
       default: boolean
     }>>(
       `${BASE}/api/v1/fsi/agent/v2/models`,
@@ -2566,10 +2566,10 @@ export const fsiApi = {
     result?: string
     chart?: string
     risk_metrics?: Record<string, unknown>
-  }) {
-    return axios.post<{ reply: string; agent: string; tool_calls: unknown[] }>(
+  }, model?: string) {
+    return axios.post<{ reply: string; agent: string; tool_calls: unknown[]; model?: string }>(
       `${BASE}/api/v1/fsi/agent/v2/chat`,
-      { message, agent, context },
+      { message, agent, context, model },
       { headers: authHeaders() },
     )
   },
@@ -2695,6 +2695,7 @@ export const fsiApi = {
     model?:     string,
     sessionId?: string,
     userId?:    string,
+    signal?:    AbortSignal,
   ): Promise<Response> {
     const token = localStorage.getItem("access_token") ?? ""
     return fetch(`${BASE}/api/v1/fsi/agent/v2/stream`, {
@@ -2711,6 +2712,7 @@ export const fsiApi = {
         session_id: sessionId,
         user_id:    userId,
       }),
+      signal,
     })
   },
 }

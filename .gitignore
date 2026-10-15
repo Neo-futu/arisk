@@ -1,4 +1,5 @@
 .env
+.cursor-chat-workspace/
 __pycache__/
 *.py[cod]
 *.egg-info/
