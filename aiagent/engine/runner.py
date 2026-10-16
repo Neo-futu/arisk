@@ -17,6 +17,7 @@ Provider 選擇邏輯：
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -28,12 +29,15 @@ from dotenv import load_dotenv
 
 from .tools import TOOLS, execute_tool
 
-load_dotenv()
+_ROOT = Path(__file__).resolve().parents[2]  # arisk/
+load_dotenv(_ROOT / ".env", override=False)
+load_dotenv(override=False)
 logger = logging.getLogger(__name__)
 
 # ── 路徑 ──────────────────────────────────────────────────────────
 AGENTS_DIR    = Path(__file__).parent.parent / "agents"
 MAX_TOOL_LOOPS = 10
+_OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 
 # ── 可用 Agent 名稱 ───────────────────────────────────────────────
 AGENT_NAMES = {
@@ -73,18 +77,48 @@ SUPPORTED_MODELS = {
                                     "base_url": "https://api.deepseek.com/v1"},
     "deepseek-reasoner":           {"provider": "deepseek",  "label": "DeepSeek R1（推理增強）",
                                     "base_url": "https://api.deepseek.com/v1"},
-    # xAI Grok via OpenRouter — 需設置 OPENROUTER_API_KEY，香港無地區限制
-    "x-ai/grok-4.20":              {"provider": "openrouter", "label": "xAI Grok 4.20（最新旗艦，香港可用）",
-                                    "base_url": "https://openrouter.ai/api/v1"},
-    "x-ai/grok-4.3":               {"provider": "openrouter", "label": "xAI Grok 4.3（香港可用）",
-                                    "base_url": "https://openrouter.ai/api/v1"},
+    # OpenRouter（sk-or-v1-...）— 与 Cursor「Override OpenAI Base URL」常用同一类 Key；可与 OPENAI_API_KEY 并行
+    "x-ai/grok-4.20":              {"provider": "openrouter", "label": "xAI Grok 4.20（OpenRouter）",
+                                    "base_url": _OPENROUTER_BASE},
+    "x-ai/grok-4.3":               {"provider": "openrouter", "label": "xAI Grok 4.3（OpenRouter）",
+                                    "base_url": _OPENROUTER_BASE},
+    "anthropic/claude-sonnet-4":   {"provider": "openrouter", "label": "Claude Sonnet 4（via OpenRouter）",
+                                    "base_url": _OPENROUTER_BASE},
+    "anthropic/claude-opus-4":     {"provider": "openrouter", "label": "Claude Opus 4（via OpenRouter）",
+                                    "base_url": _OPENROUTER_BASE},
+    "openai/gpt-4o":               {"provider": "openrouter", "label": "GPT-4o（via OpenRouter）",
+                                    "base_url": _OPENROUTER_BASE},
+    "openai/gpt-4o-mini":          {"provider": "openrouter", "label": "GPT-4o Mini（via OpenRouter）",
+                                    "base_url": _OPENROUTER_BASE},
+    "google/gemini-2.0-flash-001": {"provider": "openrouter", "label": "Gemini 2.0 Flash（via OpenRouter）",
+                                    "base_url": _OPENROUTER_BASE},
+    # Cursor Agent SDK（Ask AI / Agent Chat）
+    # 步骤：CURSOR_API_KEY → ModelSelection → 可选 tools 预取(MCP/HTTP) → bridge(cwd=arisk) → 纯文本回答
+    # Ask AI 默认禁用本地 shell/读写工具，避免误改仓库；Composer 2.5 比 Auto Router 更稳
+    "auto-smart":                  {"provider": "cursor", "label": "Cursor Auto（Router）"},
+    "composer-2.5":                {"provider": "cursor", "label": "Cursor Composer 2.5"},
 }
 
-DEFAULT_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+def _resolve_default_model() -> str:
+    """有 CURSOR_API_KEY 时优先 Cursor；否则 Anthropic。"""
+    if os.getenv("CURSOR_API_KEY", "").strip():
+        return os.getenv("CURSOR_MODEL", "auto-smart").strip() or "auto-smart"
+    return os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+
+
+DEFAULT_MODEL = _resolve_default_model()
 
 
 def detect_provider(model: str) -> str:
     """根據模型名稱前綴自動識別 Provider。"""
+    # 先查表（OpenRouter 的 openai/gpt-4o 不能誤判為直連 OpenAI）
+    info = SUPPORTED_MODELS.get(model, {})
+    if info.get("provider"):
+        return str(info["provider"])
+    if model in {"auto-smart", "auto", "composer-2.5", "composer-2"} or model.startswith("composer-"):
+        return "cursor"
+    if "/" in model:
+        return "openrouter"
     if model.startswith("gpt-") or model.startswith("o1") or model.startswith("o3"):
         return "openai"
     if model.startswith("gemini-"):
@@ -95,10 +129,6 @@ def detect_provider(model: str) -> str:
         return "deepseek"
     if model.startswith("x-ai/") or model.startswith("grok"):
         return "openrouter"
-    # 也從 SUPPORTED_MODELS 查詢（優先）
-    info = SUPPORTED_MODELS.get(model, {})
-    if info.get("provider"):
-        return info["provider"]
     return "anthropic"
 
 
@@ -203,6 +233,352 @@ async def _run_anthropic(
             working_messages.append({"role": "user", "content": tool_results})
 
     await stream_callback({"type": "error", "message": f"超過最大工具循環輪次（{MAX_TOOL_LOOPS}）"})
+
+
+# Ask AI / Chat 禁用 Cursor 本地工具，避免 Agent 误改仓库或生成坏 JS（Missing initializer…）
+_CURSOR_CHAT_DISALLOWED_TOOLS = (
+    "shell",
+    "edit",
+    "delete",
+    "read",
+    "grep",
+    "glob",
+    "ls",
+    "task",
+    "piBash",
+    "piEdit",
+    "piWrite",
+    "piRead",
+    "piFind",
+    "piGrep",
+    "piLs",
+    "mcp",
+    "fetch",
+    "webSearch",
+    "webFetch",
+    "semSearch",
+    "applyAgentDiff",
+    "createAgent",
+    "createPlan",
+    "computerUse",
+    "writeCanvas",
+    "writeShellStdin",
+)
+
+
+def _cursor_model_selection(model: str):
+    """Build Cursor SDK model selection（统一返回 ModelSelection）。"""
+    from cursor_sdk import ModelParameterValue, ModelSelection
+
+    selected = (model or "").strip() or "auto-smart"
+    if selected in {"auto", "auto-smart", "default"}:
+        mode = os.getenv("CURSOR_OPTIMIZE_FOR", "balanced").strip() or "balanced"
+        return ModelSelection(
+            id="auto-smart",
+            params=[ModelParameterValue(id="optimize_for", value=mode)],
+        )
+    # composer-2 / composer-2.5 等：显式 ModelSelection，避免字符串路径偶发 internal 错
+    return ModelSelection(id=selected)
+
+
+def _msg_text(content: object) -> str:
+    if isinstance(content, list):
+        return " ".join(
+            block.get("text", "") if isinstance(block, dict) else str(block)
+            for block in content
+        )
+    return str(content or "")
+
+
+def _resolve_fund_id(text: str, context: dict | None) -> str:
+    """从 context / 用户话术解析 fund_id；兼容 BMM001 → BHMMF001。"""
+    fund_id = str((context or {}).get("fund_id") or "").strip().upper()
+    if fund_id:
+        return fund_id
+    m = re.search(r"\b(BHMMF\d{3}|BHMF\d{3}|BMM\d{3})\b", text or "", re.I)
+    if not m:
+        return ""
+    raw = m.group(1).upper()
+    if raw.startswith("BHMMF"):
+        return raw
+    num = re.search(r"\d+", raw)
+    return f"BHMMF{num.group(0).zfill(3)}" if num else raw
+
+
+def _build_cursor_prompt(system: str, messages: list[dict], tool_bundle: str = "") -> str:
+    parts = [
+        "你是 ARISK Ask AI / 风控助手。这是一次对话问答，不是代码改造任务。",
+        "规则：",
+        "1. 只输出对用户的文字回答（可用 Markdown）。禁止输出或执行任何代码。",
+        "2. 不要探索、搜索、修改任何文件，不要运行 shell/命令，不要调用工具。",
+        "3. 下方【工具预取结果】或用户消息里的 Page context / Risk Metrics 来自真实系统，必须优先使用；禁止编造 NAV/VaR/持仓。",
+        "4. 若上下文已有基金列表、持仓或 VaR，直接据此回答；仅当明确缺失时才说明缺数据。",
+        "",
+        "【系统提示】",
+        system.strip(),
+        "",
+    ]
+    if tool_bundle.strip():
+        parts.extend(["【工具预取结果】", tool_bundle.strip(), ""])
+    parts.append("【对话】")
+    for msg in messages:
+        role = msg.get("role", "user")
+        parts.append(f"{role}: {_msg_text(msg.get('content', ''))}")
+    parts.append("")
+    parts.append("请直接回答最后一条 user 消息（纯文字/Markdown，不要写代码）。")
+    return "\n".join(parts)
+
+
+async def _prefetch_tools_for_cursor(
+    messages: list[dict],
+    context: dict | None,
+    stream_callback,
+) -> str:
+    """Cursor SDK 无 native tool_use：调 LLM 前走 arisk Layer3 tools（MCP→processing）。"""
+    last_user = ""
+    for m in reversed(messages):
+        if m.get("role") == "user":
+            last_user = _msg_text(m.get("content", ""))
+            break
+
+    # Ask AI / Copilot 已把 Page context / Risk Metrics 注入用户消息时，跳过二次预取，
+    # 避免 Cursor Auto 在工具+长上下文下长时间卡住。
+    embedded_markers = (
+        "Page context:",
+        "Risk Metrics",
+        "var_compare",
+        "组合摘要",
+        "【工具预取结果】",
+    )
+    if any(marker in last_user for marker in embedded_markers):
+        return ""
+
+    text_l = last_user.lower()
+    fund_id = _resolve_fund_id(last_user, context)
+    as_of = str((context or {}).get("as_of_date") or "").strip()
+
+    wants_funds = any(k in text_l for k in (
+        "基金", "fund", "有哪些", "列表", "portfolio", "在管",
+    ))
+    wants_pos = any(k in text_l for k in (
+        "持仓", "持倉", "position", "构成", "構成", "明细", "明細", "allocation", "配置",
+    ))
+    wants_var = any(k in text_l for k in (
+        "var", "风险", "風險", "wam", "wal", "exposure", "暴露",
+    ))
+    # 有基金上下文时，数据类问题默认拉持仓，避免空答
+    if fund_id and not (wants_funds or wants_pos or wants_var):
+        wants_pos = any(k in text_l for k in ("多少", "怎样", "怎麼", "如何", "分析", "看看", "查询", "查詢"))
+
+    calls: list[tuple[str, dict]] = []
+    if wants_funds or not fund_id:
+        calls.append(("get_system_info", {}))
+    if fund_id and (wants_pos or wants_var):
+        if not as_of:
+            # 先拉 system_info 拿默认估值日
+            if not any(n == "get_system_info" for n, _ in calls):
+                calls.insert(0, ("get_system_info", {}))
+        if wants_pos:
+            calls.append(("get_positions", {
+                "fund_id": fund_id,
+                "as_of_date": as_of or "",  # 后面用 system_info 补
+                "limit": 50,
+            }))
+        if wants_var:
+            calls.append(("get_var_compare", {
+                "fund_id": fund_id,
+                "as_of_date": as_of or "",
+            }))
+
+    if not calls:
+        # 兜底：至少给基金列表，避免 Cursor 空上下文瞎答
+        calls.append(("get_system_info", {}))
+
+    chunks: list[str] = []
+    sys_info: dict = {}
+    for idx, (name, inp) in enumerate(calls):
+        call_id = f"cursor-prefetch-{idx}-{name}"
+        if name in {"get_positions", "get_var_compare"} and not inp.get("as_of_date"):
+            as_of = (
+                str(sys_info.get("as_of_date") or sys_info.get("current_date") or as_of or "")
+            )
+            if not as_of:
+                from datetime import date as _date
+                as_of = _date.today().isoformat()
+            inp = {**inp, "as_of_date": as_of}
+        try:
+            await stream_callback({
+                "type": "tool_call", "name": name, "input": inp, "id": call_id,
+            })
+            result = await execute_tool(name, inp)
+            if name == "get_system_info" and isinstance(result, dict):
+                sys_info = result
+                # 若用户只说「1号基金」等，尝试从列表解析
+                if not fund_id:
+                    funds = result.get("funds") or result.get("fund_list") or []
+                    if isinstance(funds, list) and funds:
+                        first = funds[0]
+                        if isinstance(first, dict):
+                            fund_id = str(first.get("fund_id") or first.get("id") or "")
+                        elif isinstance(first, str):
+                            fund_id = first
+            await stream_callback({
+                "type": "tool_result", "name": name, "result": result, "id": call_id,
+            })
+            chunks.append(
+                f"### {name}\n```json\n{json.dumps(result, ensure_ascii=False, default=str)[:6000]}\n```"
+            )
+        except Exception as exc:
+            err = {"error": str(exc)[:200], "tool": name}
+            await stream_callback({
+                "type": "tool_result", "name": name, "result": err, "id": call_id,
+            })
+            chunks.append(f"### {name}\n```json\n{json.dumps(err, ensure_ascii=False)}\n```")
+
+    return "\n\n".join(chunks)
+
+
+def _format_cursor_error(exc: BaseException) -> str:
+    """Cursor 异常有时 str(exc) 为空，需拼 message/code/cause。"""
+    chunks: list[str] = []
+    message = getattr(exc, "message", None) or str(exc)
+    code = getattr(exc, "code", None)
+    status = getattr(exc, "status", None) or getattr(exc, "status_code", None)
+    request_id = getattr(exc, "request_id", None)
+    if code:
+        chunks.append(str(code))
+    if status:
+        chunks.append(f"HTTP {status}")
+    if message:
+        chunks.append(str(message))
+    if request_id:
+        chunks.append(f"request_id={request_id}")
+    if not chunks:
+        chunks.append(repr(exc))
+    cause = getattr(exc, "cause", None) or getattr(exc, "__cause__", None)
+    if isinstance(cause, BaseException):
+        chunks.append(f"cause={_format_cursor_error(cause)}")
+    elif cause:
+        chunks.append(f"cause={cause}")
+    return " | ".join(chunks)[:500]
+
+
+def _cursor_invoke_in_fresh_loop(prompt: str, model: str, api_key: str) -> tuple[str, str]:
+    """在独立事件循环中执行 Cursor Agent。
+
+    uvicorn/Windows 默认循环常无法 spawn subprocess（NotImplementedError），
+    因此放到线程内 asyncio.run（ProactorEventLoop）执行。
+
+    cwd 必须是 arisk git 根（空临时目录会导致 bridge/prompt 挂起）。
+    禁用本地读写/shell 工具，避免 Agent 误改仓库或触发
+    internal「Missing initializer in const declaration」。
+    """
+    from cursor_sdk import AgentOptions, LocalAgentOptions
+    from cursor_sdk.asyncio import AsyncAgent, AsyncClient
+
+    workspace = str(_ROOT)
+
+    async def _inner() -> tuple[str, str]:
+        options = AgentOptions(
+            api_key=api_key,
+            model=_cursor_model_selection(model),
+            local=LocalAgentOptions(cwd=workspace, setting_sources=[]),
+            disallowed_tools=list(_CURSOR_CHAT_DISALLOWED_TOOLS),
+        )
+        async with await AsyncClient.launch_bridge(workspace=workspace) as client:
+            result = await AsyncAgent.prompt(prompt, options, client=client)
+        status = str(getattr(result, "status", "") or "")
+        text = str(getattr(result, "result", None) or "").strip()
+        return status, text
+
+    return asyncio.run(_inner())
+
+
+async def _run_cursor(
+    messages: list[dict],
+    system: str,
+    model: str,
+    stream_callback,
+    context: dict | None = None,
+) -> None:
+    """Cursor Agent SDK one-shot；先走 arisk tools→MCP/processing 预取，再调 Cursor LLM。"""
+    key = os.getenv("CURSOR_API_KEY", "").strip()
+    if not key:
+        await stream_callback({
+            "type": "error",
+            "message": (
+                "未设置 CURSOR_API_KEY。\n"
+                "请到 https://cursor.com/dashboard 创建 API Key（crsr_...），\n"
+                "并写入 .env：CURSOR_API_KEY=crsr_..."
+            ),
+        })
+        return
+
+    try:
+        import cursor_sdk  # noqa: F401
+    except ImportError:
+        await stream_callback({
+            "type": "error",
+            "message": "请安装 cursor-sdk：pip install cursor-sdk",
+        })
+        return
+
+    # Layer 3：与 Anthropic/OpenAI 同一套 tools，Cursor 无 native tool_use 故预取注入
+    tool_bundle = await _prefetch_tools_for_cursor(messages, context, stream_callback)
+
+    selected = model or os.getenv("CURSOR_MODEL", "auto-smart").strip() or "auto-smart"
+    prompt = _build_cursor_prompt(system, messages, tool_bundle=tool_bundle)
+    # Ask AI 浮窗场景默认更短超时，避免 UI 长期停在「思考中」
+    timeout_s = float(os.getenv("CURSOR_CHAT_TIMEOUT_SEC", "75"))
+
+    try:
+        status, text = await asyncio.wait_for(
+            asyncio.to_thread(_cursor_invoke_in_fresh_loop, prompt, selected, key),
+            timeout=timeout_s,
+        )
+    except asyncio.TimeoutError:
+        await stream_callback({
+            "type": "error",
+            "message": (
+                f"Cursor Agent 超时（>{int(timeout_s)}s）。"
+                "请换选 Composer 2.5，或检查本机是否有卡住的 cursor-sdk-bridge 进程。"
+            ),
+        })
+        return
+    except Exception as exc:
+        err = _format_cursor_error(exc)
+        if "NotImplementedError" in err or isinstance(exc, NotImplementedError):
+            await stream_callback({
+                "type": "error",
+                "message": (
+                    "Cursor Agent 在当前服务事件循环下无法启动 bridge（Windows NotImplementedError）。"
+                    "请确认已使用最新 runner（线程隔离），并重启 backend-unified。"
+                ),
+            })
+        elif "401" in err or "auth" in err.lower() or "unauthorized" in err.lower():
+            await stream_callback({
+                "type": "error",
+                "message": "Cursor API 认证失败。请确认 .env 中 CURSOR_API_KEY 有效。",
+            })
+        elif "Missing initializer" in err or "const declaration" in err:
+            await stream_callback({
+                "type": "error",
+                "message": (
+                    "Cursor Agent 内部错误（工具/工作区解析失败）。"
+                    "已切换为隔离问答模式；请重试一次。若仍失败，可改选 OpenAI 模型。"
+                ),
+            })
+        else:
+            await stream_callback({"type": "error", "message": f"Cursor Agent 错误：{err}"})
+        return
+
+    if text:
+        await stream_callback({"type": "text", "content": text})
+    else:
+        await stream_callback({
+            "type": "error",
+            "message": f"Cursor Agent 未返回文本结果（status={status or 'unknown'}）。可改选 Composer 2.5 重试。",
+        })
 
 
 # ── OpenAI 執行 ───────────────────────────────────────────────────
@@ -642,11 +1018,13 @@ async def run_agent(
     elif provider == "openrouter":
         await _run_openai(
             working_messages, system, selected_model, _collect,
-            base_url=base_url or "https://openrouter.ai/api/v1",
+            base_url=base_url or _OPENROUTER_BASE,
             api_key_env="OPENROUTER_API_KEY",
-            provider_label="OpenRouter xAI Grok",
+            provider_label="OpenRouter",
             extra_tools=all_tools,
         )
+    elif provider == "cursor":
+        await _run_cursor(working_messages, system, selected_model, _collect, context=context)
     else:
         await _run_anthropic(working_messages, system, selected_model, _collect, extra_tools=all_tools)
 

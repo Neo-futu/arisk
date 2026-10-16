@@ -1,4 +1,4 @@
-<!-- 更新时间：2026-09-10（北京时间）｜生成模型：Cursor Grok 4.6 -->
+<!-- 更新时间：2026-10-16（北京时间）｜生成模型：Cursor Composer -->
 
 # RiskEngine 产品与金融业务功能
 
@@ -107,6 +107,7 @@ VaR, CVaR, ES, Volatility, Drawdown, Beta, Tracking Error, Risk Contribution, Gr
 - `liquidity.report`：产品分桶后加总；T0 无 haircut，ILLIQUID 25%。
 - `redemption(pct)`：从 T0 起覆盖赎回金额；MMF 赎回压力用同一瀑布。
 - `mmf()`：WAM/WAL vs 60/120 + 影子偏离。
+- **产品压力测试（LQAP）**：`liquidity.lqap` / HTTP `lqa-portfolio`——Horizon、Stress Details、Bid-Ask 阶梯；见 [`product-stress-lqap.md`](product-stress-lqap.md)。
 
 **交易对手**
 

@@ -157,12 +157,6 @@ const getFsiItems = (t: (key: string) => string): NavItem[] => [
     path: "/chat",
     permissionPaths: ["/chat", "/expert"],
     children: [
-      { id: "ai-risk-copilot", title: t("nav.aiRiskCopilot"), path: "/chat?agent=general", permissionPath: "/chat" },
-      { id: "investment-agent", title: t("nav.investmentAgent"), path: "/chat?agent=market-researcher", permissionPath: "/chat" },
-      { id: "portfolio-agent", title: t("nav.portfolioAgent"), path: "/chat?agent=fund-reporter", permissionPath: "/chat" },
-      { id: "risk-agent", title: t("nav.riskAgent"), path: "/chat?agent=risk-analyst", permissionPath: "/chat" },
-      { id: "valuation-agent", title: t("nav.valuationAgent"), path: "/chat?agent=valuation-reviewer", permissionPath: "/chat" },
-      { id: "workflow-agent", title: t("nav.workflowAgent"), path: "/chat?agent=month-end-closer", permissionPath: "/chat" },
       { id: "agent-chat", title: t("nav.chat"), path: "/chat", permissionPath: "/chat" },
       { id: "expert", title: t("nav.expert"), path: "/expert", permissionPath: "/expert" },
     ],

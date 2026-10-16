@@ -1,21 +1,10 @@
-import { Download, Search } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useMemo } from "react"
 import { useTranslation } from "react-i18next"
 
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+import { Card, CardContent } from "@/components/ui/card"
 import type { SecurityHolding, SecurityHoldingsResult } from "@/fsiClient"
-import { exportCsv } from "@/modules/investment-risk/dashboard-kit"
+import { WorkbenchTable, type WorkbenchColumn } from "@/platform/WorkbenchTable"
 
 /** 固定資產類別順序；未命中一律歸入最後一類「衍生品及其他」。 */
 const FIXED_ASSET_CLASSES = [
@@ -30,6 +19,7 @@ const FIXED_ASSET_CLASSES = [
 ] as const
 
 type FixedAssetClass = (typeof FIXED_ASSET_CLASSES)[number]
+type HoldingRow = SecurityHolding & { _rowKey: string }
 
 const ASSET_CLASS_ALIASES: Record<string, FixedAssetClass> = {
   BOND: "BOND",
@@ -66,7 +56,6 @@ function assetClassLabel(type: string, t: (key: string) => string) {
   return t(`investmentRisk.indicators.assetClass.${normalized}`)
 }
 
-/** 債券子類別映射（來自 fsi.asset_class ENUM / balance_bond.asset_subtype） */
 const BOND_SUBTYPE_ALIASES: Record<string, string> = {
   BOND_GOVT: "BOND_GOVT",
   GOVT: "BOND_GOVT",
@@ -149,78 +138,96 @@ function subtypeDisplay(row: SecurityHolding, t: (key: string) => string) {
   return "—"
 }
 
-function SecurityHoldingsTable({ rows }: { rows: SecurityHolding[] }) {
-  const { t } = useTranslation()
-  if (!rows.length) {
-    return (
-      <p className="text-muted-foreground py-6 text-center text-sm">
-        {t("investmentRisk.indicators.holdingsEmptyCategory")}
-      </p>
-    )
-  }
-  return (
-    <div className="overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>{t("investmentRisk.overview.code")}</TableHead>
-            <TableHead>{t("investmentRisk.overview.name")}</TableHead>
-            <TableHead>{t("positions.colType")}</TableHead>
-            <TableHead>{t("investmentRisk.indicators.subAssetClassCol")}</TableHead>
-            <TableHead>{t("investmentRisk.overview.issuer")}</TableHead>
-            <TableHead>{t("investmentRisk.overview.sector")}</TableHead>
-            <TableHead>{t("investmentRisk.overview.rating")}</TableHead>
-            <TableHead className="text-right">{t("investmentRisk.overview.marketValue")}</TableHead>
-            <TableHead className="text-right">{t("investmentRisk.overview.pctNav")}</TableHead>
-            <TableHead className="text-right">{t("investmentRisk.overview.ytm")}</TableHead>
-            <TableHead className="text-right">{t("investmentRisk.overview.duration")}</TableHead>
-            <TableHead className="text-right">{t("investmentRisk.overview.coupon")}</TableHead>
-            <TableHead>{t("investmentRisk.overview.maturity")}</TableHead>
-            <TableHead className="text-right">{t("investmentRisk.overview.unrealizedPnl")}</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((row, index) => {
-            const subtype = subtypeDisplay(row, t)
-            return (
-            <TableRow key={`${row.asset_class}-${row.security_code}-${index}`}>
-              <TableCell className="font-mono text-xs">{row.security_code}</TableCell>
-              <TableCell className="max-w-48 truncate font-medium" title={row.security_name}>
-                {row.security_name}
-              </TableCell>
-              <TableCell>
-                <Badge variant="secondary" className="text-xs">
-                  {assetClassLabel(row.asset_class, t)}
-                </Badge>
-              </TableCell>
-              <TableCell>
-                {subtype === "—" ? (
-                  "—"
-                ) : (
-                  <Badge variant="outline" className="text-xs">
-                    {subtype}
-                  </Badge>
-                )}
-              </TableCell>
-              <TableCell className="max-w-36 truncate" title={row.issuer_name ?? undefined}>
-                {row.issuer_name ?? "—"}
-              </TableCell>
-              <TableCell>{row.sector ?? "—"}</TableCell>
-              <TableCell>{row.rating ?? "—"}</TableCell>
-              <TableCell className="text-right font-mono">{fmtMoney(row.market_value_base)}</TableCell>
-              <TableCell className="text-right font-mono">{fmtPct(row.weight_pct)}</TableCell>
-              <TableCell className="text-right font-mono">{fmtRate(row.ytm)}</TableCell>
-              <TableCell className="text-right font-mono">{fmtNum(row.duration)}</TableCell>
-              <TableCell className="text-right font-mono">{fmtRate(row.coupon_rate)}</TableCell>
-              <TableCell className="font-mono text-xs">{row.maturity_date ?? "—"}</TableCell>
-              <TableCell className="text-right font-mono">{fmtMoney(row.unrealized_pnl)}</TableCell>
-            </TableRow>
-            )
-          })}
-        </TableBody>
-      </Table>
-    </div>
-  )
+function holdingRowId(row: SecurityHolding, index = 0) {
+  return `${row.asset_class}|${row.security_code}|${row.issuer_name ?? ""}|${row.maturity_date ?? ""}|${row.market_value_base ?? 0}|${index}`
+}
+
+function useHoldingColumns(t: (key: string) => string) {
+  return useMemo<WorkbenchColumn<HoldingRow>[]>(() => [
+    {
+      key: "security_code",
+      header: t("investmentRisk.overview.code"),
+      accessor: (row) => row.security_code,
+      cell: (row) => <span className="font-mono text-xs">{row.security_code}</span>,
+    },
+    {
+      key: "security_name",
+      header: t("investmentRisk.overview.name"),
+      accessor: (row) => row.security_name,
+      cell: (row) => (
+        <span className="max-w-48 truncate font-medium" title={row.security_name}>
+          {row.security_name}
+        </span>
+      ),
+    },
+    {
+      key: "asset_class",
+      header: t("positions.colType"),
+      filterable: true,
+      accessor: (row) => assetClassLabel(row.asset_class, t),
+      cell: (row) => (
+        <Badge variant="secondary" className="text-xs">
+          {assetClassLabel(row.asset_class, t)}
+        </Badge>
+      ),
+    },
+    {
+      key: "sub_asset_class",
+      header: t("investmentRisk.indicators.subAssetClassCol"),
+      filterable: true,
+      accessor: (row) => subtypeDisplay(row, t),
+      cell: (row) => {
+        const subtype = subtypeDisplay(row, t)
+        return subtype === "—" ? "—" : <Badge variant="outline" className="text-xs">{subtype}</Badge>
+      },
+    },
+    { key: "issuer_name", header: t("investmentRisk.overview.issuer"), accessor: (row) => row.issuer_name ?? "—" },
+    { key: "sector", header: t("investmentRisk.overview.sector"), filterable: true, accessor: (row) => row.sector ?? "—" },
+    { key: "rating", header: t("investmentRisk.overview.rating"), filterable: true, accessor: (row) => row.rating ?? "—" },
+    {
+      key: "market_value_base",
+      header: t("investmentRisk.overview.marketValue"),
+      align: "right",
+      accessor: (row) => row.market_value_base,
+      cell: (row) => <span className="font-mono">{fmtMoney(row.market_value_base)}</span>,
+    },
+    {
+      key: "weight_pct",
+      header: t("investmentRisk.overview.pctNav"),
+      align: "right",
+      accessor: (row) => row.weight_pct,
+      cell: (row) => <span className="font-mono">{fmtPct(row.weight_pct)}</span>,
+    },
+    {
+      key: "ytm",
+      header: t("investmentRisk.overview.ytm"),
+      align: "right",
+      accessor: (row) => row.ytm,
+      cell: (row) => <span className="font-mono">{fmtRate(row.ytm)}</span>,
+    },
+    {
+      key: "duration",
+      header: t("investmentRisk.overview.duration"),
+      align: "right",
+      accessor: (row) => row.duration,
+      cell: (row) => <span className="font-mono">{fmtNum(row.duration)}</span>,
+    },
+    {
+      key: "coupon_rate",
+      header: t("investmentRisk.overview.coupon"),
+      align: "right",
+      accessor: (row) => row.coupon_rate,
+      cell: (row) => <span className="font-mono">{fmtRate(row.coupon_rate)}</span>,
+    },
+    { key: "maturity_date", header: t("investmentRisk.overview.maturity"), accessor: (row) => row.maturity_date ?? "—" },
+    {
+      key: "unrealized_pnl",
+      header: t("investmentRisk.overview.unrealizedPnl"),
+      align: "right",
+      accessor: (row) => row.unrealized_pnl,
+      cell: (row) => <span className="font-mono">{fmtMoney(row.unrealized_pnl)}</span>,
+    },
+  ], [t])
 }
 
 export function HoldingsDetailSection({
@@ -237,68 +244,48 @@ export function HoldingsDetailSection({
   isError: boolean
 }) {
   const { t } = useTranslation()
-  const [query, setQuery] = useState("")
-  const holdings = data?.holdings ?? []
+  const holdings = useMemo(
+    () => (data?.holdings ?? []).map((row, index) => ({ ...row, _rowKey: holdingRowId(row, index) })),
+    [data?.holdings],
+  )
+  const byAssetClass = useMemo(
+    () =>
+      buildFixedGroups(holdings).map((group) => ({
+        ...group,
+        holdings: group.holdings.map((row, index) => ({ ...row, _rowKey: holdingRowId(row, index) })),
+      })),
+    [holdings],
+  )
+  const holdingColumns = useHoldingColumns(t)
 
-  const filtered = useMemo(() => {
-    const keyword = query.trim().toLowerCase()
-    if (!keyword) return holdings
-    return holdings.filter((row) => {
-      const haystack = [
-        row.security_code,
-        row.security_name,
-        row.asset_class,
-        row.sub_asset_class,
-        row.issuer_name,
-        row.sector,
-        row.rating,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-      return haystack.includes(keyword)
-    })
-  }, [holdings, query])
-
-  const byAssetClass = useMemo(() => buildFixedGroups(filtered), [filtered])
-
-  function exportAll() {
-    exportCsv(
-      `investment-risk-security-holdings-${fundId}-${asOfDate}.csv`,
-      [
-        t("investmentRisk.overview.code"),
-        t("investmentRisk.overview.name"),
-        t("positions.colType"),
-        t("investmentRisk.indicators.subAssetClassCol"),
-        t("investmentRisk.overview.issuer"),
-        t("investmentRisk.overview.sector"),
-        t("investmentRisk.overview.rating"),
-        t("investmentRisk.overview.marketValue"),
-        t("investmentRisk.overview.pctNav"),
-        t("investmentRisk.overview.ytm"),
-        t("investmentRisk.overview.duration"),
-        t("investmentRisk.overview.coupon"),
-        t("investmentRisk.overview.maturity"),
-        t("investmentRisk.overview.unrealizedPnl"),
-      ],
-      filtered.map((row) => [
-        row.security_code,
-        row.security_name,
-        assetClassLabel(row.asset_class, t),
-        subtypeDisplay(row, t),
-        row.issuer_name,
-        row.sector,
-        row.rating,
-        row.market_value_base,
-        row.weight_pct,
-        row.ytm,
-        row.duration,
-        row.coupon_rate,
-        row.maturity_date,
-        row.unrealized_pnl,
-      ]),
-    )
-  }
+  const summaryColumns = useMemo<WorkbenchColumn<(typeof byAssetClass)[number]>[]>(() => [
+    {
+      key: "asset_class",
+      header: t("positions.colType"),
+      filterable: true,
+      accessor: (row) => assetClassLabel(row.asset_class, t),
+    },
+    {
+      key: "count",
+      header: t("investmentRisk.overview.positionCount"),
+      align: "right",
+      accessor: (row) => row.count,
+    },
+    {
+      key: "market_value_base",
+      header: t("investmentRisk.overview.marketValue"),
+      align: "right",
+      accessor: (row) => row.market_value_base,
+      cell: (row) => <span className="font-mono">{fmtMoney(row.market_value_base)}</span>,
+    },
+    {
+      key: "weight_pct",
+      header: t("investmentRisk.overview.pctNav"),
+      align: "right",
+      accessor: (row) => row.weight_pct,
+      cell: (row) => <span className="font-mono">{fmtPct(row.weight_pct)}</span>,
+    },
+  ], [t])
 
   if (isFetching && !data) {
     return <p className="text-muted-foreground animate-pulse text-sm">{t("investmentRisk.common.loading")}</p>
@@ -316,83 +303,44 @@ export function HoldingsDetailSection({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold">{t("investmentRisk.indicators.holdingsAllTitle")}</h2>
-          <p className="text-muted-foreground text-sm">
-            {fundId} · {asOfDate} · {t("positions.countLabel", { count: filtered.length })}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 rounded-md border px-3 py-2">
-            <Search className="text-muted-foreground h-4 w-4" />
-            <Input
-              className="h-8 w-56 border-0 p-0 shadow-none focus-visible:ring-0"
-              placeholder={t("investmentRisk.indicators.holdingsSearch")}
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-          </div>
-          <Button variant="outline" size="sm" onClick={exportAll}>
-            <Download className="mr-2 h-4 w-4" />
-            {t("investmentRisk.common.export")}
-          </Button>
-        </div>
+      <div>
+        <h2 className="text-base font-semibold">{t("investmentRisk.indicators.holdingsAllTitle")}</h2>
+        <p className="text-muted-foreground text-sm">
+          {fundId} · {asOfDate} · {t("positions.countLabel", { count: holdings.length })}
+        </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{t("investmentRisk.indicators.holdingsTypeSummary")}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("positions.colType")}</TableHead>
-                <TableHead className="text-right">{t("investmentRisk.overview.positionCount")}</TableHead>
-                <TableHead className="text-right">{t("investmentRisk.overview.marketValue")}</TableHead>
-                <TableHead className="text-right">{t("investmentRisk.overview.pctNav")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {byAssetClass.map((group) => (
-                <TableRow key={group.asset_class}>
-                  <TableCell className="font-medium">{assetClassLabel(group.asset_class, t)}</TableCell>
-                  <TableCell className="text-right">{group.count}</TableCell>
-                  <TableCell className="text-right font-mono">{fmtMoney(group.market_value_base)}</TableCell>
-                  <TableCell className="text-right font-mono">{fmtPct(group.weight_pct)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <WorkbenchTable
+        title={t("investmentRisk.indicators.holdingsTypeSummary")}
+        rows={byAssetClass}
+        columns={summaryColumns}
+        rowId={(row) => row.asset_class}
+        exportFilename={`holdings-type-summary-${fundId}-${asOfDate}.csv`}
+        initialSortKey="weight_pct"
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{t("investmentRisk.indicators.holdingsAllTitle")}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <SecurityHoldingsTable rows={filtered} />
-        </CardContent>
-      </Card>
+      <WorkbenchTable
+        title={t("investmentRisk.indicators.holdingsAllTitle")}
+        rows={holdings}
+        columns={holdingColumns}
+        rowId={(row) => row._rowKey}
+        exportFilename={`security-holdings-${fundId}-${asOfDate}.csv`}
+        initialSortKey="weight_pct"
+      />
 
       <div className="space-y-4">
         <h2 className="text-base font-semibold">{t("investmentRisk.indicators.holdingsByTypeTitle")}</h2>
         {byAssetClass.map((group) => (
-          <Card key={group.asset_class}>
-            <CardHeader>
-              <CardTitle className="text-base">
-                {assetClassLabel(group.asset_class, t)}
-                <span className="text-muted-foreground ml-2 text-sm font-normal">
-                  {t("positions.countLabel", { count: group.count })} · {fmtPct(group.weight_pct)}
-                </span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <SecurityHoldingsTable rows={group.holdings} />
-            </CardContent>
-          </Card>
+          <WorkbenchTable
+            key={group.asset_class}
+            title={`${assetClassLabel(group.asset_class, t)} · ${t("positions.countLabel", { count: group.count })} · ${fmtPct(group.weight_pct)}`}
+            rows={group.holdings}
+            columns={holdingColumns}
+            rowId={(row) => row._rowKey}
+            exportFilename={`holdings-${group.asset_class}-${fundId}-${asOfDate}.csv`}
+            initialSortKey="weight_pct"
+            emptyText={t("investmentRisk.indicators.holdingsEmptyCategory")}
+          />
         ))}
       </div>
     </div>

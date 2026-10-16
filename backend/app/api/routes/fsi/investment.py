@@ -204,6 +204,30 @@ async def get_liquidity_stress(
     )
 
 
+@router.get("/lqa-portfolio/{fund_id}", summary="LQAP 組合流動性 / 產品壓力測試")
+async def get_lqa_portfolio(
+    fund_id: str,
+    as_of_date: Annotated[date, Query(description="估值日期 YYYY-MM-DD")],
+    _user: PortfolioViewer,
+    client: ProcessingClient,
+    scenario: Annotated[str, Query()] = "SEVERE",
+    redemption_pct: Annotated[float, Query(ge=1, le=100)] = 100,
+    cost_multiple: Annotated[float, Query(ge=0.1, le=5)] = 0.5,
+    include_current_day: Annotated[bool, Query()] = True,
+) -> Any:
+    return await _proxy(
+        client,
+        f"/investment/lqa-portfolio/{fund_id}",
+        {
+            "as_of_date": str(as_of_date),
+            "scenario": scenario,
+            "redemption_pct": redemption_pct,
+            "cost_multiple": cost_multiple,
+            "include_current_day": include_current_day,
+        },
+    )
+
+
 @router.get("/pretrade-check/{fund_id}", summary="風險預算與前置試算")
 async def get_pretrade_check(
     fund_id: str,

@@ -918,6 +918,28 @@ export interface RiskMetricBoardCategory {
   metrics: RiskMetricItem[]
 }
 
+export interface CreditRatingDetail {
+  as_of_date?: string
+  total_bond_market_value?: number | null
+  bond_count?: number | null
+  issuer_rating_distribution: Array<{
+    rating: string
+    market_value: number
+    weight_pct: number
+    is_investment_grade?: boolean
+  }>
+  debt_rating_distribution: Array<{
+    rating: string
+    market_value: number
+    weight_pct: number
+    is_investment_grade?: boolean
+  }>
+  issuer_investment_grade_pct?: number | null
+  issuer_below_investment_grade_pct?: number | null
+  debt_investment_grade_pct?: number | null
+  debt_below_investment_grade_pct?: number | null
+}
+
 export interface RiskMetricBoardResult {
   fund_id: string
   period_start: string
@@ -935,6 +957,7 @@ export interface RiskMetricBoardResult {
     total: number
   }
   categories: RiskMetricBoardCategory[]
+  credit_rating_detail?: CreditRatingDetail | null
 }
 
 export interface RiskIndicatorTimeseriesResult {
@@ -1054,8 +1077,95 @@ export interface RatesCreditResult {
     rating: string
     market_value: number
     weight_pct: number
+    is_investment_grade?: boolean
   }>
+  investment_grade_pct?: number | null
+  below_investment_grade_pct?: number | null
+  issuer_rating_distribution?: Array<{
+    rating: string
+    market_value: number
+    weight_pct: number
+    is_investment_grade?: boolean
+  }>
+  debt_rating_distribution?: Array<{
+    rating: string
+    market_value: number
+    weight_pct: number
+    is_investment_grade?: boolean
+  }>
+  issuer_investment_grade_pct?: number | null
+  issuer_below_investment_grade_pct?: number | null
+  debt_investment_grade_pct?: number | null
+  debt_below_investment_grade_pct?: number | null
   bond_count: number
+}
+
+export interface LqaPortfolioAnalytics {
+  fund_id: string
+  as_of_date: string
+  data_as_of: string | null
+  currency: string
+  scenario: { code: string; label: string; base_scenario: string }
+  scenarios: Array<{ code: string; label: string }>
+  assumptions: {
+    redemption_pct: number
+    target_cost: string
+    cost_multiple: number
+    include_current_day: boolean
+  }
+  overview: {
+    market_value: number | null
+    positions: number
+    bid_ask_bps: number | null
+    annual_volatility: number | null
+    daily_volatility: number | null
+    pct_of_edv: number | null
+    liq_horizon_days: number | null
+    global_score: number | null
+  }
+  redemption: {
+    nominal: number | null
+    cost: number | null
+    value: number | null
+    residual_market_value: number | null
+  }
+  horizons: Array<{
+    id: string
+    label: string
+    market_value: number | null
+    mv_weight_pct: number | null
+    positions: number
+    trade_size: number | null
+    liq_horizon_days: number | null
+    sector_score: number | null
+    sector: string | null
+    cost: number | null
+  }>
+  securities?: Array<{
+    security_code: string
+    security_name: string
+    market_value: number | null
+    mv_weight_pct: number | null
+    liq_horizon_days: number | null
+    hk_sfc_port_lqdty_class: string | null
+    scenario_lqdty_class: string
+    unif_mkt_imp_cost: number | null
+    bid_ask_spread: number | null
+    bid_ask_bps: number | null
+    expected_daily_volume: number | null
+    sector_score: number | null
+    liquidity_sector: string | null
+    price_volatility: number | null
+    cost: number | null
+    horizon_bucket: string
+  }>
+  not_covered_positions: number
+  lqa_fields: Array<{ field: string; exists: boolean; proxy: string | null; populated?: number }>
+  lqa_present_count: number
+  lqa_populated_fields?: number
+  lqa_proxy_positions?: number
+  lqa_missing_positions?: number
+  message: string | null
 }
 
 export interface LiquidityStressResult {
@@ -2013,6 +2123,32 @@ export const fsiApi = {
     )
   },
 
+  /** LQAP 組合流動性分析（產品壓力測試） */
+  getLqaPortfolio(
+    fundId: string,
+    asOfDate: string,
+    options?: {
+      scenario?: string
+      redemptionPct?: number
+      costMultiple?: number
+      includeCurrentDay?: boolean
+    },
+  ) {
+    return axios.get<LqaPortfolioAnalytics>(
+      `${BASE}/api/v1/fsi/investment/lqa-portfolio/${fundId}`,
+      {
+        params: {
+          as_of_date: asOfDate,
+          scenario: options?.scenario ?? "SEVERE",
+          redemption_pct: options?.redemptionPct ?? 100,
+          cost_multiple: options?.costMultiple ?? 0.5,
+          include_current_day: options?.includeCurrentDay ?? true,
+        },
+        headers: authHeaders(),
+      },
+    )
+  },
+
   /** 投資風險分析：流動性與壓力測試 */
   getLiquidityStress(
     fundId: string,
@@ -2550,7 +2686,7 @@ export const fsiApi = {
     return axios.get<Array<{
       id: string
       label: string
-      provider: "anthropic" | "openai" | "gemini" | "moonshot" | "deepseek" | "openrouter"
+      provider: "anthropic" | "openai" | "gemini" | "moonshot" | "deepseek" | "openrouter" | "cursor"
       default: boolean
     }>>(
       `${BASE}/api/v1/fsi/agent/v2/models`,
@@ -2566,10 +2702,10 @@ export const fsiApi = {
     result?: string
     chart?: string
     risk_metrics?: Record<string, unknown>
-  }) {
-    return axios.post<{ reply: string; agent: string; tool_calls: unknown[] }>(
+  }, model?: string) {
+    return axios.post<{ reply: string; agent: string; tool_calls: unknown[]; model?: string }>(
       `${BASE}/api/v1/fsi/agent/v2/chat`,
-      { message, agent, context },
+      { message, agent, context, model },
       { headers: authHeaders() },
     )
   },
@@ -2695,6 +2831,7 @@ export const fsiApi = {
     model?:     string,
     sessionId?: string,
     userId?:    string,
+    signal?:    AbortSignal,
   ): Promise<Response> {
     const token = localStorage.getItem("access_token") ?? ""
     return fetch(`${BASE}/api/v1/fsi/agent/v2/stream`, {
@@ -2711,6 +2848,7 @@ export const fsiApi = {
         session_id: sessionId,
         user_id:    userId,
       }),
+      signal,
     })
   },
 }

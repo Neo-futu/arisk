@@ -193,7 +193,7 @@ export function SessionPanel({ sessions, currentSessionId, onSelect, onDelete, o
 
   return (
     <>
-      <div className="flex w-60 shrink-0 flex-col border-l bg-background">
+      <div className="flex w-60 shrink-0 min-h-0 flex-col border-l bg-background">
         {/* 新對話 */}
         <div className="border-b p-3">
           <Button size="sm" variant="outline" className="w-full gap-2 text-xs" onClick={onNew}>

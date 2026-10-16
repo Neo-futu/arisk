@@ -761,24 +761,31 @@ async def _execute_sector_overview(inp: dict) -> dict:
 
 
 async def _call_direct(name: str, inp: dict) -> dict:
-    """路徑 A：直接調用 processing:8001"""
+    """路徑 A：優先 4_mcp/internal；失敗則回退 processing HTTP（unified 下為 /processing）。"""
+    # MCP 優先；失敗不直接返回，以便走下方 HTTP 回退
     if name == "get_positions":
-        return await _call_internal_mcp("get_positions", {
+        mcp = await _call_internal_mcp("get_positions", {
             "fund_id": inp.get("fund_id", ""),
             "as_of_date": inp.get("as_of_date", ""),
             "asset_type": inp.get("asset_type"),
             "limit": inp.get("limit", 50),
         })
+        if isinstance(mcp, dict) and not mcp.get("error"):
+            return mcp
+        logger.warning("[tool] get_positions MCP failed, fallback HTTP: %s", (mcp or {}).get("error"))
 
-    if name == "get_nav_history":
-        return await _call_internal_mcp("get_nav_history", {
+    elif name == "get_nav_history":
+        mcp = await _call_internal_mcp("get_nav_history", {
             "fund_id": inp.get("fund_id", ""),
             "start_date": inp.get("start_date", ""),
             "end_date": inp.get("end_date", ""),
         })
+        if isinstance(mcp, dict) and not mcp.get("error"):
+            return mcp
+        logger.warning("[tool] get_nav_history MCP failed, fallback HTTP: %s", (mcp or {}).get("error"))
 
-    if name == "get_var_compare":
-        result = await _call_internal_mcp("get_var_three_methods", {
+    elif name in {"get_var_compare", "get_var"}:
+        mcp = await _call_internal_mcp("get_var_three_methods", {
             "fund_id": inp.get("fund_id", ""),
             "as_of_date": inp.get("as_of_date", ""),
             "confidence": inp.get("confidence", 0.99),
@@ -787,54 +794,44 @@ async def _call_direct(name: str, inp: dict) -> dict:
             "min_observations": inp.get("min_observations", 30),
             "simulations": inp.get("simulations", 10000),
         })
-        if result.get("error"):
-            return result
-        raw_results = result.get("results", [])
-        if isinstance(raw_results, list):
-            max_var = max(float(r.get("var_pct_nav") or 0) for r in raw_results if isinstance(r, dict)) if raw_results else 0
-            result["max_var_pct_nav"] = max_var
-        return result
-
-    if name == "get_var":
-        result = await _call_internal_mcp("get_var_three_methods", {
-            "fund_id": inp.get("fund_id", ""),
-            "as_of_date": inp.get("as_of_date", ""),
-            "confidence": inp.get("confidence", 0.99),
-            "horizon_days": inp.get("horizon_days", 1),
-            "lookback_days": inp.get("lookback_days", 252),
-            "min_observations": inp.get("min_observations", 30),
-            "simulations": inp.get("simulations", 10000),
-        })
-        if result.get("error"):
-            return result
-        method = str(inp.get("method", "historical"))
-        method_map = {
-            "historical": "HISTORICAL_SIMULATION",
-            "monte_carlo": "MONTE_CARLO",
-            "distribution": "DISTRIBUTION_FORMULA",
-        }
-        desired = method_map.get(method, "HISTORICAL_SIMULATION")
-        chosen = None
-        for item in result.get("results", []):
-            if isinstance(item, dict) and item.get("method") == desired:
-                chosen = item
-                break
-        if chosen is None and isinstance(result.get("results"), list) and result["results"]:
-            chosen = result["results"][0]
-        if isinstance(chosen, dict):
-            return {
-                "fund_id": result.get("fund_id", inp.get("fund_id", "")),
-                "as_of_date": result.get("as_of_date", inp.get("as_of_date", "")),
-                "confidence": result.get("confidence", inp.get("confidence", 0.99)),
-                "horizon_days": result.get("horizon_days", inp.get("horizon_days", 1)),
-                "var_hkd": chosen.get("var_hkd", 0),
-                "var_pct_nav": chosen.get("var_pct_nav", 0),
-                "cvar_hkd": chosen.get("cvar_hkd", 0),
-                "method": chosen.get("method", desired),
-                "sample_size": chosen.get("sample_size", 0),
-                "method_requested": method,
+        if isinstance(mcp, dict) and not mcp.get("error"):
+            if name == "get_var_compare":
+                raw_results = mcp.get("results", [])
+                if isinstance(raw_results, list):
+                    max_var = max(
+                        float(r.get("var_pct_nav") or 0) for r in raw_results if isinstance(r, dict)
+                    ) if raw_results else 0
+                    mcp["max_var_pct_nav"] = max_var
+                return mcp
+            method = str(inp.get("method", "historical"))
+            method_map = {
+                "historical": "HISTORICAL_SIMULATION",
+                "monte_carlo": "MONTE_CARLO",
+                "distribution": "DISTRIBUTION_FORMULA",
             }
-        return result
+            desired = method_map.get(method, "HISTORICAL_SIMULATION")
+            chosen = None
+            for item in mcp.get("results", []):
+                if isinstance(item, dict) and item.get("method") == desired:
+                    chosen = item
+                    break
+            if chosen is None and isinstance(mcp.get("results"), list) and mcp["results"]:
+                chosen = mcp["results"][0]
+            if isinstance(chosen, dict):
+                return {
+                    "fund_id": mcp.get("fund_id", inp.get("fund_id", "")),
+                    "as_of_date": mcp.get("as_of_date", inp.get("as_of_date", "")),
+                    "confidence": mcp.get("confidence", inp.get("confidence", 0.99)),
+                    "horizon_days": mcp.get("horizon_days", inp.get("horizon_days", 1)),
+                    "var_hkd": chosen.get("var_hkd", 0),
+                    "var_pct_nav": chosen.get("var_pct_nav", 0),
+                    "cvar_hkd": chosen.get("cvar_hkd", 0),
+                    "method": chosen.get("method", desired),
+                    "sample_size": chosen.get("sample_size", 0),
+                    "method_requested": method,
+                }
+            return mcp
+        logger.warning("[tool] %s MCP failed, fallback HTTP: %s", name, (mcp or {}).get("error"))
 
     headers = {"X-API-Key": PROCESSING_KEY}
     fund_id = inp.get("fund_id", "")
@@ -859,7 +856,10 @@ async def _call_direct(name: str, inp: dict) -> dict:
             params: dict = {"as_of_date": inp["as_of_date"]}
             if inp.get("asset_type"):
                 params["asset_type"] = inp["asset_type"]
-            r = await c.get(f"/positions/{fund_id}", params=params)
+            # 优先证券级持仓；旧 /positions 作兼容回退
+            r = await c.get(f"/investment/holdings/{fund_id}", params=params)
+            if r.status_code == 404:
+                r = await c.get(f"/positions/{fund_id}", params=params)
         elif name == "get_nav_history":
             r = await c.get(f"/positions/{fund_id}/nav",
                             params={"start": inp["start_date"], "end": inp["end_date"]})

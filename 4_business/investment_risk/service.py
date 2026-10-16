@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .domains import MODULE_KPIS
 
 _analysis = import_module("2_processing.tools.performance.investment_analysis")
+_lqa = import_module("2_processing.tools.performance.lqa_portfolio_analytics")
 _loader = import_module("2_processing.tools.risk_testing.loader")
 _kpis = import_module("3_riskengine.risk.kpis")
 _engine = import_module("3_riskengine")
@@ -89,6 +90,7 @@ compute_performance_attribution = _analysis.compute_performance_attribution
 compute_performance_attribution_timeseries = _analysis.compute_performance_attribution_timeseries
 compute_rates_credit_sensitivity = _analysis.compute_rates_credit_sensitivity
 compute_liquidity_stress_testing = _analysis.compute_liquidity_stress_testing
+compute_lqa_portfolio_analytics = _lqa.compute_lqa_portfolio_analytics
 compute_pretrade_risk_budget = _analysis.compute_pretrade_risk_budget
 compute_macro_market_dynamics = _analysis.compute_macro_market_dynamics
 compute_factor_behavior_risk = _analysis.compute_factor_behavior_risk

@@ -3,20 +3,23 @@ import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { fsiApi } from "@/fsiClient"
 import type { ChatSessionRecord } from "@/fsiClient"
+import { usePageContext } from "@/platform/page-context"
 import { FALLBACK_AGENTS, FALLBACK_MODELS } from "./constants"
 import { parseToolCalls } from "./utils"
 import type { ChatMessage, SSEEvent, ToolCallRecord } from "./types"
 
 export function useChatSession(initialAgentId?: string) {
   const { t } = useTranslation()
+  const { context: pageCtx } = usePageContext()
   const [sessions,          setSessions]          = useState<ChatSessionRecord[]>([])
   const [currentSessionId,  setCurrentSessionId]  = useState<string | null>(null)
   const [messages,          setMessages]          = useState<ChatMessage[]>([])
   const [streaming,         setStreaming]          = useState(false)
   const [input,             setInput]             = useState("")
   const [agentId,           setAgentId]           = useState(initialAgentId ?? "general")
-  const [modelId,           setModelId]           = useState("claude-sonnet-4-6")
+  const [modelId,           setModelId]           = useState("auto-smart")
   const bottomRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
   const inputRef  = useRef<HTMLTextAreaElement>(null)
   const sessionIdRef = useRef<string | null>(null)
   const skillsRefreshPromiseRef = useRef<Promise<void> | null>(null)
@@ -63,7 +66,12 @@ export function useChatSession(initialAgentId?: string) {
     default: m.default,
   }))
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }) }, [messages])
+  // 只滾消息列表容器，避免 scrollIntoView 帶動整頁上移
+  useEffect(() => {
+    const list = listRef.current
+    if (!list) return
+    list.scrollTo({ top: list.scrollHeight, behavior: "smooth" })
+  }, [messages])
 
   // ── 加載歷史會話 ─────────────────────────────────────────────────
   const loadSession = async (id: string) => {
@@ -157,8 +165,12 @@ export function useChatSession(initialAgentId?: string) {
         userId = payload.sub
       } catch { /* ignore */ }
 
+      const agentContext = {
+        fund_id: pageCtx.portfolio || undefined,
+        as_of_date: pageCtx.date || undefined,
+      }
       const response = await fsiApi.streamAgentChat(
-        historyForApi, agentId, undefined, modelId, sid ?? undefined, userId,
+        historyForApi, agentId, agentContext, modelId, sid ?? undefined, userId,
       )
       if (!response.ok) {
         const err = await response.text()
@@ -219,6 +231,6 @@ export function useChatSession(initialAgentId?: string) {
     agentList,
     modelList,
     sendMessage, newChat, loadSession, deleteSession,
-    bottomRef, inputRef,
+    bottomRef, listRef, inputRef,
   }
 }

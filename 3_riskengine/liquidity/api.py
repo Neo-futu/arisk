@@ -34,6 +34,31 @@ class LiquidityAPI:
 
         return stamp(self._bound, "MMF_SFC", sfc_metrics(self._bound), model="mmf_look_through_sfc")
 
+    def lqap(
+        self,
+        positions: list[dict[str, Any]],
+        *,
+        scenario_code: str = "SEVERE",
+        redemption_pct: float = 100.0,
+        cost_multiple: float = 0.5,
+        include_current_day: bool = True,
+    ) -> dict[str, Any]:
+        """彭博 LQAP：期限分布、赎回成本、LQA 字段覆盖。positions 来自 mktdata_lqa 连接后的持仓。"""
+        from .lqap import analyze
+
+        return stamp(
+            self._bound,
+            "LQAP",
+            analyze(
+                positions,
+                scenario_code=scenario_code,
+                redemption_pct=redemption_pct,
+                cost_multiple=cost_multiple,
+                include_current_day=include_current_day,
+            ),
+            model="bloomberg_lqap",
+        )
+
     def report(self, redemption_pct: float = 20.0) -> dict[str, Any]:
         ratio = self.ratio()
         buckets = self.buckets()

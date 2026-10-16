@@ -70,6 +70,8 @@ export function TrendLineChart({
   lineColor = "#2563eb",
   pointColor = "#38bdf8",
   valueFormatter,
+  className = "h-52 w-full",
+  height = 200,
 }: {
   values: number[]
   labels: string[]
@@ -77,17 +79,20 @@ export function TrendLineChart({
   pointColor?: string
   /** Y 轴刻度格式；默认保留 2 位小数 */
   valueFormatter?: (value: number) => string
+  /** 外层/SVG 尺寸 class，用于与表格同高展示 */
+  className?: string
+  /** viewBox 高度，配合 className 拉高图表 */
+  height?: number
 }) {
   if (!values.length) {
-    return <div className="flex h-48 items-center justify-center text-sm text-muted-foreground">暫無圖表數據</div>
+    return <div className={`flex items-center justify-center text-sm text-muted-foreground ${className}`}>暫無圖表數據</div>
   }
 
-  const width = 400
-  const height = 200
-  const padL = 52
-  const padR = 12
-  const padT = 14
-  const padB = 28
+  const width = 720
+  const padL = 56
+  const padR = 16
+  const padT = 18
+  const padB = 32
   const plotW = width - padL - padR
   const plotH = height - padT - padB
 
@@ -105,8 +110,8 @@ export function TrendLineChart({
   const showPoints = values.length <= 40
 
   return (
-    <div>
-      <svg viewBox={`0 0 ${width} ${height}`} className="h-52 w-full" role="img" aria-label="trend-line">
+    <div className="h-full w-full">
+      <svg viewBox={`0 0 ${width} ${height}`} className={className} preserveAspectRatio="xMidYMid meet" role="img" aria-label="trend-line">
         {/* 网格 + Y 轴刻度 */}
         {yTicks.map((tick) => (
           <g key={`y-${tick.value}`}>

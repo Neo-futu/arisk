@@ -52,7 +52,7 @@ export const RISK_GOVERNANCE_NAV = [
   { id: "risk-reports", titleKey: "nav.riskReports", path: "/risk-governance#reports" },
 ] as const
 
-export const WORKBENCH_FLOW = ["Parameter", "Data / Table", "Charts / Analytics", "AI Copilot"] as const
+export const WORKBENCH_FLOW = ["Parameter", "Data / Table", "Charts / Analytics", "Ask AI"] as const
 
 export function parseNavPath(path: string): {
   to: string

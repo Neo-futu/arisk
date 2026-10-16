@@ -1,19 +1,20 @@
+/**
+ * 投资风险 · 风险指标页（/investment-risk/indicators）
+ *
+ * 开发步骤（step-by-step）：
+ * 1. 参数栏 + PageContext（fund / date）绑定，供 Ask AI 注入
+ * 2. 组合信息 / KPI / 核心风险指标（含 VaR 三方法）用 WorkbenchTable 统一交互
+ * 3. 六大类指标看板（metric-board）与持仓明细分区展示
+ * 4. riskMetrics 写入 PageContext，Ask AI 回答 VaR 等时优先用页面真实数
+ */
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 
 import { FUNDS, FsiToolbar, lastTradeDate } from "@/components/FsiToolbar"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { fsiApi, type PortfolioBasicInfo } from "@/fsiClient"
 import { TrendLineChart } from "@/modules/investment-risk/dashboard-kit"
@@ -22,6 +23,8 @@ import { HoldingsDetailSection } from "@/modules/investment-risk/HoldingsDetailS
 import { RiskMetricBoardSection } from "@/modules/investment-risk/RiskMetricBoardSection"
 import { RISK_DOMAINS } from "@/modules/investment-risk/RiskDomainTabs"
 import { SqlViewButton } from "@/modules/investment-risk/SqlViewButton"
+import { useBindPageContext } from "@/platform/page-context"
+import { WorkbenchTable, type WorkbenchColumn } from "@/platform/WorkbenchTable"
 
 export const Route = createFileRoute("/_layout/investment-risk/indicators")({
   component: RiskIndicatorsPage,
@@ -127,6 +130,12 @@ function RiskIndicatorsPage() {
     setActiveTab("core")
   }, [])
 
+  // 已移除的業務域 Tab（宏觀 / 因子 / 前置）若仍留在狀態中，回退到風險指標
+  useEffect(() => {
+    const allowed = new Set(["basic-info", "holdings", "core", ...RISK_DOMAINS.map((d) => d.key)])
+    if (!allowed.has(activeTab)) setActiveTab("core")
+  }, [activeTab])
+
   const basicInfo = useQuery({
     queryKey: ["investment-basic-info", fundId, endDate],
     queryFn: () => fsiApi.getBasicInfo(fundId, endDate).then((response) => response.data),
@@ -175,6 +184,46 @@ function RiskIndicatorsPage() {
   })
   const isFetching = indicators.isFetching || varCompare.isFetching || indicatorSeries.isFetching || positions.isFetching
   const isError = indicators.isError || varCompare.isError || indicatorSeries.isError
+
+  // 供 AI Copilot / Agent 注入页面已展示的风险指标（含 VaR 三方法）
+  useBindPageContext({
+    portfolio: fundId,
+    date: endDate,
+    result: varCompare.data
+      ? `max_var_pct_nav=${varCompare.data.max_var_pct_nav}`
+      : indicators.data
+        ? `interval_return_pct=${indicators.data.interval_return_pct}`
+        : undefined,
+    chart: activeTab === "core" ? "rolling-volatility / var-compare" : activeTab,
+    riskMetrics: {
+      fund_id: fundId,
+      as_of_date: endDate,
+      period: { start: startDate, end: endDate },
+      indicators: indicators.data
+        ? {
+            interval_return_pct: indicators.data.interval_return_pct,
+            annualized_volatility_pct: indicators.data.annualized_volatility_pct,
+            max_drawdown_pct: indicators.data.max_drawdown_pct,
+            equity_turnover_pct: indicators.data.equity_turnover?.annualized_turnover_pct ?? null,
+            equity_beta: indicators.data.equity_beta?.value ?? null,
+          }
+        : null,
+      var_compare: varCompare.data
+        ? {
+            confidence: varCompare.data.confidence,
+            horizon_days: varCompare.data.horizon_days,
+            max_var_pct_nav: varCompare.data.max_var_pct_nav,
+            methods: (varCompare.data.results ?? []).map((row) => ({
+              method: row.method_requested ?? row.method,
+              var_hkd: row.var_hkd,
+              var_pct_nav: row.var_pct_nav,
+              cvar_hkd: row.cvar_hkd,
+              sample_size: row.sample_size,
+            })),
+          }
+        : null,
+    },
+  })
 
   return (
     <div className="space-y-6">
@@ -255,31 +304,11 @@ function RiskIndicatorsPage() {
                   )}
                 </div>
 
-                <div>
-                  <p className="mb-2 text-sm font-semibold">{t("investmentRisk.indicators.managers")}</p>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{t("investmentRisk.indicators.managerName")}</TableHead>
-                        <TableHead>{t("investmentRisk.indicators.managerRole")}</TableHead>
-                        <TableHead>{t("investmentRisk.indicators.managerTenure")}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {basicInfo.data.managers.map((manager) => (
-                        <TableRow key={`${manager.person_id}-${manager.role}-${manager.begin_date}`}>
-                          <TableCell className="font-medium">
-                            {manager.person_name}
-                            {manager.person_name_en ? <span className="ml-1 text-xs text-muted-foreground">{manager.person_name_en}</span> : null}
-                          </TableCell>
-                          <TableCell>{PERSON_ROLE_LABELS[manager.role] ?? manager.role}</TableCell>
-                          <TableCell className="font-mono text-xs">{manager.begin_date ?? "—"} ~ {manager.end_date ?? t("investmentRisk.indicators.present")}</TableCell>
-                        </TableRow>
-                      ))}
-                      {!basicInfo.data.managers.length && <EmptyRow columns={3} />}
-                    </TableBody>
-                  </Table>
-                </div>
+                <ManagersWorkbenchTable
+                  fundId={fundId}
+                  asOfDate={endDate}
+                  managers={basicInfo.data.managers}
+                />
               </CardContent>
             </Card>
           ) : (
@@ -300,144 +329,155 @@ function RiskIndicatorsPage() {
 
         {/* 核心風控指標 */}
         <TabsContent value="core" className="mt-0 space-y-5">
-          <section>
-            <EngineKpiPanel
-              domain="overview"
-              fundId={fundId}
-              asOfDate={endDate}
-              variant="metrics"
-              title={t("investmentRisk.overview.exposureTitle")}
-            />
-          </section>
-
-          {indicators.data ? (
-            <>
-              {(indicators.data.message || indicatorSeries.data?.message) ? (
-                <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-                  {indicators.data.message || indicatorSeries.data?.message}
-                </p>
-              ) : null}
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="text-base font-semibold">{t("investmentRisk.indicators.coreTitle")}</h2>
+          <Card className="min-h-[280px]">
+            <CardHeader>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <CardTitle className="text-base">{t("investmentRisk.overview.exposureTitle")}</CardTitle>
                 <SqlViewButton sqlIds={["SQL-RI-01"]} />
               </div>
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-                <MetricCard
-                  label={t("investmentRisk.indicators.intervalReturn")}
-                  value={percent(indicators.data.interval_return_pct)}
-                />
-                <MetricCard
-                  label={t("investmentRisk.indicators.annualizedVol")}
-                  value={percent(indicators.data.annualized_volatility_pct)}
-                />
-                <MetricCard
-                  label={t("investmentRisk.indicators.maxDrawdown")}
-                  value={percent(indicators.data.max_drawdown_pct)}
-                />
-                <MetricCard
-                  label={t("investmentRisk.indicators.equityTurnover")}
-                  value={percent(indicators.data.equity_turnover?.annualized_turnover_pct)}
-                />
-                <MetricCard
-                  label={t("investmentRisk.indicators.equityBeta")}
-                  value={indicators.data.equity_beta?.value == null ? "—" : indicators.data.equity_beta.value.toFixed(3)}
-                />
-              </div>
-
-              <Card>
-                <CardHeader>
-                  <ModuleHeader title={t("investmentRisk.indicators.rollingVol")} sqlIds={["SQL-RI-02"]} applicable={ALL_CATEGORIES} />
-                </CardHeader>
-                <CardContent>
-                  <TrendLineChart
-                    values={(indicatorSeries.data?.points ?? []).map((row) => row.rolling_volatility_pct ?? 0)}
-                    labels={(indicatorSeries.data?.points ?? []).map((row) => String(row.date).slice(5))}
-                    lineColor="#dc2626"
-                    pointColor="#fb7185"
-                    valueFormatter={(value) =>
-                      Math.abs(value) >= 1 ? `${value.toFixed(2)}%` : `${value.toFixed(4)}%`
-                    }
-                  />
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <ModuleHeader title={t("investmentRisk.indicators.drawdownVarSummary")} sqlIds={["SQL-RI-02", "SQL-VAR-01"]} applicable={ALL_CATEGORIES} />
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader><TableRow><TableHead>{t("investmentRisk.indicators.date")}</TableHead><TableHead className="text-right">{t("investmentRisk.indicators.dailyReturn")}</TableHead><TableHead className="text-right">{t("investmentRisk.indicators.drawdown")}</TableHead><TableHead className="text-right">{t("investmentRisk.indicators.rollingVar95")}</TableHead></TableRow></TableHeader>
-                    <TableBody>
-                      {(indicatorSeries.data?.points ?? []).slice(-10).map((row) => (
-                        <TableRow key={row.date}>
-                          <TableCell>{row.date}</TableCell>
-                          <TableCell className="text-right font-mono">{percent(row.daily_return_pct, 3)}</TableCell>
-                          <TableCell className="text-right font-mono">{percent(row.drawdown_pct, 3)}</TableCell>
-                          <TableCell className="text-right font-mono">{percent(row.rolling_var_95_pct, 3)}</TableCell>
-                        </TableRow>
-                      ))}
-                      {!(indicatorSeries.data?.points ?? []).length && <EmptyRow columns={4} />}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <ModuleHeader
-                    title={t("investmentRisk.indicators.turnoverDetail")}
-                    sqlIds={["SQL-RI-03"]}
-                    applicable={EQUITY_CATEGORIES}
-                    category={fundCategory}
-                    notApplicableHint={t("investmentRisk.indicators.turnoverNotApplicable")}
-                  />
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-4 md:grid-cols-3">
-                    <MetricBlock label={t("investmentRisk.indicators.buyAmount")} value={money(indicators.data.equity_turnover?.buy_amount)} />
-                    <MetricBlock label={t("investmentRisk.indicators.sellAmount")} value={money(indicators.data.equity_turnover?.sell_amount)} />
-                    <MetricBlock label={t("investmentRisk.indicators.avgEquityBalance")} value={money(indicators.data.equity_turnover?.average_equity_balance)} />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <EngineKpiPanel
+                domain="overview"
+                fundId={fundId}
+                asOfDate={endDate}
+                variant="metrics"
+                title={t("investmentRisk.overview.exposureTitle")}
+                embed
+              />
+              {indicators.data ? (
+                <div className="grid min-h-[112px] gap-4 md:grid-cols-2 xl:grid-cols-5">
+                  <div className="rounded-lg border px-4 py-3">
+                    <p className="text-muted-foreground text-xs">{t("investmentRisk.indicators.intervalReturn")}</p>
+                    <p className="mt-1 text-xl font-semibold font-mono">{percent(indicators.data.interval_return_pct)}</p>
                   </div>
-                  <p className="text-muted-foreground mt-4 text-xs">{t("investmentRisk.indicators.turnoverMethodHint", { method: indicators.data.equity_turnover?.method ?? "—" })}</p>
-                </CardContent>
-              </Card>
+                  <div className="rounded-lg border px-4 py-3">
+                    <p className="text-muted-foreground text-xs">{t("investmentRisk.indicators.annualizedVol")}</p>
+                    <p className="mt-1 text-xl font-semibold font-mono">{percent(indicators.data.annualized_volatility_pct)}</p>
+                  </div>
+                  <div className="rounded-lg border px-4 py-3">
+                    <p className="text-muted-foreground text-xs">{t("investmentRisk.indicators.maxDrawdown")}</p>
+                    <p className="mt-1 text-xl font-semibold font-mono">{percent(indicators.data.max_drawdown_pct)}</p>
+                  </div>
+                  <div className="rounded-lg border px-4 py-3">
+                    <p className="text-muted-foreground text-xs">{t("investmentRisk.indicators.equityTurnover")}</p>
+                    <p className="mt-1 text-xl font-semibold font-mono">{percent(indicators.data.equity_turnover?.annualized_turnover_pct)}</p>
+                  </div>
+                  <div className="rounded-lg border px-4 py-3">
+                    <p className="text-muted-foreground text-xs">{t("investmentRisk.indicators.equityBeta")}</p>
+                    <p className="mt-1 text-xl font-semibold font-mono">
+                      {indicators.data.equity_beta?.value == null ? "—" : indicators.data.equity_beta.value.toFixed(3)}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
 
-              {varCompare.data && (
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center justify-between gap-3">
-                      <CardTitle className="text-base">{t("investmentRisk.indicators.varTitle")}</CardTitle>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary">{t("investmentRisk.indicators.varMax", { value: percent(varCompare.data.max_var_pct_nav, 4) })}</Badge>
-                        <SqlViewButton sqlIds={["SQL-VAR-01"]} />
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <Table>
-                      <TableHeader><TableRow><TableHead>{t("investmentRisk.indicators.method")}</TableHead><TableHead className="text-right">{t("investmentRisk.indicators.varHkd")}</TableHead><TableHead className="text-right">{t("investmentRisk.indicators.varPctNav")}</TableHead><TableHead className="text-right">{t("investmentRisk.indicators.cvarHkd")}</TableHead><TableHead className="text-right">{t("investmentRisk.indicators.sampleSize")}</TableHead></TableRow></TableHeader>
-                      <TableBody>
-                        {varCompare.data.results.map((row) => (
-                          <TableRow key={row.method_requested ?? row.method}>
-                            <TableCell className="font-medium">{methodLabels[row.method_requested ?? ""] ?? row.method}</TableCell>
-                            <TableCell className="text-right font-mono">{money(row.var_hkd)}</TableCell>
-                            <TableCell className="text-right font-mono">{percent(row.var_pct_nav, 4)}</TableCell>
-                            <TableCell className="text-right font-mono">{money(row.cvar_hkd)}</TableCell>
-                            <TableCell className="text-right">{row.sample_size}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </CardContent>
-                </Card>
-              )}
-            </>
-          ) : (
+          {!indicators.data && !indicators.isFetching ? (
             <p className="text-muted-foreground text-sm">{t("investmentRisk.indicators.noIndicators")}</p>
-          )}
+          ) : null}
 
-          <RiskMetricBoardSection fundId={fundId} startDate={startDate} endDate={endDate} />
+          <RiskMetricBoardSection
+            fundId={fundId}
+            startDate={startDate}
+            endDate={endDate}
+            categoryPanels={{
+              market: (
+                <div className="space-y-4">
+                  {(indicators.data?.message || indicatorSeries.data?.message) ? (
+                    <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                      {indicators.data?.message || indicatorSeries.data?.message}
+                    </p>
+                  ) : null}
+
+                  <Card className="min-h-[520px]">
+                    <CardHeader>
+                      <ModuleHeader title={t("investmentRisk.indicators.rollingVol")} sqlIds={["SQL-RI-02"]} applicable={ALL_CATEGORIES} />
+                    </CardHeader>
+                    <CardContent>
+                      <Tabs defaultValue="chart" className="space-y-3">
+                        <TabsList>
+                          <TabsTrigger value="chart">{t("investmentRisk.indicators.tabChart")}</TabsTrigger>
+                          <TabsTrigger value="table">{t("investmentRisk.indicators.tabTable")}</TabsTrigger>
+                        </TabsList>
+                        <div className="h-[360px]">
+                          <TabsContent value="chart" className="mt-0 h-full">
+                            <div className="h-full rounded-lg border p-3">
+                              <TrendLineChart
+                                values={(indicatorSeries.data?.points ?? []).map((row) => row.rolling_volatility_pct ?? 0)}
+                                labels={(indicatorSeries.data?.points ?? []).map((row) => String(row.date).slice(5))}
+                                lineColor="#dc2626"
+                                pointColor="#fb7185"
+                                className="h-full w-full"
+                                height={360}
+                                valueFormatter={(value) =>
+                                  Math.abs(value) >= 1 ? `${value.toFixed(2)}%` : `${value.toFixed(4)}%`
+                                }
+                              />
+                            </div>
+                          </TabsContent>
+                          <TabsContent value="table" className="mt-0 h-full">
+                            <IndicatorSeriesWorkbenchTable
+                              fundId={fundId}
+                              startDate={startDate}
+                              endDate={endDate}
+                              points={indicatorSeries.data?.points ?? []}
+                              mode="full"
+                              embedded
+                            />
+                          </TabsContent>
+                        </div>
+                      </Tabs>
+                    </CardContent>
+                  </Card>
+
+                  <IndicatorSeriesWorkbenchTable
+                    fundId={fundId}
+                    startDate={startDate}
+                    endDate={endDate}
+                    points={(indicatorSeries.data?.points ?? []).slice(-10)}
+                    mode="drawdown"
+                    title={t("investmentRisk.indicators.drawdownVarSummary")}
+                    toolbarExtra={<SqlViewButton sqlIds={["SQL-RI-02", "SQL-VAR-01"]} />}
+                    bodyClassName="h-[280px] overflow-auto rounded-lg border"
+                  />
+
+                  <Card className="min-h-[220px]">
+                    <CardHeader>
+                      <ModuleHeader
+                        title={t("investmentRisk.indicators.turnoverDetail")}
+                        sqlIds={["SQL-RI-03"]}
+                        applicable={EQUITY_CATEGORIES}
+                        category={fundCategory}
+                        notApplicableHint={t("investmentRisk.indicators.turnoverNotApplicable")}
+                      />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid gap-4 md:grid-cols-3">
+                        <MetricBlock label={t("investmentRisk.indicators.buyAmount")} value={money(indicators.data?.equity_turnover?.buy_amount)} />
+                        <MetricBlock label={t("investmentRisk.indicators.sellAmount")} value={money(indicators.data?.equity_turnover?.sell_amount)} />
+                        <MetricBlock label={t("investmentRisk.indicators.avgEquityBalance")} value={money(indicators.data?.equity_turnover?.average_equity_balance)} />
+                      </div>
+                      <p className="text-muted-foreground mt-4 text-xs">
+                        {t("investmentRisk.indicators.turnoverMethodHint", { method: indicators.data?.equity_turnover?.method ?? "—" })}
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  {varCompare.data ? (
+                    <VarCompareWorkbenchTable
+                      fundId={fundId}
+                      asOfDate={endDate}
+                      maxVarPct={varCompare.data.max_var_pct_nav}
+                      results={varCompare.data.results}
+                      methodLabels={methodLabels}
+                    />
+                  ) : null}
+                </div>
+              ),
+            }}
+          />
         </TabsContent>
 
         {/* 六大業務域：卡片铺满，风格对齐组合概况 */}
@@ -473,7 +513,241 @@ function MetricBlock({ label, value }: { label: string; value: string }) {
   return <div className="rounded-lg border p-3"><p className="text-muted-foreground text-xs">{label}</p><p className="mt-1 font-mono text-lg">{value}</p></div>
 }
 
-function EmptyRow({ columns }: { columns: number }) {
+function ManagersWorkbenchTable({
+  fundId,
+  asOfDate,
+  managers,
+}: {
+  fundId: string
+  asOfDate: string
+  managers: PortfolioBasicInfo["managers"]
+}) {
   const { t } = useTranslation()
-  return <TableRow><TableCell colSpan={columns} className="h-20 text-center text-muted-foreground">{t("investmentRisk.common.empty")}</TableCell></TableRow>
+  const columns = useMemo<WorkbenchColumn<PortfolioBasicInfo["managers"][number]>[]>(() => [
+    {
+      key: "person_name",
+      header: t("investmentRisk.indicators.managerName"),
+      accessor: (row) => row.person_name,
+      cell: (row) => (
+        <span className="font-medium">
+          {row.person_name}
+          {row.person_name_en ? <span className="ml-1 text-xs text-muted-foreground">{row.person_name_en}</span> : null}
+        </span>
+      ),
+      exportValue: (row) => row.person_name,
+    },
+    {
+      key: "role",
+      header: t("investmentRisk.indicators.managerRole"),
+      filterable: true,
+      accessor: (row) => PERSON_ROLE_LABELS[row.role] ?? row.role,
+    },
+    {
+      key: "tenure",
+      header: t("investmentRisk.indicators.managerTenure"),
+      accessor: (row) => `${row.begin_date ?? "—"} ~ ${row.end_date ?? t("investmentRisk.indicators.present")}`,
+      cell: (row) => (
+        <span className="font-mono text-xs">
+          {row.begin_date ?? "—"} ~ {row.end_date ?? t("investmentRisk.indicators.present")}
+        </span>
+      ),
+    },
+  ], [t])
+
+  return (
+    <WorkbenchTable
+      title={t("investmentRisk.indicators.managers")}
+      rows={managers}
+      columns={columns}
+      rowId={(row) => `${row.person_id}-${row.role}-${row.begin_date}`}
+      exportFilename={`managers-${fundId}-${asOfDate}.csv`}
+      initialSortKey="person_name"
+    />
+  )
+}
+
+type SeriesPoint = {
+  date: string
+  nav: number
+  daily_return_pct: number | null
+  cumulative_return_pct: number | null
+  rolling_volatility_pct: number | null
+  drawdown_pct: number | null
+  rolling_var_95_pct: number | null
+}
+
+function IndicatorSeriesWorkbenchTable({
+  fundId,
+  startDate,
+  endDate,
+  points,
+  mode,
+  title,
+  toolbarExtra,
+  bodyClassName,
+  embedded = false,
+}: {
+  fundId: string
+  startDate: string
+  endDate: string
+  points: SeriesPoint[]
+  mode: "full" | "drawdown"
+  title?: string
+  toolbarExtra?: ReactNode
+  bodyClassName?: string
+  embedded?: boolean
+}) {
+  const { t } = useTranslation()
+  const columns = useMemo<WorkbenchColumn<SeriesPoint>[]>(() => {
+    const base: WorkbenchColumn<SeriesPoint>[] = [
+      { key: "date", header: t("investmentRisk.indicators.date"), accessor: (row) => row.date },
+    ]
+    if (mode === "full") {
+      base.push(
+        {
+          key: "nav",
+          header: t("investmentRisk.indicators.unitNav"),
+          align: "right",
+          accessor: (row) => row.nav,
+          cell: (row) => <span className="font-mono">{row.nav == null ? "—" : Number(row.nav).toFixed(4)}</span>,
+        },
+        {
+          key: "daily_return_pct",
+          header: t("investmentRisk.indicators.dailyReturn"),
+          align: "right",
+          accessor: (row) => row.daily_return_pct,
+          cell: (row) => <span className="font-mono">{percent(row.daily_return_pct, 3)}</span>,
+        },
+        {
+          key: "cumulative_return_pct",
+          header: t("investmentRisk.indicators.cumulativeReturn"),
+          align: "right",
+          accessor: (row) => row.cumulative_return_pct,
+          cell: (row) => <span className="font-mono">{percent(row.cumulative_return_pct, 3)}</span>,
+        },
+        {
+          key: "rolling_volatility_pct",
+          header: t("investmentRisk.indicators.rollingVolPct"),
+          align: "right",
+          accessor: (row) => row.rolling_volatility_pct,
+          cell: (row) => <span className="font-mono">{percent(row.rolling_volatility_pct, 3)}</span>,
+        },
+      )
+    } else {
+      base.push({
+        key: "daily_return_pct",
+        header: t("investmentRisk.indicators.dailyReturn"),
+        align: "right",
+        accessor: (row) => row.daily_return_pct,
+        cell: (row) => <span className="font-mono">{percent(row.daily_return_pct, 3)}</span>,
+      })
+    }
+    base.push(
+      {
+        key: "drawdown_pct",
+        header: t("investmentRisk.indicators.drawdown"),
+        align: "right",
+        accessor: (row) => row.drawdown_pct,
+        cell: (row) => <span className="font-mono">{percent(row.drawdown_pct, 3)}</span>,
+      },
+      {
+        key: "rolling_var_95_pct",
+        header: t("investmentRisk.indicators.rollingVar95"),
+        align: "right",
+        accessor: (row) => row.rolling_var_95_pct,
+        cell: (row) => <span className="font-mono">{percent(row.rolling_var_95_pct, 3)}</span>,
+      },
+    )
+    return base
+  }, [mode, t])
+
+  return (
+    <WorkbenchTable
+      title={title ?? t("investmentRisk.indicators.rollingVol")}
+      rows={points}
+      columns={columns}
+      rowId={(row) => row.date}
+      exportFilename={`${mode === "full" ? "rolling-volatility" : "drawdown-var"}-${fundId}-${startDate}-${endDate}.csv`}
+      initialSortKey="date"
+      toolbarExtra={toolbarExtra}
+      bodyClassName={bodyClassName}
+      embedded={embedded}
+    />
+  )
+}
+
+function VarCompareWorkbenchTable({
+  fundId,
+  asOfDate,
+  maxVarPct,
+  results,
+  methodLabels,
+}: {
+  fundId: string
+  asOfDate: string
+  maxVarPct: number | null | undefined
+  results: Array<{
+    method?: string
+    method_requested?: string
+    var_hkd?: number | null
+    var_pct_nav?: number | null
+    cvar_hkd?: number | null
+    sample_size?: number | null
+  }>
+  methodLabels: Record<string, string>
+}) {
+  const { t } = useTranslation()
+  const columns = useMemo<WorkbenchColumn<(typeof results)[number]>[]>(() => [
+    {
+      key: "method",
+      header: t("investmentRisk.indicators.method"),
+      filterable: true,
+      accessor: (row) => methodLabels[row.method_requested ?? ""] ?? row.method ?? "",
+    },
+    {
+      key: "var_hkd",
+      header: t("investmentRisk.indicators.varHkd"),
+      align: "right",
+      accessor: (row) => row.var_hkd,
+      cell: (row) => <span className="font-mono">{money(row.var_hkd)}</span>,
+    },
+    {
+      key: "var_pct_nav",
+      header: t("investmentRisk.indicators.varPctNav"),
+      align: "right",
+      accessor: (row) => row.var_pct_nav,
+      cell: (row) => <span className="font-mono">{percent(row.var_pct_nav, 4)}</span>,
+    },
+    {
+      key: "cvar_hkd",
+      header: t("investmentRisk.indicators.cvarHkd"),
+      align: "right",
+      accessor: (row) => row.cvar_hkd,
+      cell: (row) => <span className="font-mono">{money(row.cvar_hkd)}</span>,
+    },
+    {
+      key: "sample_size",
+      header: t("investmentRisk.indicators.sampleSize"),
+      align: "right",
+      accessor: (row) => row.sample_size,
+    },
+  ], [methodLabels, t])
+
+  return (
+    <WorkbenchTable
+      title={t("investmentRisk.indicators.varTitle")}
+      rows={results}
+      columns={columns}
+      rowId={(row) => row.method_requested ?? row.method ?? "method"}
+      exportFilename={`var-compare-${fundId}-${asOfDate}.csv`}
+      initialSortKey="var_pct_nav"
+      bodyClassName="h-[240px] overflow-auto rounded-lg border"
+      toolbarExtra={(
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="secondary">{t("investmentRisk.indicators.varMax", { value: percent(maxVarPct, 4) })}</Badge>
+          <SqlViewButton sqlIds={["SQL-VAR-01"]} />
+        </div>
+      )}
+    />
+  )
 }

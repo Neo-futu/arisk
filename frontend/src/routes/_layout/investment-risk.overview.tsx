@@ -1,23 +1,13 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { Download, Search } from "lucide-react"
 import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import { FUNDS, FsiToolbar, lastTradeDate } from "@/components/FsiToolbar"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { fsiApi } from "@/fsiClient"
-import { exportCsv, HorizontalBarList, TrendLineChart } from "@/modules/investment-risk/dashboard-kit"
+import { HorizontalBarList, TrendLineChart } from "@/modules/investment-risk/dashboard-kit"
+import { WorkbenchTable, type WorkbenchColumn } from "@/platform/WorkbenchTable"
 
 export const Route = createFileRoute("/_layout/investment-risk/overview")({
   component: PortfolioOverviewPage,
@@ -56,7 +46,6 @@ function percent(value: number | null | undefined, digits = 2) {
   return value == null ? "—" : `${Number(value).toFixed(digits)}%`
 }
 
-// YTM / coupon are stored as decimal rates (0.035 → 3.50%)
 function ratePercent(value: number | null | undefined, digits = 2) {
   return value == null ? "—" : `${(Number(value) * 100).toFixed(digits)}%`
 }
@@ -75,8 +64,6 @@ function PortfolioOverviewPage() {
   const { t } = useTranslation()
   const [fundId, setFundId] = useState(FUNDS[0].id)
   const [asOfDate, setAsOfDate] = useState(lastTradeDate)
-  const [stockQuery, setStockQuery] = useState("")
-  const [bondQuery, setBondQuery] = useState("")
   const { data, isFetching, isError, refetch } = useQuery({
     queryKey: ["investment-overview", fundId, asOfDate],
     queryFn: () => fsiApi.getPortfolioOverview(fundId, asOfDate).then((response) => response.data),
@@ -89,77 +76,146 @@ function PortfolioOverviewPage() {
   })
 
   const currency = data?.portfolio.base_currency ?? "HKD"
-  const filteredTopStocks = useMemo(() => {
-    if (!data) return []
-    return data.top_stocks.filter((row) => {
-      const keyword = `${row.security_code} ${row.security_name} ${row.sector}`.toLowerCase()
-      return keyword.includes(stockQuery.toLowerCase())
-    })
-  }, [data, stockQuery])
+  const performance = data?.performance ?? []
+  const allocation = data?.asset_allocation ?? []
+  const topStocks = data?.top_stocks ?? []
+  const topBonds = data?.top_bonds ?? []
+  const stockSectors = data?.stock_sectors ?? []
 
-  const filteredTopBonds = useMemo(() => {
-    if (!data?.top_bonds) return []
-    return data.top_bonds.filter((row) => {
-      const keyword = `${row.security_code} ${row.security_name} ${row.issuer_name} ${row.rating ?? ""}`.toLowerCase()
-      return keyword.includes(bondQuery.toLowerCase())
-    })
-  }, [data, bondQuery])
+  const performanceColumns = useMemo<WorkbenchColumn<(typeof performance)[number]>[]>(() => [
+    { key: "period", header: t("investmentRisk.overview.period"), accessor: (row) => row.period },
+    { key: "start_date", header: t("investmentRisk.overview.startDate"), accessor: (row) => row.start_date },
+    {
+      key: "return_pct",
+      header: t("investmentRisk.overview.returnPct"),
+      align: "right",
+      accessor: (row) => row.return_pct,
+      cell: (row) => (
+        <span className={`font-mono ${row.return_pct < 0 ? "text-destructive" : "text-emerald-600"}`}>
+          {percent(row.return_pct, 3)}
+        </span>
+      ),
+    },
+  ], [t])
 
-  function exportTopStocks() {
-    if (!data) return
-    exportCsv(
-      `investment-risk-overview-top-stocks-${fundId}-${asOfDate}.csv`,
-      [
-        t("investmentRisk.overview.code"),
-        t("investmentRisk.overview.name"),
-        t("investmentRisk.overview.sector"),
-        t("investmentRisk.overview.marketValue"),
-        t("investmentRisk.overview.pctNav"),
-        t("investmentRisk.overview.unrealizedPnl"),
-      ],
-      filteredTopStocks.map((row) => [
-        row.security_code,
-        row.security_name,
-        row.sector,
-        row.market_value_base,
-        row.weight_pct,
-        row.unrealized_pnl,
-      ]),
-    )
-  }
+  const allocationColumns = useMemo<WorkbenchColumn<(typeof allocation)[number]>[]>(() => [
+    {
+      key: "asset_class",
+      header: t("investmentRisk.overview.assetClass"),
+      filterable: true,
+      accessor: (row) => ASSET_LABELS[row.asset_class] ?? row.asset_class,
+    },
+    {
+      key: "market_value_base",
+      header: t("investmentRisk.overview.marketValue"),
+      align: "right",
+      accessor: (row) => row.market_value_base,
+      cell: (row) => <span className="font-mono">{money(row.market_value_base, currency)}</span>,
+    },
+    {
+      key: "weight_pct",
+      header: t("investmentRisk.overview.weight"),
+      align: "right",
+      accessor: (row) => row.weight_pct,
+      cell: (row) => <span className="font-mono">{percent(row.weight_pct)}</span>,
+    },
+  ], [currency, t])
 
-  function exportTopBonds() {
-    if (!data?.top_bonds) return
-    exportCsv(
-      `investment-risk-overview-top-bonds-${fundId}-${asOfDate}.csv`,
-      [
-        t("investmentRisk.overview.code"),
-        t("investmentRisk.overview.name"),
-        t("investmentRisk.overview.issuer"),
-        t("investmentRisk.overview.rating"),
-        t("investmentRisk.overview.marketValue"),
-        t("investmentRisk.overview.pctNav"),
-        "YTM%",
-        t("investmentRisk.overview.duration"),
-        "票息%",
-        t("investmentRisk.overview.maturity"),
-        "剩餘天數",
-      ],
-      filteredTopBonds.map((row) => [
-        row.security_code,
-        row.security_name,
-        row.issuer_name,
-        row.rating ?? "",
-        row.market_value_base,
-        row.weight_pct,
-        row.ytm == null ? "" : row.ytm * 100,
-        row.duration,
-        row.coupon_rate == null ? "" : row.coupon_rate * 100,
-        row.maturity_date ?? "",
-        row.remaining_days,
-      ]),
-    )
-  }
+  const stockColumns = useMemo<WorkbenchColumn<(typeof topStocks)[number]>[]>(() => [
+    { key: "security_code", header: t("investmentRisk.overview.code"), accessor: (row) => row.security_code, cell: (row) => <span className="font-mono">{row.security_code}</span> },
+    { key: "security_name", header: t("investmentRisk.overview.name"), accessor: (row) => row.security_name },
+    { key: "sector", header: t("investmentRisk.overview.sector"), filterable: true, accessor: (row) => row.sector },
+    {
+      key: "market_value_base",
+      header: t("investmentRisk.overview.marketValue"),
+      align: "right",
+      accessor: (row) => row.market_value_base,
+      cell: (row) => <span className="font-mono">{money(row.market_value_base, currency)}</span>,
+    },
+    {
+      key: "weight_pct",
+      header: t("investmentRisk.overview.pctNav"),
+      align: "right",
+      accessor: (row) => row.weight_pct,
+      cell: (row) => <span className="font-mono">{percent(row.weight_pct)}</span>,
+    },
+    {
+      key: "unrealized_pnl",
+      header: t("investmentRisk.overview.unrealizedPnl"),
+      align: "right",
+      accessor: (row) => row.unrealized_pnl,
+      cell: (row) => <span className="font-mono">{money(row.unrealized_pnl, currency)}</span>,
+    },
+  ], [currency, t])
+
+  const bondColumns = useMemo<WorkbenchColumn<(typeof topBonds)[number]>[]>(() => [
+    { key: "security_code", header: t("investmentRisk.overview.code"), accessor: (row) => row.security_code, cell: (row) => <span className="font-mono">{row.security_code}</span> },
+    { key: "security_name", header: t("investmentRisk.overview.name"), accessor: (row) => row.security_name },
+    { key: "issuer_name", header: t("investmentRisk.overview.issuer"), accessor: (row) => row.issuer_name },
+    { key: "rating", header: t("investmentRisk.overview.rating"), filterable: true, accessor: (row) => row.rating ?? "—" },
+    {
+      key: "market_value_base",
+      header: t("investmentRisk.overview.marketValue"),
+      align: "right",
+      accessor: (row) => row.market_value_base,
+      cell: (row) => <span className="font-mono">{money(row.market_value_base, currency)}</span>,
+    },
+    {
+      key: "weight_pct",
+      header: t("investmentRisk.overview.pctNav"),
+      align: "right",
+      accessor: (row) => row.weight_pct,
+      cell: (row) => <span className="font-mono">{percent(row.weight_pct)}</span>,
+    },
+    {
+      key: "ytm",
+      header: t("investmentRisk.overview.ytm"),
+      align: "right",
+      accessor: (row) => row.ytm,
+      cell: (row) => <span className="font-mono">{ratePercent(row.ytm)}</span>,
+      exportValue: (row) => (row.ytm == null ? "" : row.ytm * 100),
+    },
+    {
+      key: "duration",
+      header: t("investmentRisk.overview.duration"),
+      align: "right",
+      accessor: (row) => row.duration,
+      cell: (row) => <span className="font-mono">{years(row.duration)}</span>,
+    },
+    {
+      key: "coupon_rate",
+      header: t("investmentRisk.overview.coupon"),
+      align: "right",
+      accessor: (row) => row.coupon_rate,
+      cell: (row) => <span className="font-mono">{ratePercent(row.coupon_rate)}</span>,
+      exportValue: (row) => (row.coupon_rate == null ? "" : row.coupon_rate * 100),
+    },
+    { key: "maturity_date", header: t("investmentRisk.overview.maturity"), accessor: (row) => row.maturity_date ?? "—" },
+  ], [currency, t])
+
+  const sectorColumns = useMemo<WorkbenchColumn<(typeof stockSectors)[number]>[]>(() => [
+    { key: "sector", header: t("investmentRisk.overview.sector"), filterable: true, accessor: (row) => row.sector },
+    {
+      key: "position_count",
+      header: t("investmentRisk.overview.positionCount"),
+      align: "right",
+      accessor: (row) => row.position_count,
+    },
+    {
+      key: "market_value_base",
+      header: t("investmentRisk.overview.marketValue"),
+      align: "right",
+      accessor: (row) => row.market_value_base,
+      cell: (row) => <span className="font-mono">{money(row.market_value_base, currency)}</span>,
+    },
+    {
+      key: "weight_pct",
+      header: t("investmentRisk.overview.pctNav"),
+      align: "right",
+      accessor: (row) => row.weight_pct,
+      cell: (row) => <span className="font-mono">{percent(row.weight_pct)}</span>,
+    },
+  ], [currency, t])
 
   return (
     <div className="space-y-6">
@@ -233,165 +289,50 @@ function PortfolioOverviewPage() {
           </div>
 
           <div className="grid gap-6 xl:grid-cols-2">
-            <Card>
-              <CardHeader><CardTitle className="text-base">{t("investmentRisk.overview.performance")}</CardTitle></CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader><TableRow><TableHead>{t("investmentRisk.overview.period")}</TableHead><TableHead>{t("investmentRisk.overview.startDate")}</TableHead><TableHead className="text-right">{t("investmentRisk.overview.returnPct")}</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    {data.performance.map((row) => (
-                      <TableRow key={row.period}>
-                        <TableCell className="font-medium">{row.period}</TableCell>
-                        <TableCell>{row.start_date}</TableCell>
-                        <TableCell className={`text-right font-mono ${row.return_pct < 0 ? "text-destructive" : "text-emerald-600"}`}>
-                          {percent(row.return_pct, 3)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {!data.performance.length && <EmptyRow columns={3} />}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader><CardTitle className="text-base">{t("investmentRisk.overview.allocationTable")}</CardTitle></CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader><TableRow><TableHead>{t("investmentRisk.overview.assetClass")}</TableHead><TableHead className="text-right">{t("investmentRisk.overview.marketValue")}</TableHead><TableHead className="text-right">{t("investmentRisk.overview.weight")}</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    {data.asset_allocation.map((row) => (
-                      <TableRow key={row.asset_class}>
-                        <TableCell className="font-medium">{ASSET_LABELS[row.asset_class] ?? row.asset_class}</TableCell>
-                        <TableCell className="text-right font-mono">{money(row.market_value_base, currency)}</TableCell>
-                        <TableCell className="text-right font-mono">{percent(row.weight_pct)}</TableCell>
-                      </TableRow>
-                    ))}
-                    {!data.asset_allocation.length && <EmptyRow columns={3} />}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+            <WorkbenchTable
+              title={t("investmentRisk.overview.performance")}
+              rows={performance}
+              columns={performanceColumns}
+              rowId={(row) => row.period}
+              exportFilename={`overview-performance-${fundId}-${asOfDate}.csv`}
+              initialSortKey="return_pct"
+            />
+            <WorkbenchTable
+              title={t("investmentRisk.overview.allocationTable")}
+              rows={allocation}
+              columns={allocationColumns}
+              rowId={(row) => row.asset_class}
+              exportFilename={`overview-allocation-${fundId}-${asOfDate}.csv`}
+              initialSortKey="weight_pct"
+            />
           </div>
 
-          <Card>
-            <CardHeader>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <CardTitle className="text-base">{t("investmentRisk.overview.topStocks")}</CardTitle>
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex items-center gap-2 rounded-md border px-3 py-2">
-                    <Search className="h-4 w-4 text-muted-foreground" />
-                    <Input
-                      className="h-8 w-56 border-0 p-0 shadow-none focus-visible:ring-0"
-                      placeholder={t("investmentRisk.overview.searchStock")}
-                      value={stockQuery}
-                      onChange={(event) => setStockQuery(event.target.value)}
-                    />
-                  </div>
-                  <Button variant="outline" size="sm" onClick={exportTopStocks}>
-                    <Download className="mr-2 h-4 w-4" />
-                    {t("investmentRisk.common.export")}
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader><TableRow><TableHead>{t("investmentRisk.overview.code")}</TableHead><TableHead>{t("investmentRisk.overview.name")}</TableHead><TableHead>{t("investmentRisk.overview.sector")}</TableHead><TableHead className="text-right">{t("investmentRisk.overview.marketValue")}</TableHead><TableHead className="text-right">{t("investmentRisk.overview.pctNav")}</TableHead><TableHead className="text-right">{t("investmentRisk.overview.unrealizedPnl")}</TableHead></TableRow></TableHeader>
-                <TableBody>
-                  {filteredTopStocks.map((row) => (
-                    <TableRow key={row.security_code}>
-                      <TableCell className="font-mono">{row.security_code}</TableCell>
-                      <TableCell className="font-medium">{row.security_name}</TableCell>
-                      <TableCell>{row.sector}</TableCell>
-                      <TableCell className="text-right font-mono">{money(row.market_value_base, currency)}</TableCell>
-                      <TableCell className="text-right font-mono">{percent(row.weight_pct)}</TableCell>
-                      <TableCell className="text-right font-mono">{money(row.unrealized_pnl, currency)}</TableCell>
-                    </TableRow>
-                  ))}
-                  {!filteredTopStocks.length && <EmptyRow columns={6} />}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <WorkbenchTable
+            title={t("investmentRisk.overview.topStocks")}
+            rows={topStocks}
+            columns={stockColumns}
+            rowId={(row) => row.security_code}
+            exportFilename={`overview-top-stocks-${fundId}-${asOfDate}.csv`}
+            initialSortKey="weight_pct"
+          />
 
-          <Card>
-            <CardHeader>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <CardTitle className="text-base">{t("investmentRisk.overview.topBonds")}</CardTitle>
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex items-center gap-2 rounded-md border px-3 py-2">
-                    <Search className="h-4 w-4 text-muted-foreground" />
-                    <Input
-                      className="h-8 w-56 border-0 p-0 shadow-none focus-visible:ring-0"
-                      placeholder={t("investmentRisk.overview.searchBond")}
-                      value={bondQuery}
-                      onChange={(event) => setBondQuery(event.target.value)}
-                    />
-                  </div>
-                  <Button variant="outline" size="sm" onClick={exportTopBonds}>
-                    <Download className="mr-2 h-4 w-4" />
-                    {t("investmentRisk.common.export")}
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t("investmentRisk.overview.code")}</TableHead>
-                    <TableHead>{t("investmentRisk.overview.name")}</TableHead>
-                    <TableHead>{t("investmentRisk.overview.issuer")}</TableHead>
-                    <TableHead>{t("investmentRisk.overview.rating")}</TableHead>
-                    <TableHead className="text-right">{t("investmentRisk.overview.marketValue")}</TableHead>
-                    <TableHead className="text-right">{t("investmentRisk.overview.pctNav")}</TableHead>
-                    <TableHead className="text-right">{t("investmentRisk.overview.ytm")}</TableHead>
-                    <TableHead className="text-right">{t("investmentRisk.overview.duration")}</TableHead>
-                    <TableHead className="text-right">{t("investmentRisk.overview.coupon")}</TableHead>
-                    <TableHead>{t("investmentRisk.overview.maturity")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredTopBonds.map((row) => (
-                    <TableRow key={row.security_code}>
-                      <TableCell className="font-mono">{row.security_code}</TableCell>
-                      <TableCell className="font-medium">{row.security_name}</TableCell>
-                      <TableCell className="max-w-40 truncate" title={row.issuer_name}>{row.issuer_name}</TableCell>
-                      <TableCell>{row.rating ?? "—"}</TableCell>
-                      <TableCell className="text-right font-mono">{money(row.market_value_base, currency)}</TableCell>
-                      <TableCell className="text-right font-mono">{percent(row.weight_pct)}</TableCell>
-                      <TableCell className="text-right font-mono">{ratePercent(row.ytm)}</TableCell>
-                      <TableCell className="text-right font-mono">{years(row.duration)}</TableCell>
-                      <TableCell className="text-right font-mono">{ratePercent(row.coupon_rate)}</TableCell>
-                      <TableCell className="font-mono text-xs">{row.maturity_date ?? "—"}</TableCell>
-                    </TableRow>
-                  ))}
-                  {!filteredTopBonds.length && <EmptyRow columns={10} />}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <WorkbenchTable
+            title={t("investmentRisk.overview.topBonds")}
+            rows={topBonds}
+            columns={bondColumns}
+            rowId={(row) => row.security_code}
+            exportFilename={`overview-top-bonds-${fundId}-${asOfDate}.csv`}
+            initialSortKey="weight_pct"
+          />
 
-          <Card>
-            <CardHeader><CardTitle className="text-base">{t("investmentRisk.overview.stockSectors")}</CardTitle></CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader><TableRow><TableHead>{t("investmentRisk.overview.sector")}</TableHead><TableHead className="text-right">{t("investmentRisk.overview.positionCount")}</TableHead><TableHead className="text-right">{t("investmentRisk.overview.marketValue")}</TableHead><TableHead className="text-right">{t("investmentRisk.overview.pctNav")}</TableHead></TableRow></TableHeader>
-                <TableBody>
-                  {data.stock_sectors.map((row) => (
-                    <TableRow key={row.sector}>
-                      <TableCell className="font-medium">{row.sector}</TableCell>
-                      <TableCell className="text-right">{row.position_count}</TableCell>
-                      <TableCell className="text-right font-mono">{money(row.market_value_base, currency)}</TableCell>
-                      <TableCell className="text-right font-mono">{percent(row.weight_pct)}</TableCell>
-                    </TableRow>
-                  ))}
-                  {!data.stock_sectors.length && <EmptyRow columns={4} />}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <WorkbenchTable
+            title={t("investmentRisk.overview.stockSectors")}
+            rows={stockSectors}
+            columns={sectorColumns}
+            rowId={(row) => row.sector}
+            exportFilename={`overview-stock-sectors-${fundId}-${asOfDate}.csv`}
+            initialSortKey="weight_pct"
+          />
         </>
       )}
     </div>
@@ -408,9 +349,4 @@ function MetricCard({ label, value, detail }: { label: string; value: string; de
       </CardContent>
     </Card>
   )
-}
-
-function EmptyRow({ columns }: { columns: number }) {
-  const { t } = useTranslation()
-  return <TableRow><TableCell colSpan={columns} className="h-20 text-center text-muted-foreground">{t("investmentRisk.common.empty")}</TableCell></TableRow>
 }
