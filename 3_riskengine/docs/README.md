@@ -1,4 +1,4 @@
-<!-- 更新时间：2026-09-11（北京时间）｜生成模型：Cursor Grok 4.6 -->
+<!-- 更新时间：2026-10-16（北京时间）｜生成模型：Cursor Composer -->
 
 # RiskEngine 文档目录
 
@@ -9,6 +9,7 @@
 | [架构和接口](architecture-and-interfaces.md) | 架构 / 业务 / 接入方 | 分层、对象模型、绑定 API、HTTP / Python / Quant 入口 |
 | [代码和说明](codebase-guide.md) | 开发 | 目录、模块职责、关键函数、血缘字段 |
 | [产品与金融业务](products-and-business.md) | 业务 / 产品 / 风控 | 全部 ProductKind、指标、风险流程、报表 |
+| [产品压力测试 LQAP](product-stress-lqap.md) | 业务 / 风控 / 开发 | 投资风险「产品压力测试」：架构、功能、数据流、阶梯与价差配置 |
 | [开发细化](development-playbook.md) | 开发 + 业务一起迭代 | 如何加产品、指标、流程、报表；红线与测试 |
 | [平台切片开发](platform-incremental-verification.md) | 开发 + 业务 | 枚举；索引；单切片。引擎包 `scripts/riskengine/`，闭环 `scripts/platform_workflow.py` |
 | [目标架构](target-architecture.md) | 架构 | FinancePy / ORE / Riskfolio 能力矩阵与路由 |

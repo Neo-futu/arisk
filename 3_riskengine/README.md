@@ -1,4 +1,4 @@
-<!-- 更新时间：2026-09-11（北京时间）｜生成模型：Cursor Grok 4.6 -->
+<!-- 更新时间：2026-10-16（北京时间）｜生成模型：Grok 4.7 -->
 
 # 3_riskengine — 统一量化与风险计算平台
 
@@ -36,7 +36,7 @@ RiskEngine 是 ARISK **自主**的统一 Quantitative Finance & Risk Engine，�
 | `risk/` | `calculate` / `exposure` / Sensitivity / Stress / Scenario / Reverse Stress / Tail Risk / KRD / PnL Explain / Historical Backtest / VaR Backtest / XVA / KPI |
 | `stress/` | 多因子压力测试 |
 | `scenario/` | 内置情景目录与再估值 |
-| `liquidity/` | 产品流动性桶、赎回瀑布、MMF WAM/WAL / SFC |
+| `liquidity/` | 产品流动性桶、赎回瀑布、MMF WAM/WAL / SFC、彭博 LQAP |
 | `counterparty/` | 产品敞口再聚合、XVA 分摊、净额集 |
 | `pnl/` | 快照间 PnL explain |
 | `limits/` | Limit Engine + SFC 60/120/50bp 口径 |
@@ -87,6 +87,7 @@ bound.liquidity().ratio()
 bound.liquidity().report()
 bound.liquidity().redemption(20.0)
 bound.liquidity().mmf()
+bound.liquidity().lqap(positions)   # 彭博 LQAP，输入为 mktdata_lqa 连接后的持仓
 bound.counterparty().xva()
 bound.counterparty().report()
 bound.pnl().explain(previous)

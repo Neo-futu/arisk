@@ -30,6 +30,8 @@ from .investment_analysis_liquidity_stress import compute_liquidity_stress_testi
 from .investment_analysis_overview import compute_portfolio_overview
 from .investment_analysis_rates_credit import compute_rates_credit_sensitivity
 from .investment_analysis_risk_indicators import compute_risk_indicators
+from ..risk.exposure_engine import compute_exposure
+from ..risk.exposure_domain import ExposureResult
 
 # Ratings at or below AA+ treated as "low rating" for credit-bond concentration.
 _LOW_RATINGS = {
@@ -162,9 +164,11 @@ async def _bond_extensions(
         return {
             "weighted_convexity": None,
             "avg_remaining_years": None,
+            "max_remaining_days": None,
             "modified_duration": None,
             "credit_spread_proxy_pct": None,
             "low_rating_pct": None,
+            "unrated_pct": None,
             "top5_bond_pct": None,
             "top10_bond_pct": None,
             "top_issuer_pct": None,
@@ -173,6 +177,7 @@ async def _bond_extensions(
     w_conv = sum(_number(b["market_value"]) * _number(b["convexity"]) for b in bonds) / total
     w_dur = sum(_number(b["market_value"]) * _number(b["duration"]) for b in bonds) / total
     remaining_years = []
+    remaining_days_list: list[int] = []
     for b in bonds:
         mat = b.get("maturity_date")
         if mat is None:
@@ -180,6 +185,7 @@ async def _bond_extensions(
         try:
             days = max((_date_value(mat) - snapshot).days, 0)
             remaining_years.append((_number(b["market_value"]), days / 365.25))
+            remaining_days_list.append(days)
         except Exception:
             continue
     avg_rem = (
@@ -187,6 +193,7 @@ async def _bond_extensions(
         if remaining_years
         else None
     )
+    max_remaining_days = max(remaining_days_list) if remaining_days_list else None
     # YTM - duration-weighted proxy vs risk-free-ish 2% for credit spread
     w_ytm = sum(_number(b["market_value"]) * _number(b["ytm"]) for b in bonds) / total
     credit_spread = (w_ytm - 2.0) if w_ytm else None
@@ -195,6 +202,11 @@ async def _bond_extensions(
         _number(b["market_value"])
         for b in bonds
         if str(b.get("rating") or "NR").upper() in _LOW_RATINGS
+    )
+    unrated_mv = sum(
+        _number(b["market_value"])
+        for b in bonds
+        if str(b.get("rating") or "NR").upper() in {"NR", "N/A", "", "UNRATED"}
     )
 
     by_code = sorted(
@@ -211,9 +223,11 @@ async def _bond_extensions(
     return {
         "weighted_convexity": _round(w_conv, 4),
         "avg_remaining_years": _round(avg_rem, 3),
+        "max_remaining_days": max_remaining_days,
         "modified_duration": _round(w_dur, 3),
         "credit_spread_proxy_pct": _round(credit_spread, 3),
         "low_rating_pct": _round(low_mv / total * 100.0, 2),
+        "unrated_pct": _round(unrated_mv / total * 100.0, 2),
         "top5_bond_pct": _round(top5, 2),
         "top10_bond_pct": _round(top10, 2),
         "top_issuer_pct": _round(top_issuer, 2),
@@ -894,6 +908,464 @@ async def _extension_metrics(
     return out
 
 
+def _ams_breached(value: float | None, limit: float, op: str) -> bool | None:
+    if value is None:
+        return None
+    if op == "<=":
+        return value > limit
+    if op == "<":
+        return value >= limit
+    if op == ">=":
+        return value < limit
+    if op == ">":
+        return value <= limit
+    return None
+
+
+def _ams_limit_metric(
+    metric_id: str,
+    name: str,
+    value: float | int | None,
+    *,
+    limit: float | None,
+    op: str,
+    unit: str,
+    ams_code: str,
+    hard: bool = True,
+    scheme: str = "BAMUSDMMF风控001",
+    extra: str | None = None,
+) -> dict[str, Any]:
+    """AMS / Wind 合规限额行：数值 + 限额对照 + 合规/超限/待数据。"""
+    hard_label = "硬指标" if hard else "内部从严"
+    limit_txt = f"{op}{limit}{unit}" if limit is not None else "—"
+    note = f"AMS {ams_code} · {scheme} · {hard_label} · 限额 {limit_txt}"
+    if extra:
+        note = f"{note} · {extra}"
+    if value is None or limit is None:
+        return _metric(metric_id, name, value=value, unit=unit, status="unavailable", note=note, detail="待数据")
+    breached = _ams_breached(float(value), float(limit), op)
+    detail = "超限" if breached else "合规"
+    return _metric(
+        metric_id,
+        name,
+        value=_round(float(value), 2) if isinstance(value, float) or (isinstance(value, int) and unit != "条") else value,
+        unit=unit,
+        status="derived",
+        note=note,
+        detail=detail,
+    )
+
+
+def _pct_of_nav(mv: float, nav: float) -> float | None:
+    if not nav:
+        return None
+    return _round(mv / nav * 100.0, 2)
+
+
+def _build_ams_compliance_metrics(
+    *,
+    exposure: ExposureResult | None,
+    assets: dict[str, Any],
+    bond_ext: dict[str, Any],
+    rates: dict[str, Any],
+    ext: dict[str, Any],
+    nav: float,
+    base_currency: str,
+) -> list[dict[str, Any]]:
+    """对齐 Wind AMS《合规风控指标及AMS配置》Sheet1（BAMUSDMMF风控001/002）。"""
+    by_class: dict[str, float] = assets.get("by_class") or {}
+    exp_nav = float(exposure.total_nav_hkd) if exposure and exposure.total_nav_hkd else nav
+
+    max_issuer_pct = None
+    max_group_pct = None
+    non_base_fx_pct = None
+    china_pct = None
+    if exposure and exp_nav > 0:
+        if exposure.by_issuer:
+            max_issuer_pct = max(v / exp_nav * 100.0 for v in exposure.by_issuer.values())
+        if exposure.by_group:
+            max_group_pct = max(v / exp_nav * 100.0 for v in exposure.by_group.values())
+        base = (base_currency or "HKD").upper()
+        if exposure.by_currency:
+            non_base = sum(v for ccy, v in exposure.by_currency.items() if str(ccy).upper() != base)
+            non_base_fx_pct = non_base / exp_nav * 100.0
+        if exposure.by_country:
+            china_keys = {"CN", "CHN", "CHINA", "CNY", "中国", "内地", "Mainland China"}
+            china_mv = sum(
+                v for cty, v in exposure.by_country.items() if str(cty).upper() in {k.upper() for k in china_keys}
+                or "中国" in str(cty) or "内地" in str(cty)
+            )
+            china_pct = china_mv / exp_nav * 100.0
+
+    debt_pct = _pct_of_nav(
+        sum(by_class.get(k, 0.0) for k in (_CREDIT_BOND | _RATE_BOND | {"BOND", "CP"})),
+        nav,
+    )
+    mm_quality_pct = _pct_of_nav(
+        sum(by_class.get(k, 0.0) for k in {"CASH", "DEPOSIT", "CD", "BOND_GOVT", "CP", "REV_REPO"}),
+        nav,
+    )
+    abs_pct = _pct_of_nav(by_class.get("BOND_ABS", 0.0) + by_class.get("ABCP", 0.0) + by_class.get("MBS", 0.0), nav)
+    other_mmf_pct = _pct_of_nav(
+        sum(v for k, v in by_class.items() if "MMF" in str(k).upper() or k in {"FUND_MMF", "FUND_MONEY"}),
+        nav,
+    )
+    repo_pct = assets.get("repo_liability_pct_nav")
+    rev_repo_pct = _pct_of_nav(by_class.get("REV_REPO", 0.0), nav)
+
+    issuer_below = rates.get("issuer_below_investment_grade_pct")
+    debt_below = rates.get("debt_below_investment_grade_pct")
+    below_ig = None
+    if issuer_below is not None or debt_below is not None:
+        below_ig = max(float(issuer_below or 0), float(debt_below or 0))
+    unrated_pct = bond_ext.get("unrated_pct")
+
+    wam = float(exposure.wam_days) if exposure else None
+    wal = float(exposure.wal_days) if exposure else None
+    dla = float(exposure.daily_liquid_pct) if exposure else None
+    wla = float(exposure.weekly_liquid_pct) if exposure else None
+    max_days = bond_ext.get("max_remaining_days")
+
+    metrics: list[dict[str, Any]] = [
+        # —— AMS 001 硬性：期限与流动性 ——
+        _ams_limit_metric("ams_wam", "WAM 加权平均届满期", wam, limit=60, op="<=", unit="天", ams_code="2.2", hard=True),
+        _ams_limit_metric("ams_wal", "WAL 加权平均有效期／寿命", wal, limit=120, op="<=", unit="天", ams_code="2.4", hard=True),
+        _ams_limit_metric("ams_dla", "DLA 每日流动资产", dla, limit=7.5, op=">=", unit="%", ams_code="2.5", hard=True),
+        _ams_limit_metric("ams_wla", "WLA 每周流动资产", wla, limit=15.0, op=">=", unit="%", ams_code="2.6", hard=True),
+        _ams_limit_metric(
+            "ams_max_maturity",
+            "单券剩余期限",
+            float(max_days) if max_days is not None else None,
+            limit=397,
+            op="<=",
+            unit="天",
+            ams_code="2.7",
+            hard=True,
+        ),
+        _ams_limit_metric(
+            "ams_gov_maturity",
+            "政府及其他公共证券剩余期限",
+            None,
+            limit=730,
+            op="<=",
+            unit="天",
+            ams_code="2.8",
+            hard=True,
+            extra="单券层级；待政府/公共券标识",
+        ),
+        # —— AMS 001 硬性：集中度 ——
+        _ams_limit_metric(
+            "ams_single_issuer",
+            "单一主体：工具 + 存款",
+            _round(max_issuer_pct, 2) if max_issuer_pct is not None else None,
+            limit=10.0,
+            op="<=",
+            unit="%",
+            ams_code="2.3",
+            hard=True,
+            extra="同一集团20%暂未单独拆分",
+        ),
+        _ams_limit_metric(
+            "ams_issuer_group",
+            "同一集团集中度",
+            _round(max_group_pct, 2) if max_group_pct is not None else None,
+            limit=20.0,
+            op="<=",
+            unit="%",
+            ams_code="2.3",
+            hard=True,
+            extra="SFC 集团口径对照",
+        ),
+        _ams_limit_metric(
+            "ams_gov_issuer",
+            "政府及其他公共证券同一发行",
+            None,
+            limit=30.0,
+            op="<=",
+            unit="%",
+            ams_code="2.9",
+            hard=True,
+            extra="待政府券穿透标识",
+        ),
+        _ams_limit_metric(
+            "ams_sfi_issuer",
+            "具规模财务机构主体上限（可升至25%）",
+            _round(max_issuer_pct, 2) if max_issuer_pct is not None else None,
+            limit=25.0,
+            op="<=",
+            unit="%",
+            ams_code="2.10",
+            hard=True,
+            extra="SFI认定暂用大型企业；对照股本+不可分派资本≤10%",
+        ),
+        # —— AMS 001 硬性：评级与禁投 ——
+        _ams_limit_metric(
+            "ams_below_ig",
+            "低于投资级／未获评级占比",
+            _round(max(float(below_ig or 0), float(unrated_pct or 0)), 2)
+            if below_ig is not None or unrated_pct is not None
+            else None,
+            limit=0.0,
+            op="<=",
+            unit="%",
+            ams_code="2.11",
+            hard=True,
+            extra="禁止未评；工具A-1+或发行人AA+",
+        ),
+        _metric(
+            "ams_eligible_pool",
+            "可投资产类别（短存+优质货币工具池）",
+            value=None,
+            unit="",
+            status="unavailable",
+            note="AMS 2.17 · BAMUSDMMF风控001 · 硬指标 · 证券池",
+            detail="待证券池映射",
+        ),
+        _metric(
+            "ams_st_rating_floor",
+            "短期国际评级底线（S&P A-3 / Fitch F3 / Moody's P-3）",
+            value=None,
+            unit="",
+            status="unavailable",
+            note="AMS · 人工核对 · 硬指标",
+            detail="待短期评级字段",
+        ),
+        # —— AMS 001 硬性：资产配置 ——
+        _ams_limit_metric(
+            "ams_mm_quality",
+            "投资（短期存款+优质货币工具）",
+            mm_quality_pct,
+            limit=70.0,
+            op=">=",
+            unit="%",
+            ams_code="2.12",
+            hard=True,
+            extra="建仓期可暂缓",
+        ),
+        _ams_limit_metric("ams_debt_pct", "债务证券（固息／浮息等）", debt_pct, limit=30.0, op="<", unit="%", ams_code="2.18", hard=True),
+        _ams_limit_metric(
+            "ams_fx_pct",
+            "非主币种",
+            _round(non_base_fx_pct, 2) if non_base_fx_pct is not None else None,
+            limit=30.0,
+            op="<=",
+            unit="%",
+            ams_code="2.19",
+            hard=True,
+            extra=f"主币种 {base_currency or '—'}",
+        ),
+        _ams_limit_metric(
+            "ams_em_pct",
+            "新兴市场（不含内地）",
+            None,
+            limit=30.0,
+            op="<",
+            unit="%",
+            ams_code="2.20",
+            hard=True,
+            extra="待新兴市场国家清单",
+        ),
+        _ams_limit_metric(
+            "ams_china_onshore",
+            "内地在岸固收／债（直／间接）",
+            _round(china_pct, 2) if china_pct is not None else None,
+            limit=20.0,
+            op="<=",
+            unit="%",
+            ams_code="2.21",
+            hard=True,
+        ),
+        _ams_limit_metric(
+            "ams_dimsum_lgfv",
+            "点心债及／或城投债",
+            None,
+            limit=10.0,
+            op="<",
+            unit="%",
+            ams_code="2.22+2.23",
+            hard=True,
+            extra="需彭博二次核验；合并口径",
+        ),
+        _ams_limit_metric("ams_abs", "ABS／MBS／ABCP", abs_pct, limit=10.0, op="<=", unit="%", ams_code="2.24", hard=True),
+        _ams_limit_metric(
+            "ams_other_mmf",
+            "其他货基（SFC 8.2 或同等可接受）",
+            other_mmf_pct,
+            limit=10.0,
+            op="<=",
+            unit="%",
+            ams_code="2.25",
+            hard=True,
+            extra="证券池",
+        ),
+        _ams_limit_metric(
+            "ams_repo",
+            "出售与回购（repo）所得现金合计",
+            repo_pct,
+            limit=10.0,
+            op="<=",
+            unit="%",
+            ams_code="2.26",
+            hard=True,
+        ),
+        _ams_limit_metric(
+            "ams_rev_repo_cpty",
+            "逆回购：向同一对手提供现金",
+            rev_repo_pct if rev_repo_pct is not None else None,
+            limit=15.0,
+            op="<=",
+            unit="%",
+            ams_code="2.27",
+            hard=True,
+            extra="暂用逆回购合计占比近似；待对手拆分",
+        ),
+        _ams_limit_metric(
+            "ams_fdi",
+            "FDI 衍生工具风险承担净额",
+            None,
+            limit=50.0,
+            op="<=",
+            unit="%",
+            ams_code="2.28",
+            hard=True,
+            extra="应为风险敞口，暂用合约面值近似",
+        ),
+        _ams_limit_metric(
+            "ams_borrow",
+            "借款（仅临时赎回／营运）",
+            None,
+            limit=10.0,
+            op="<=",
+            unit="%",
+            ams_code="2.25+",
+            hard=True,
+            extra="另含禁止证券借出、长期评级底线、非OECD对手≤5%",
+        ),
+        # —— AMS 002 内部从严 ——
+        _ams_limit_metric(
+            "ams_wam_soft",
+            "WAM（内部从严）",
+            wam,
+            limit=50,
+            op="<=",
+            unit="天",
+            ams_code="3.29",
+            hard=False,
+            scheme="BAMUSDMMF风控002",
+        ),
+        _ams_limit_metric(
+            "ams_wal_soft",
+            "WAL（内部从严）",
+            wal,
+            limit=100,
+            op="<=",
+            unit="天",
+            ams_code="3.30",
+            hard=False,
+            scheme="BAMUSDMMF风控002",
+        ),
+        _ams_limit_metric(
+            "ams_dla_soft",
+            "DLA（内部从严）",
+            dla,
+            limit=10.0,
+            op=">=",
+            unit="%",
+            ams_code="3.31",
+            hard=False,
+            scheme="BAMUSDMMF风控002",
+        ),
+        _ams_limit_metric(
+            "ams_wla_soft",
+            "WLA（内部从严）",
+            wla,
+            limit=20.0,
+            op=">=",
+            unit="%",
+            ams_code="3.32",
+            hard=False,
+            scheme="BAMUSDMMF风控002",
+        ),
+        _ams_limit_metric(
+            "ams_issuer_soft",
+            "单一主体：工具 + 存款（内部从严）",
+            _round(max_issuer_pct, 2) if max_issuer_pct is not None else None,
+            limit=9.0,
+            op="<=",
+            unit="%",
+            ams_code="3.34",
+            hard=False,
+            scheme="BAMUSDMMF风控002",
+        ),
+        # —— 对手与运营 ——
+        _ams_limit_metric(
+            "ams_bank_quota",
+            "存款行额度使用率",
+            ext.get("bank_limit"),
+            limit=100.0,
+            op="<=",
+            unit="%",
+            ams_code="额度",
+            hard=True,
+            scheme="额度管理-额度设置",
+            extra="交易对手／存款行",
+        ),
+        _metric(
+            "related_party",
+            "关联交易持仓占比",
+            value=ext.get("related_party"),
+            unit="%",
+            status="computed" if ext.get("related_party") is not None else "unavailable",
+            note="para_port_related_party",
+        ),
+        _metric(
+            "counterparty",
+            "交易对手限额使用率",
+            value=ext.get("counterparty"),
+            unit="%",
+            status="computed" if ext.get("counterparty") is not None else "unavailable",
+            note="回购本金 / 授信额度",
+        ),
+        _metric(
+            "scope_breach",
+            "监管红线触发数",
+            value=ext.get("scope_breach"),
+            unit="条",
+            status="computed",
+            note="单一发行人超监管上限",
+        ),
+        _metric(
+            "ops_anomaly",
+            "流程异常节点数",
+            value=ext.get("ops_anomaly"),
+            unit="个",
+            status="computed",
+            note="待处理审核请求",
+        ),
+        _metric(
+            "ams_breach_count",
+            "AMS硬性限额超限条数",
+            value=None,
+            unit="条",
+            status="derived",
+            note="按本页硬指标 detail=超限 汇总",
+        ),
+    ]
+
+    # 回填硬性超限条数
+    hard_breach = sum(
+        1
+        for m in metrics
+        if m.get("detail") == "超限" and m.get("note") and "硬指标" in str(m.get("note"))
+    )
+    for m in metrics:
+        if m["id"] == "ams_breach_count":
+            m["value"] = hard_breach
+            m["detail"] = "有超限" if hard_breach else "全部合规"
+            break
+    return metrics
+
+
 _METRIC_GROUPS: dict[str, dict[str, str]] = {
     "market": {
         "nav_unit": "组合风险",
@@ -925,7 +1397,12 @@ _METRIC_GROUPS: dict[str, dict[str, str]] = {
         "non_cny_pct": "汇率与国家",
     },
     "credit": {
-        "rating_dist": "评级与个券",
+        "issuer_rating_dist": "评级与个券",
+        "debt_rating_dist": "评级与个券",
+        "issuer_ig_pct": "评级与个券",
+        "issuer_below_ig_pct": "评级与个券",
+        "debt_ig_pct": "评级与个券",
+        "debt_below_ig_pct": "评级与个券",
         "low_rating_pct": "评级与个券",
         "bond_top5": "评级与个券",
         "bond_top10": "评级与个券",
@@ -970,13 +1447,42 @@ _METRIC_GROUPS: dict[str, dict[str, str]] = {
         "controller_eq": "杠杆与区域",
     },
     "compliance": {
-        "double_ten_equity": "投资限制",
-        "double_ten_bond": "投资限制",
-        "te_limit": "投资限制",
-        "scope_breach": "投资限制",
-        "related_party": "投资限制",
+        # Wind AMS 风控合规限额（001/002）合并同一表；对手与运营单独成表
+        "ams_wam": "风控合规限额",
+        "ams_wal": "风控合规限额",
+        "ams_dla": "风控合规限额",
+        "ams_wla": "风控合规限额",
+        "ams_max_maturity": "风控合规限额",
+        "ams_gov_maturity": "风控合规限额",
+        "ams_single_issuer": "风控合规限额",
+        "ams_issuer_group": "风控合规限额",
+        "ams_gov_issuer": "风控合规限额",
+        "ams_sfi_issuer": "风控合规限额",
+        "ams_below_ig": "风控合规限额",
+        "ams_eligible_pool": "风控合规限额",
+        "ams_st_rating_floor": "风控合规限额",
+        "ams_mm_quality": "风控合规限额",
+        "ams_debt_pct": "风控合规限额",
+        "ams_fx_pct": "风控合规限额",
+        "ams_em_pct": "风控合规限额",
+        "ams_china_onshore": "风控合规限额",
+        "ams_dimsum_lgfv": "风控合规限额",
+        "ams_abs": "风控合规限额",
+        "ams_other_mmf": "风控合规限额",
+        "ams_repo": "风控合规限额",
+        "ams_rev_repo_cpty": "风控合规限额",
+        "ams_fdi": "风控合规限额",
+        "ams_borrow": "风控合规限额",
+        "ams_wam_soft": "风控合规限额",
+        "ams_wal_soft": "风控合规限额",
+        "ams_dla_soft": "风控合规限额",
+        "ams_wla_soft": "风控合规限额",
+        "ams_issuer_soft": "风控合规限额",
+        "ams_breach_count": "风控合规限额",
+        "ams_bank_quota": "对手与运营",
+        "related_party": "对手与运营",
         "counterparty": "对手与运营",
-        "bank_limit": "对手与运营",
+        "scope_breach": "对手与运营",
         "ops_anomaly": "对手与运营",
     },
     "stress": {
@@ -1261,13 +1767,21 @@ async def compute_risk_metric_board(
     bond_ext = await _bond_extensions(db, fund_id, rates_asof) if bond_date else {
         "weighted_convexity": None,
         "avg_remaining_years": None,
+        "max_remaining_days": None,
         "modified_duration": None,
         "credit_spread_proxy_pct": None,
         "low_rating_pct": None,
+        "unrated_pct": None,
         "top5_bond_pct": None,
         "top10_bond_pct": None,
         "top_issuer_pct": None,
     }
+
+    exposure: ExposureResult | None = None
+    try:
+        exposure = await compute_exposure(fund_id, liq_asof, db)
+    except Exception:
+        exposure = None
     assets = await _asset_structure(db, fund_id, asset_date or effective_end, nav) if asset_date else {
         "total_assets": 0.0,
         "cash_pct_nav": None,
@@ -1285,7 +1799,6 @@ async def compute_risk_metric_board(
     fund_rets, bench_rets, bench_id = await _active_return_series(
         db, fund_id, effective_start, effective_end
     )
-    te_limit = await _tracking_error_limit(db, fund_id, effective_end)
     bench_note = f"基准 {bench_id}" if bench_id else None
     sharpe = None
     info_ratio = None
@@ -1306,7 +1819,8 @@ async def compute_risk_metric_board(
     day_return = overview.get("portfolio", {}).get("day_return")
     day_return_pct = _number(day_return) * 100.0 if day_return is not None else None
 
-    rating_dist = rates.get("rating_distribution") or []
+    issuer_rating_dist = rates.get("issuer_rating_distribution") or []
+    debt_rating_dist = rates.get("debt_rating_distribution") or []
     sector_hhi = (factor.get("sector_concentration") or {}).get("hhi")
     style = factor.get("style_exposure") or {}
 
@@ -1331,24 +1845,7 @@ async def compute_risk_metric_board(
         _number((liq.get("stress_summary") or {}).get("liquid_within_7d")),
     )
 
-    # Double-ten: largest single equity / bond weight vs 10%
-    double_ten_equity = equity_conc.get("largest_pct")
-    largest_bond = None
-    if bond_date:
-        one = await db.execute(
-            text(
-                """
-                SELECT MAX(COALESCE(market_value_base, market_value, 0)) AS max_mv,
-                       SUM(COALESCE(market_value_base, market_value, 0)) AS total_mv
-                FROM fsi.balance_bond
-                WHERE port_id = :fund_id AND evaluate_date = :snapshot
-                """
-            ),
-            {"fund_id": fund_id, "snapshot": rates_asof},
-        )
-        row = one.mappings().first()
-        if row and _number(row["total_mv"]):
-            largest_bond = _round(_number(row["max_mv"]) / _number(row["total_mv"]) * 100.0, 2)
+    base_currency = str(overview.get("portfolio", {}).get("base_currency") or "HKD")
 
     categories = [
         {
@@ -1405,7 +1902,62 @@ async def compute_risk_metric_board(
             "name": "信用风险",
             "name_en": "Credit Risk",
             "metrics": [
-                _metric("rating_dist", "评级集中度（档位数）", value=len(rating_dist), unit="档", status="derived", note="利率信用", detail=", ".join(f"{r['rating']}:{_round(r['weight_pct'],1)}%" for r in rating_dist[:5])),
+                _metric(
+                    "issuer_rating_dist",
+                    "主体评级档位数",
+                    value=len(issuer_rating_dist),
+                    unit="档",
+                    status="derived" if bond_date else "unavailable",
+                    note="issuer_rating",
+                    detail=", ".join(
+                        f"{r.get('rating')}:{_round(r.get('weight_pct'), 1)}%"
+                        for r in issuer_rating_dist
+                    ) or None,
+                ),
+                _metric(
+                    "debt_rating_dist",
+                    "债项评级档位数",
+                    value=len(debt_rating_dist),
+                    unit="档",
+                    status="derived" if bond_date else "unavailable",
+                    note="debt_rating",
+                    detail=", ".join(
+                        f"{r.get('rating')}:{_round(r.get('weight_pct'), 1)}%"
+                        for r in debt_rating_dist
+                    ) or None,
+                ),
+                _metric(
+                    "issuer_ig_pct",
+                    "主体评级·投资级占比",
+                    value=_round(rates.get("issuer_investment_grade_pct"), 2),
+                    unit="%",
+                    status="derived" if rates.get("issuer_investment_grade_pct") is not None else "unavailable",
+                    note="BBB-及以上 · 占债券市值",
+                ),
+                _metric(
+                    "issuer_below_ig_pct",
+                    "主体评级·低于投资级占比",
+                    value=_round(rates.get("issuer_below_investment_grade_pct"), 2),
+                    unit="%",
+                    status="derived" if rates.get("issuer_below_investment_grade_pct") is not None else "unavailable",
+                    note="含 NR",
+                ),
+                _metric(
+                    "debt_ig_pct",
+                    "债项评级·投资级占比",
+                    value=_round(rates.get("debt_investment_grade_pct"), 2),
+                    unit="%",
+                    status="derived" if rates.get("debt_investment_grade_pct") is not None else "unavailable",
+                    note="BBB-及以上 · 占债券市值",
+                ),
+                _metric(
+                    "debt_below_ig_pct",
+                    "债项评级·低于投资级占比",
+                    value=_round(rates.get("debt_below_investment_grade_pct"), 2),
+                    unit="%",
+                    status="derived" if rates.get("debt_below_investment_grade_pct") is not None else "unavailable",
+                    note="含 NR",
+                ),
                 _metric("low_rating_pct", "低评级债占比（AA+及以下）", value=bond_ext["low_rating_pct"], unit="%", status="computed" if bond_date else "unavailable"),
                 _metric("issuer_hhi", "发行人集中度 HHI", value=_round((rates.get("issuer_concentration") or {}).get("hhi"), 1), unit="", status="derived", note="利率信用"),
                 _metric("top_issuer_pct", "最大发行人占比", value=bond_ext["top_issuer_pct"], unit="%", status="computed" if bond_date else "unavailable"),
@@ -1464,38 +2016,15 @@ async def compute_risk_metric_board(
             "id": "compliance",
             "name": "投资合规与操作风险",
             "name_en": "Compliance & Operational Risk",
-            "metrics": [
-                _metric(
-                    "double_ten_equity",
-                    "双十·单股占比",
-                    value=double_ten_equity,
-                    unit="%",
-                    status="computed" if double_ten_equity is not None else "unavailable",
-                    note="红线 10%" if double_ten_equity is not None and double_ten_equity > 10 else "红线 10%",
-                ),
-                _metric(
-                    "double_ten_bond",
-                    "双十·单债占比",
-                    value=largest_bond,
-                    unit="%",
-                    status="computed" if largest_bond is not None else "unavailable",
-                    note="红线 10%",
-                ),
-                _metric(
-                    "te_limit",
-                    "跟踪误差控制线",
-                    value=_round(te_limit, 3) if te_limit is not None else _round(tracking_error, 3),
-                    unit="%",
-                    status="computed" if te_limit is not None or tracking_error is not None else "unavailable",
-                    detail=f"当前年化跟踪误差 {_round(tracking_error, 3)}%" if tracking_error is not None else None,
-                    note="para_risk_limit_regulatory" if te_limit is not None else bench_note,
-                ),
-                _metric("related_party", "关联交易持仓占比", value=ext.get("related_party"), unit="%", status="computed" if ext.get("related_party") is not None else "unavailable", note="para_port_related_party"),
-                _metric("scope_breach", "监管红线触发数", value=ext.get("scope_breach"), unit="条", status="computed", note="单一发行人超监管上限"),
-                _metric("counterparty", "交易对手限额使用率", value=ext.get("counterparty"), unit="%", status="computed" if ext.get("counterparty") is not None else "unavailable", note="回购本金 / 授信额度"),
-                _metric("bank_limit", "存款银行限额使用率", value=ext.get("bank_limit"), unit="%", status="computed" if ext.get("bank_limit") is not None else "unavailable", note="存款 / 银行授信额度"),
-                _metric("ops_anomaly", "流程异常节点数", value=ext.get("ops_anomaly"), unit="个", status="computed", note="待处理审核请求"),
-            ],
+            "metrics": _build_ams_compliance_metrics(
+                exposure=exposure,
+                assets=assets,
+                bond_ext=bond_ext,
+                rates=rates,
+                ext=ext,
+                nav=nav,
+                base_currency=base_currency,
+            ),
         },
         {
             "id": "stress",
@@ -1550,6 +2079,17 @@ async def compute_risk_metric_board(
         },
         "categories": categories,
         "message": risk.get("message"),
+        "credit_rating_detail": {
+            "as_of_date": rates_asof.isoformat() if hasattr(rates_asof, "isoformat") else str(rates_asof),
+            "total_bond_market_value": rates.get("total_bond_market_value"),
+            "bond_count": rates.get("bond_count"),
+            "issuer_rating_distribution": issuer_rating_dist,
+            "debt_rating_distribution": debt_rating_dist,
+            "issuer_investment_grade_pct": rates.get("issuer_investment_grade_pct"),
+            "issuer_below_investment_grade_pct": rates.get("issuer_below_investment_grade_pct"),
+            "debt_investment_grade_pct": rates.get("debt_investment_grade_pct"),
+            "debt_below_investment_grade_pct": rates.get("debt_below_investment_grade_pct"),
+        },
     }
     await _save_metric_report(db, payload)
     return payload

@@ -12,6 +12,9 @@
 
 本文件顯式構建 FastAPI 應用並掛載 backend API router，避免熱重載下
 對外核心路由偶發丟失（例如 /api/v1/users/me 被 404）。
+
+注意：2_processing 等子模塊改動若未觸發重載，可輕觸本文件强制 reload。
+# touch: lqa computed from holdings 2026-10-16
 """
 from __future__ import annotations
 

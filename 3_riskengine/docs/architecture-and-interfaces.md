@@ -1,4 +1,4 @@
-<!-- 更新时间：2026-09-10（北京时间）｜生成模型：Cursor Grok 4.6 -->
+<!-- 更新时间：2026-10-16（北京时间）｜生成模型：Cursor Composer -->
 
 # RiskEngine 架构和接口
 
@@ -96,7 +96,7 @@ bound = RiskEngine().bind(snapshot)
 | `portfolio()` | 组合/基金聚合、VaR/CVaR/RC/优化 | `aggregate` `risk` `fund_risk` `optimize` |
 | `risk()` | 风险测试十项 + KPI + 组合风险 | `sensitivity` `krd` `var` `kpis` `calculate` |
 | `stress()` / `scenario()` | 多因子压力、命名情景 | `run` `reverse` `named("gfc_2008")` |
-| `liquidity()` | 流动性桶、赎回、MMF SFC | `report` `redemption` `mmf` |
+| `liquidity()` | 流动性桶、赎回、MMF SFC、LQAP 产品压力测试 | `report` `redemption` `mmf` `lqap`（详见 [`product-stress-lqap.md`](product-stress-lqap.md)） |
 | `counterparty()` | 对手方、PFE/EPE、XVA 分摊 | `exposure` `xva` `report` |
 | `pnl()` | 跨期解释 | `explain(previous)` |
 | `limits()` | 限额引擎 | `evaluate` `catalog` `check` |

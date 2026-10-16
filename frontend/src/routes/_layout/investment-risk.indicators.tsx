@@ -130,6 +130,12 @@ function RiskIndicatorsPage() {
     setActiveTab("core")
   }, [])
 
+  // 已移除的業務域 Tab（宏觀 / 因子 / 前置）若仍留在狀態中，回退到風險指標
+  useEffect(() => {
+    const allowed = new Set(["basic-info", "holdings", "core", ...RISK_DOMAINS.map((d) => d.key)])
+    if (!allowed.has(activeTab)) setActiveTab("core")
+  }, [activeTab])
+
   const basicInfo = useQuery({
     queryKey: ["investment-basic-info", fundId, endDate],
     queryFn: () => fsiApi.getBasicInfo(fundId, endDate).then((response) => response.data),
@@ -368,101 +374,110 @@ function RiskIndicatorsPage() {
             </CardContent>
           </Card>
 
-          {indicators.data ? (
-            <>
-              {(indicators.data.message || indicatorSeries.data?.message) ? (
-                <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-                  {indicators.data.message || indicatorSeries.data?.message}
-                </p>
-              ) : null}
-
-              <Card className="min-h-[520px]">
-                <CardHeader>
-                  <ModuleHeader title={t("investmentRisk.indicators.rollingVol")} sqlIds={["SQL-RI-02"]} applicable={ALL_CATEGORIES} />
-                </CardHeader>
-                <CardContent>
-                  <Tabs defaultValue="chart" className="space-y-3">
-                    <TabsList>
-                      <TabsTrigger value="chart">{t("investmentRisk.indicators.tabChart")}</TabsTrigger>
-                      <TabsTrigger value="table">{t("investmentRisk.indicators.tabTable")}</TabsTrigger>
-                    </TabsList>
-                    <div className="h-[360px]">
-                      <TabsContent value="chart" className="mt-0 h-full">
-                        <div className="h-full rounded-lg border p-3">
-                          <TrendLineChart
-                            values={(indicatorSeries.data?.points ?? []).map((row) => row.rolling_volatility_pct ?? 0)}
-                            labels={(indicatorSeries.data?.points ?? []).map((row) => String(row.date).slice(5))}
-                            lineColor="#dc2626"
-                            pointColor="#fb7185"
-                            className="h-full w-full"
-                            height={360}
-                            valueFormatter={(value) =>
-                              Math.abs(value) >= 1 ? `${value.toFixed(2)}%` : `${value.toFixed(4)}%`
-                            }
-                          />
-                        </div>
-                      </TabsContent>
-                      <TabsContent value="table" className="mt-0 h-full">
-                        <IndicatorSeriesWorkbenchTable
-                          fundId={fundId}
-                          startDate={startDate}
-                          endDate={endDate}
-                          points={indicatorSeries.data?.points ?? []}
-                          mode="full"
-                          embedded
-                        />
-                      </TabsContent>
-                    </div>
-                  </Tabs>
-                </CardContent>
-              </Card>
-
-              <IndicatorSeriesWorkbenchTable
-                fundId={fundId}
-                startDate={startDate}
-                endDate={endDate}
-                points={(indicatorSeries.data?.points ?? []).slice(-10)}
-                mode="drawdown"
-                title={t("investmentRisk.indicators.drawdownVarSummary")}
-                toolbarExtra={<SqlViewButton sqlIds={["SQL-RI-02", "SQL-VAR-01"]} />}
-                bodyClassName="h-[280px] overflow-auto rounded-lg border"
-              />
-
-              <Card className="min-h-[220px]">
-                <CardHeader>
-                  <ModuleHeader
-                    title={t("investmentRisk.indicators.turnoverDetail")}
-                    sqlIds={["SQL-RI-03"]}
-                    applicable={EQUITY_CATEGORIES}
-                    category={fundCategory}
-                    notApplicableHint={t("investmentRisk.indicators.turnoverNotApplicable")}
-                  />
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-4 md:grid-cols-3">
-                    <MetricBlock label={t("investmentRisk.indicators.buyAmount")} value={money(indicators.data.equity_turnover?.buy_amount)} />
-                    <MetricBlock label={t("investmentRisk.indicators.sellAmount")} value={money(indicators.data.equity_turnover?.sell_amount)} />
-                    <MetricBlock label={t("investmentRisk.indicators.avgEquityBalance")} value={money(indicators.data.equity_turnover?.average_equity_balance)} />
-                  </div>
-                  <p className="text-muted-foreground mt-4 text-xs">{t("investmentRisk.indicators.turnoverMethodHint", { method: indicators.data.equity_turnover?.method ?? "—" })}</p>
-                </CardContent>
-              </Card>
-
-              {varCompare.data ? (
-                <VarCompareWorkbenchTable
-                  fundId={fundId}
-                  asOfDate={endDate}
-                  maxVarPct={varCompare.data.max_var_pct_nav}
-                  results={varCompare.data.results}
-                  methodLabels={methodLabels}
-                />
-              ) : null}
-            </>
-          ) : (
+          {!indicators.data && !indicators.isFetching ? (
             <p className="text-muted-foreground text-sm">{t("investmentRisk.indicators.noIndicators")}</p>
-          )}
+          ) : null}
 
-          <RiskMetricBoardSection fundId={fundId} startDate={startDate} endDate={endDate} />
+          <RiskMetricBoardSection
+            fundId={fundId}
+            startDate={startDate}
+            endDate={endDate}
+            categoryPanels={{
+              market: (
+                <div className="space-y-4">
+                  {(indicators.data?.message || indicatorSeries.data?.message) ? (
+                    <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                      {indicators.data?.message || indicatorSeries.data?.message}
+                    </p>
+                  ) : null}
+
+                  <Card className="min-h-[520px]">
+                    <CardHeader>
+                      <ModuleHeader title={t("investmentRisk.indicators.rollingVol")} sqlIds={["SQL-RI-02"]} applicable={ALL_CATEGORIES} />
+                    </CardHeader>
+                    <CardContent>
+                      <Tabs defaultValue="chart" className="space-y-3">
+                        <TabsList>
+                          <TabsTrigger value="chart">{t("investmentRisk.indicators.tabChart")}</TabsTrigger>
+                          <TabsTrigger value="table">{t("investmentRisk.indicators.tabTable")}</TabsTrigger>
+                        </TabsList>
+                        <div className="h-[360px]">
+                          <TabsContent value="chart" className="mt-0 h-full">
+                            <div className="h-full rounded-lg border p-3">
+                              <TrendLineChart
+                                values={(indicatorSeries.data?.points ?? []).map((row) => row.rolling_volatility_pct ?? 0)}
+                                labels={(indicatorSeries.data?.points ?? []).map((row) => String(row.date).slice(5))}
+                                lineColor="#dc2626"
+                                pointColor="#fb7185"
+                                className="h-full w-full"
+                                height={360}
+                                valueFormatter={(value) =>
+                                  Math.abs(value) >= 1 ? `${value.toFixed(2)}%` : `${value.toFixed(4)}%`
+                                }
+                              />
+                            </div>
+                          </TabsContent>
+                          <TabsContent value="table" className="mt-0 h-full">
+                            <IndicatorSeriesWorkbenchTable
+                              fundId={fundId}
+                              startDate={startDate}
+                              endDate={endDate}
+                              points={indicatorSeries.data?.points ?? []}
+                              mode="full"
+                              embedded
+                            />
+                          </TabsContent>
+                        </div>
+                      </Tabs>
+                    </CardContent>
+                  </Card>
+
+                  <IndicatorSeriesWorkbenchTable
+                    fundId={fundId}
+                    startDate={startDate}
+                    endDate={endDate}
+                    points={(indicatorSeries.data?.points ?? []).slice(-10)}
+                    mode="drawdown"
+                    title={t("investmentRisk.indicators.drawdownVarSummary")}
+                    toolbarExtra={<SqlViewButton sqlIds={["SQL-RI-02", "SQL-VAR-01"]} />}
+                    bodyClassName="h-[280px] overflow-auto rounded-lg border"
+                  />
+
+                  <Card className="min-h-[220px]">
+                    <CardHeader>
+                      <ModuleHeader
+                        title={t("investmentRisk.indicators.turnoverDetail")}
+                        sqlIds={["SQL-RI-03"]}
+                        applicable={EQUITY_CATEGORIES}
+                        category={fundCategory}
+                        notApplicableHint={t("investmentRisk.indicators.turnoverNotApplicable")}
+                      />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid gap-4 md:grid-cols-3">
+                        <MetricBlock label={t("investmentRisk.indicators.buyAmount")} value={money(indicators.data?.equity_turnover?.buy_amount)} />
+                        <MetricBlock label={t("investmentRisk.indicators.sellAmount")} value={money(indicators.data?.equity_turnover?.sell_amount)} />
+                        <MetricBlock label={t("investmentRisk.indicators.avgEquityBalance")} value={money(indicators.data?.equity_turnover?.average_equity_balance)} />
+                      </div>
+                      <p className="text-muted-foreground mt-4 text-xs">
+                        {t("investmentRisk.indicators.turnoverMethodHint", { method: indicators.data?.equity_turnover?.method ?? "—" })}
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  {varCompare.data ? (
+                    <VarCompareWorkbenchTable
+                      fundId={fundId}
+                      asOfDate={endDate}
+                      maxVarPct={varCompare.data.max_var_pct_nav}
+                      results={varCompare.data.results}
+                      methodLabels={methodLabels}
+                    />
+                  ) : null}
+                </div>
+              ),
+            }}
+          />
         </TabsContent>
 
         {/* 六大業務域：卡片铺满，风格对齐组合概况 */}

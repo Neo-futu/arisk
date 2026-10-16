@@ -161,6 +161,28 @@ async def get_liquidity_stress(
     )
 
 
+@router.get("/lqa-portfolio/{fund_id}")
+async def get_lqa_portfolio(
+    fund_id: str,
+    as_of_date: Annotated[date, Query(description="估值日期 YYYY-MM-DD")],
+    scenario: Annotated[str, Query(description="LQAP 情景代码")] = "SEVERE",
+    redemption_pct: Annotated[float, Query(ge=1, le=100)] = 100,
+    cost_multiple: Annotated[float, Query(ge=0.1, le=5)] = 0.5,
+    include_current_day: Annotated[bool, Query()] = True,
+    db: AsyncSession = Depends(get_db),
+):
+    """彭博 LQAP 组合流动性分析口径（LQA 字段缺失时用 SFC 压测结果近似）。"""
+    return await _ir.compute_lqa_portfolio_analytics(
+        fund_id,
+        as_of_date,
+        db,
+        scenario=scenario,
+        redemption_pct=redemption_pct,
+        cost_multiple=cost_multiple,
+        include_current_day=include_current_day,
+    )
+
+
 @router.get("/pretrade-check/{fund_id}")
 async def get_pretrade_check(
     fund_id: str,
