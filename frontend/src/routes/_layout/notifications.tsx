@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { createFileRoute } from "@tanstack/react-router"
+import { createFileRoute, redirect } from "@tanstack/react-router"
 import { Bell, Building2, Loader2, Mail, MessageSquare, Send } from "lucide-react"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -23,7 +23,13 @@ import { fsiApi, type NotificationChannel } from "@/fsiClient"
 
 export const Route = createFileRoute("/_layout/notifications")({
   component: NotificationsPage,
-  head: () => ({ meta: [{ title: "Notification Center — ARISK" }] }),
+  beforeLoad: async () => {
+    const access = await fsiApi.getMyAccessContext().then((response) => response.data)
+    if (!access.menu_paths.includes("/notifications") && !access.can_manage_system) {
+      throw redirect({ to: "/" })
+    }
+  },
+  head: () => ({ meta: [{ title: "通知中心 — ARISK" }] }),
 })
 
 const CHANNELS: Array<{
@@ -62,14 +68,16 @@ function NotificationsPage() {
   const canSend = configured && title.trim() && content.trim() && (channel !== "email" || recipient.trim())
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5" data-testid="platform-workbench">
       <div>
-        <div className="mb-1 flex items-center gap-2">
-          <Bell className="h-5 w-5 text-primary" />
-          <span className="text-muted-foreground text-sm">{t("notifications.breadcrumb")}</span>
+        <div className="mb-2 flex items-center gap-2">
+          <Badge className="gap-1">
+            <Bell className="h-3.5 w-3.5" />
+            {t("nav.systemManagement")}
+          </Badge>
         </div>
         <h1 className="text-2xl font-bold tracking-tight">{t("notifications.title")}</h1>
-        <p className="text-muted-foreground text-sm">
+        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
           {t("notifications.subtitle")}
         </p>
       </div>

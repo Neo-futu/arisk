@@ -148,7 +148,31 @@ function RatingAndSecuritiesGroup({
   detail: NonNullable<RiskMetricBoardResult["credit_rating_detail"]> | undefined
 }) {
   const { t } = useTranslation()
+  const [ratingSource, setRatingSource] = useState("all")
+  const ratesQuery = useQuery({
+    queryKey: ["metric-board-rating-source", fundId, endDate, ratingSource],
+    queryFn: () => fsiApi.getRatesCredit(fundId, endDate, ratingSource).then((r) => r.data),
+    retry: 1,
+  })
+  const live = ratesQuery.data
+  const issuerDist = live?.issuer_rating_distribution ?? detail?.issuer_rating_distribution ?? []
+  const debtDist = live?.debt_rating_distribution ?? detail?.debt_rating_distribution ?? []
+  const issuerIg = live?.issuer_investment_grade_pct ?? detail?.issuer_investment_grade_pct
+  const issuerBelow = live?.issuer_below_investment_grade_pct ?? detail?.issuer_below_investment_grade_pct
+  const debtIg = live?.debt_investment_grade_pct ?? detail?.debt_investment_grade_pct
+  const debtBelow = live?.debt_below_investment_grade_pct ?? detail?.debt_below_investment_grade_pct
   const securityMetrics = metrics.filter((m) => !RATING_KPI_IDS.has(m.id))
+  const ratingSourceOptions = [
+    { id: "all", label_zh: t("investmentRisk.ratingSecurities.sourceAll") },
+    { id: "domestic", label_zh: t("investmentRisk.ratingSecurities.sourceDomestic") },
+    { id: "csci", label_zh: t("investmentRisk.ratingSecurities.sourceCsci") },
+    { id: "lianhe", label_zh: t("investmentRisk.ratingSecurities.sourceLianhe") },
+    { id: "foreign", label_zh: t("investmentRisk.ratingSecurities.sourceForeign") },
+    { id: "sp", label_zh: t("investmentRisk.ratingSecurities.sourceSp") },
+    { id: "moody", label_zh: t("investmentRisk.ratingSecurities.sourceMoody") },
+    { id: "fitch", label_zh: t("investmentRisk.ratingSecurities.sourceFitch") },
+    { id: "internal", label_zh: t("investmentRisk.ratingSecurities.sourceInternal") },
+  ]
 
   return (
     <div className="space-y-4 rounded-lg border p-4">
@@ -159,30 +183,28 @@ function RatingAndSecuritiesGroup({
         </p>
       </div>
 
-      {detail ? (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-lg border px-3 py-2">
-            <p className="text-muted-foreground text-[11px]">{t("investmentRisk.ratingSecurities.issuerIgPct")}</p>
-            <p className="mt-1 font-mono text-lg font-semibold text-emerald-700 dark:text-emerald-400">
-              {pct(detail.issuer_investment_grade_pct)}
-            </p>
-          </div>
-          <div className="rounded-lg border px-3 py-2">
-            <p className="text-muted-foreground text-[11px]">{t("investmentRisk.ratingSecurities.issuerBelowIgPct")}</p>
-            <p className="mt-1 font-mono text-lg font-semibold">{pct(detail.issuer_below_investment_grade_pct)}</p>
-          </div>
-          <div className="rounded-lg border px-3 py-2">
-            <p className="text-muted-foreground text-[11px]">{t("investmentRisk.ratingSecurities.debtIgPct")}</p>
-            <p className="mt-1 font-mono text-lg font-semibold text-emerald-700 dark:text-emerald-400">
-              {pct(detail.debt_investment_grade_pct)}
-            </p>
-          </div>
-          <div className="rounded-lg border px-3 py-2">
-            <p className="text-muted-foreground text-[11px]">{t("investmentRisk.ratingSecurities.debtBelowIgPct")}</p>
-            <p className="mt-1 font-mono text-lg font-semibold">{pct(detail.debt_below_investment_grade_pct)}</p>
-          </div>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-lg border px-3 py-2">
+          <p className="text-muted-foreground text-[11px]">{t("investmentRisk.ratingSecurities.issuerIgPct")}</p>
+          <p className="mt-1 font-mono text-lg font-semibold text-emerald-700 dark:text-emerald-400">
+            {pct(issuerIg)}
+          </p>
         </div>
-      ) : null}
+        <div className="rounded-lg border px-3 py-2">
+          <p className="text-muted-foreground text-[11px]">{t("investmentRisk.ratingSecurities.issuerBelowIgPct")}</p>
+          <p className="mt-1 font-mono text-lg font-semibold">{pct(issuerBelow)}</p>
+        </div>
+        <div className="rounded-lg border px-3 py-2">
+          <p className="text-muted-foreground text-[11px]">{t("investmentRisk.ratingSecurities.debtIgPct")}</p>
+          <p className="mt-1 font-mono text-lg font-semibold text-emerald-700 dark:text-emerald-400">
+            {pct(debtIg)}
+          </p>
+        </div>
+        <div className="rounded-lg border px-3 py-2">
+          <p className="text-muted-foreground text-[11px]">{t("investmentRisk.ratingSecurities.debtBelowIgPct")}</p>
+          <p className="mt-1 font-mono text-lg font-semibold">{pct(debtBelow)}</p>
+        </div>
+      </div>
 
       {securityMetrics.length > 0 ? (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -200,6 +222,35 @@ function RatingAndSecuritiesGroup({
         </div>
       ) : null}
 
+      {/* 评级来源切换：紧贴主体/债项明细表 */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-sky-300/60 bg-sky-50/70 px-3 py-3 dark:border-sky-800 dark:bg-sky-950/30">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-sky-900 dark:text-sky-100">
+            {t("investmentRisk.ratingSecurities.sourceLabel")}
+          </p>
+          <p className="text-muted-foreground text-xs">
+            {ratesQuery.isFetching
+              ? t("investmentRisk.common.loading")
+              : t("investmentRisk.ratingSecurities.sourceHint", {
+                  count: live?.rating_matched_bond_count ?? 0,
+                  total: live?.bond_count ?? detail?.bond_count ?? "—",
+                })}
+          </p>
+        </div>
+        <select
+          aria-label={t("investmentRisk.ratingSecurities.sourceLabel")}
+          className="min-w-[240px] rounded-md border border-sky-400 bg-background px-3 py-2 text-sm font-medium shadow-sm"
+          value={ratingSource}
+          onChange={(event) => setRatingSource(event.target.value)}
+        >
+          {ratingSourceOptions.map((opt) => (
+            <option key={opt.id} value={opt.id}>
+              {opt.label_zh}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="grid gap-4 xl:grid-cols-2">
         <div className="min-h-[300px] space-y-2">
           <p className="text-sm font-medium">{t("investmentRisk.ratingSecurities.issuerTable")}</p>
@@ -207,7 +258,7 @@ function RatingAndSecuritiesGroup({
             title={t("investmentRisk.ratingSecurities.issuerTable")}
             fundId={fundId}
             endDate={endDate}
-            rows={detail?.issuer_rating_distribution ?? []}
+            rows={issuerDist}
           />
         </div>
         <div className="min-h-[300px] space-y-2">
@@ -216,7 +267,7 @@ function RatingAndSecuritiesGroup({
             title={t("investmentRisk.ratingSecurities.debtTable")}
             fundId={fundId}
             endDate={endDate}
-            rows={detail?.debt_rating_distribution ?? []}
+            rows={debtDist}
           />
         </div>
       </div>

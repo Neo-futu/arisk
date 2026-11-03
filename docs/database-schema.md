@@ -1,6 +1,6 @@
 # ARISK 数据库结构概览
 
-> 更新时间：2026-09-29 北京时间 | 生成模型：Grok 4.7
+> 更新时间：2026-11-03 北京时间 | 生成模型：Composer
 >
 > 本文只做**导航概览**，指向权威源；表结构以下列 SQL / 迁移文件为准，勿在此复述细节。
 
@@ -38,13 +38,16 @@ arisk 使用**单一 PostgreSQL 实例（`fsi_risk` 库）**，两个 schema 共
 
 seed 数据见 `1_datastorage/postgres/seeds/`。
 
-## `fsi` 计算 SQL（`2_processing/sql/{indicators,mmf}/`）
+## `fsi` 计算 SQL / 数据管理 · SQL 资产库（`2_processing/sql/{indicators,mmf}/`）
 
 WAM/WAL/VaR/久期/杠杆/集中度/归因等 atomic / composite 查询沉淀在
-`2_processing/sql/indicators/`（非 mmf 风控指标，如 `atomic_portfolio_wam.sql`、
-`brinson_asset_class.sql` …），mmf 报表 SQL 在 `2_processing/sql/mmf/`，二者平行。
-这些 SQL 作为**资产**经 `/api/v1/fsi/sql-assets/*` 提供目录/正文/AI 上下文（查看与
-参考用途，非执行器）。计算引擎在 `2_processing/tools/{risk,performance}/`。
+`2_processing/sql/indicators/`（如 `atomic_portfolio_wam.sql`、`brinson_asset_class.sql` …），
+mmf 报表包在 `2_processing/sql/mmf/report_*`。二者由计算层路由
+`2_processing/api/routers/sql_assets.py` 扫描为只读资产，经 backend 代理
+`/api/v1/fsi/sql-assets/{catalog,asset,context}` 供前端 `/sql-library`（数据管理中心 ·
+SQL 资产库）浏览、复制、下载，以及打包 Markdown AI 上下文；**不执行 SQL**。
+MMF 按 `report_*` 子目录归类；筛选包上下文有条数上限。实际计算引擎仍在
+`2_processing/tools/{risk,performance}/`。
 
 ## `iam` 权限 schema（backend）
 
@@ -72,11 +75,16 @@ portfolios/holdings/risk-free-options/chart PNG，登录即可）。**对接平�
 与 `fsi.balance_portfolio_nav`（每日 NAV 历史）。计算层 `2_processing/api/routers/valuation.py`（`/report`、`/pnl`），
 后端代理 `/api/v1/fsi/valuation/*`（只读，`portfolio.view` 组合级授权）。菜单 `/valuation` 以 `BETA` 灰度上线。无新表。
 
-**指标探索引擎（DataJungle）**：`fsi.mktdata_indicator_def`（指标目录）+ `fsi.mktdata_indicator_series`
-（long-format 时序观测，可界面增删改并直连底层表）承载「选指标/国家/周期/数据源 → 对比折线 + CSV 导出」。
-schema 见 `1_datastorage/postgres/schema/017_indicator_explorer.sql`（含示例种子）；计算层
-`2_processing/api/routers/indicators.py`，后端代理 `/api/v1/fsi/indicator-explorer/*`（读=登录、写=`market_data.manage`）。
-菜单 `/indicator-explorer` 以 `BETA` 灰度上线。
+**市场数据与指标**（数据管理中心子菜单 `/indicator-explorer`）：
+
+1. **市场行情**：复用数据管理 CRUD，表为 `fsi.mktdata_quotes` / `mktdata_index_quotes` /
+   `mktdata_futures_quotes` / `mktdata_fx_rate` / `mktdata_fund_nav` / `mktdata_security_quotes`
+  （路由 `data_management.py`，写权限 `market_data.manage`）。
+2. **宏观指标**：`fsi.mktdata_indicator_def`（目录）+ `fsi.mktdata_indicator_series`（long-format 时序），
+   支持按类别/国家/周期对比折线、行内维护观测点与 CSV 导出。schema 见
+   `1_datastorage/postgres/schema/017_indicator_explorer.sql`；API
+   `2_processing/api/routers/indicators.py` → `/api/v1/fsi/indicator-explorer/*`
+   （读=登录、写=`market_data.manage`）。组合优化无风险利率预设亦读自此序列表。
 
 **灰度上线（模块菜单显隐）**：`iam.menu.release_stage`（`GA`/`BETA`/`HIDDEN`）在 per-role
 `role_menu` 授权之上再叠加一层发布阶段——`GA` 对已授权用户可见；`BETA` 仅超级管理员预览

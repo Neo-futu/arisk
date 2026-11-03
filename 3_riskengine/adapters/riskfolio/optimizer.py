@@ -62,7 +62,25 @@ def apply_constraints(
             lo - 1e-12 <= clipped[a] <= hi + 1e-12 for a in assets
         ):
             break
-    clipped = _normalize(clipped)
+    # Final normalize can push a clipped weight above ``hi`` by float noise;
+    # re-clip once and absorb the residual into the largest under-cap name.
+    if abs(sum(clipped.values()) - 1.0) >= 1e-12:
+        clipped = _normalize(clipped)
+        clipped = {a: min(max(clipped[a], lo), hi) for a in assets}
+        residual = 1.0 - sum(clipped.values())
+        if abs(residual) > 1e-12:
+            room = sorted(
+                ((a, hi - clipped[a]) for a in assets if hi - clipped[a] > 1e-15),
+                key=lambda item: item[1],
+                reverse=True,
+            )
+            for asset, capacity in room:
+                take = min(capacity, residual) if residual > 0 else max(-clipped[asset] + lo, residual)
+                clipped[asset] += take
+                residual -= take
+                if abs(residual) <= 1e-12:
+                    break
+    clipped = {a: min(max(float(clipped[a]), lo), hi) for a in assets}
 
     cash = str(cfg.get("cash_asset") or "CASH")
     min_liq = float(cfg.get("min_liquidity_pct") or 0.0)

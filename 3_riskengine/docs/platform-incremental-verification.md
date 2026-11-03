@@ -1,4 +1,4 @@
-<!-- 更新时间：2026-09-11（北京时间）｜生成模型：Cursor Composer -->
+<!-- 更新时间：2026-11-03（北京时间）｜生成模型：Composer -->
 
 # 在平台上按切片开发完善 RiskEngine
 
@@ -62,7 +62,7 @@ bound = RiskEngine().bind(snapshot)
 | `BOND` | `fsi.balance_bond` | financepy `bond_discount_curve` | `products/fixed_income.py` `Bond` |
 | `CD` | `fsi.balance_cd` | financepy `bond_zero_or_deposit` | 同上 `CertificateOfDeposit` |
 | `DEPOSIT` | `fsi.balance_deposit` | financepy `ibor_deposit` | 同上 `Deposit` |
-| `REPO` | metadata / 待补表 | financepy `repo_carry` | **产品类待补** |
+| `REPO` | metadata / 持仓 | financepy `repo_carry` | `products/fixed_income.py` `Repo` |
 | `MMF` | 货币账本或 FUND+MMF 提示 | riskengine `mmf_nav_yield` | `products/money_market/fund.py` |
 | `FX` | metadata `asset_class=FX` | ore `fx_spot` | `products/fx.py` |
 | `FX_FORWARD` | metadata | ore `fx_forward` | 同上 |
@@ -72,7 +72,7 @@ bound = RiskEngine().bind(snapshot)
 | `IRS` / `SWAP` | metadata `notional` `pay_fixed` | ore `irs` / `swap` | `products/rates.py` |
 | `SWAPTION` | metadata | ore `swaption`（不构造 Swaption 对象） | 同上 |
 | `CDS` | metadata `hazard_rate` | ore `cds`（不构造 CDS 对象） | `products/credit.py` |
-| `STRUCTURED` | metadata | ore `scripted_or_otc` | **产品类待补** |
+| `STRUCTURED` | metadata | ore `scripted_or_otc` | `products/structured.py` `StructuredNote` |
 
 夹具证券代码（轨道 A）：
 
@@ -81,6 +81,7 @@ bound = RiskEngine().bind(snapshot)
 | `sample_snapshot` | `BOND5Y` `US_EQ` `CASH` |
 | `sample_mmf_snapshot` | `TBILL90` `CD180` `DEP30` `CASH`（PRODUCT 收成一只 MMF） |
 | `sample_otc_snapshot` | `FXSPOT` `FXFWD` `FXOPT` `EQFUT` `EQOPT` `IRS5Y` `SWPT` `CDS5Y` |
+| `sample_repo_structured_snapshot` | `REPO7D` `STRUCT1` |
 
 ### 1.3 估值定价（对「这一个产品」要做的定价动作）
 
@@ -179,7 +180,7 @@ OTC 放进 `metadata`：`notional` `strike` `volatility` `pair` `pay_fixed` `haz
 | 9 | 信用 | `CDS` | CREDIT_SPREAD | CS01 / XVA | 利差扩大 |
 | 10 | 组合 | 全产品账本 | 加总 PV≈NAV | VaR/CVaR、Limits | 四个内置情景 |
 
-`REPO` / `STRUCTURED`：先「组装 + 零冲击账面」，再补定价。
+`REPO` / `STRUCTURED`：组装 + 零冲击账面 + FinancePy `repo_carry` / ORE scripted analytic 已接通。
 
 ---
 

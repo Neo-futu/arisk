@@ -252,6 +252,7 @@ async def load_effective_pretrade_limits(
         "duration_years": 4.0,
         "issuer_pct_nav": 10.0,
         "tracking_error_proxy_pct": 5.0,
+        "var_pct_nav": 2.0,
     }
     applied: list[dict[str, object]] = []
     for row in rows:
@@ -265,9 +266,11 @@ async def load_effective_pretrade_limits(
             key = "issuer_pct_nav"
         elif dimension == "TRACKING_ERROR" or code in {"PRETRADE_TRACKING_ERROR", "MAX_TRACKING_ERROR"}:
             key = "tracking_error_proxy_pct"
+        elif dimension in {"VAR", "MARKET_RISK"} or code in {"PRETRADE_VAR", "MAX_VAR", "VAR_LIMIT"}:
+            key = "var_pct_nav"
         if not key or str(row["direction"]).upper() != "MAX":
             continue
-        limits[key] = min(limits[key], value)
+        limits[key] = min(float(limits[key]), value)
         applied.append(
             {
                 "application_id": int(row["application_id"]),

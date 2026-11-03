@@ -46,9 +46,12 @@ async def pnl_analysis(
     start: date | None = None,
     end: date | None = None,
 ) -> Any:
+    # httpx encodes None as empty string (?start=&end=), which FastAPI date
+    # parsing rejects with 422 — only forward provided bounds.
+    params = {k: v for k, v in {"start": start, "end": end}.items() if v is not None}
     return await _proxy(
         client,
         "get",
         f"/valuation/pnl/{fund_id}",
-        params={"start": start, "end": end},
+        params=params,
     )

@@ -37,6 +37,30 @@ if settings.POSTGRES_IAM_AUTH:
 # for more details: https://github.com/fastapi/full-stack-fastapi-template/issues/28
 
 
+# Local/demo accounts kept short for the Admin UI (email + display name).
+_DEMO_USERS: tuple[tuple[str, str, str, bool], ...] = (
+    # email, full_name, role_code, is_superuser
+    ("risk@fsi.com", "Risk", "INVESTMENT_MANAGER", False),
+    ("mgr@fsi.com", "Mgr", "INVESTMENT_DIRECTOR", False),
+    ("view@fsi.com", "View", "PORTFOLIO_VIEWER", False),
+)
+
+
+def _ensure_role(session: Session, user_id, role_code: str) -> None:
+    session.execute(
+        text(
+            """
+            INSERT INTO iam.user_role (user_id, role_id, created_at)
+            SELECT :user_id, r.id, NOW()
+            FROM iam.role r
+            WHERE r.code = :role_code
+            ON CONFLICT DO NOTHING
+            """
+        ),
+        {"user_id": user_id, "role_code": role_code},
+    )
+
+
 def init_db(session: Session) -> None:
     # Tables should be created with Alembic migrations
     # But if you don't want to use migrations, create
@@ -54,25 +78,47 @@ def init_db(session: Session) -> None:
             email=settings.FIRST_SUPERUSER,
             password=settings.FIRST_SUPERUSER_PASSWORD,
             is_superuser=True,
+            full_name="Admin",
         )
         user = crud.create_user(session=session, user_create=user_in)
+    elif not user.full_name:
+        user.full_name = "Admin"
+        session.add(user)
+        session.commit()
+        session.refresh(user)
 
     # Ensure the bootstrap superuser holds SYSTEM_ADMIN so a fresh install (where the
     # superuser is created after the RBAC seed migration) still lands in a usable state.
     # Guarded so it is a no-op until the RBAC seed migration has run.
     try:
-        session.execute(
-            text(
-                """
-                INSERT INTO iam.user_role (user_id, role_id, created_at)
-                SELECT :user_id, r.id, NOW()
-                FROM iam.role r
-                WHERE r.code = 'SYSTEM_ADMIN'
-                ON CONFLICT DO NOTHING
-                """
-            ),
-            {"user_id": user.id},
-        )
+        _ensure_role(session, user.id, "SYSTEM_ADMIN")
         session.commit()
+    except Exception:
+        session.rollback()
+
+    # Small set of short demo accounts for Admin / access demos (idempotent).
+    try:
+        for email, full_name, role_code, is_superuser in _DEMO_USERS:
+            existing = session.exec(select(User).where(User.email == email)).first()
+            if existing:
+                if not existing.full_name:
+                    existing.full_name = full_name
+                    session.add(existing)
+                    session.commit()
+                _ensure_role(session, existing.id, role_code)
+                session.commit()
+                continue
+            created = crud.create_user(
+                session=session,
+                user_create=UserCreate(
+                    email=email,
+                    password=settings.FIRST_SUPERUSER_PASSWORD,
+                    full_name=full_name,
+                    is_superuser=is_superuser,
+                    is_active=True,
+                ),
+            )
+            _ensure_role(session, created.id, role_code)
+            session.commit()
     except Exception:
         session.rollback()

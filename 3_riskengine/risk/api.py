@@ -81,6 +81,98 @@ class RiskAPI:
 
         return run(self._bound, bump_bps)
 
+    def rates_credit(
+        self,
+        *,
+        meta: Any | None = None,
+        rating_source: str = "all",
+        top_n: int = 10,
+    ) -> dict[str, Any]:
+        """``/investment-risk/indicators`` 利率信用：久期/DV01/CS01/KRD/评级/发行人集中。"""
+
+        from .rates_credit.pack import fundamentals
+
+        return fundamentals(
+            self._bound,
+            meta=meta,
+            rating_source=rating_source,
+            top_n=top_n,
+        )
+
+    def factor_risk(
+        self,
+        *,
+        meta: Any | None = None,
+        confidence: float = 0.99,
+        include_portfolio_risk: bool = True,
+    ) -> dict[str, Any]:
+        """``/investment-risk/factor-risk``：因子敞口 / 标准冲击 PnL / RC / Beta·TE。"""
+
+        from .factor_risk.pack import fundamentals
+
+        return fundamentals(
+            self._bound,
+            meta=meta,
+            confidence=confidence,
+            include_portfolio_risk=include_portfolio_risk,
+        )
+
+    def factor_behavior(
+        self,
+        *,
+        meta: Any | None = None,
+        crowding_top_n: int = 20,
+    ) -> dict[str, Any]:
+        """``/investment-risk/factor-behavior``：Momentum/LowVol/Size、行业 HHI、拥挤度。"""
+
+        from .factor_behavior.pack import fundamentals
+
+        return fundamentals(self._bound, meta=meta, crowding_top_n=crowding_top_n)
+
+    def pretrade_budget(
+        self,
+        *,
+        trade_amount: float = 10_000_000.0,
+        trade_side: str = "BUY",
+        asset_class: str = "BOND",
+        duration_years: float = 2.0,
+        issuer_name: str = "UNKNOWN_ISSUER",
+        limits: Any | None = None,
+        bond_stats: Any | None = None,
+        nav: float | None = None,
+        confidence: float = 0.99,
+        applied_rules: Any | None = None,
+    ) -> dict[str, Any]:
+        """``/investment-risk/pretrade-budget#risk-budget``：风险预算与前置试算闸门。"""
+
+        from .pretrade.pack import fundamentals
+
+        return fundamentals(
+            self._bound,
+            trade_amount=trade_amount,
+            trade_side=trade_side,
+            asset_class=asset_class,
+            duration_years=duration_years,
+            issuer_name=issuer_name,
+            limits=limits,
+            bond_stats=bond_stats,
+            nav=nav,
+            confidence=confidence,
+            applied_rules=applied_rules,
+        )
+
+    def risk_budget(self, **kwargs: Any) -> dict[str, Any]:
+        """域别名：同 ``pretrade_budget``。"""
+
+        return self.pretrade_budget(**kwargs)
+
+    def risk_testing(self, analytic: str = "SENSITIVITY", **kwargs: Any) -> dict[str, Any]:
+        """``/risk-testing/*``：敏感度 / 压力 / 情景 / 反向压力 / 尾部 / KRD / PnL / 回测 / XVA。"""
+
+        from .scenario_testing.pack import fundamentals
+
+        return fundamentals(self._bound, analytic=analytic, **kwargs)
+
     def pnl_explain(self, previous: Any) -> dict[str, Any]:
         from .testing import pnl_explain as run
 

@@ -9,7 +9,7 @@ from typing import Any
 
 from ..core.contracts import ProductKind
 
-FIXED_INCOME = frozenset({"BOND", "CD", "DEPOSIT"})
+FIXED_INCOME = frozenset({"BOND", "CD", "DEPOSIT", "REPO", "REV_REPO"})
 EQUITY_LIKE = frozenset({"EQUITY"})
 FUND_LIKE = frozenset({"FUND", "ETF"})
 MMF_LIKE = frozenset({"MMF"})
@@ -53,6 +53,12 @@ _KIND_BY_ASSET = {
     "SWAPTION": ProductKind.SWAPTION,
     "CDS": ProductKind.CDS,
     "CREDIT_DEFAULT_SWAP": ProductKind.CDS,
+    "REPO": ProductKind.REPO,
+    "REV_REPO": ProductKind.REPO,
+    "REVERSE_REPO": ProductKind.REPO,
+    "STRUCTURED": ProductKind.STRUCTURED,
+    "STRUCTURED_NOTE": ProductKind.STRUCTURED,
+    "SCRIPTED": ProductKind.STRUCTURED,
 }
 
 
@@ -141,7 +147,7 @@ def product_kind_of(position: Any) -> ProductKind:
 
 def factor_family(position: Any, reporting_currency: str) -> str:
     kind = product_kind_of(position)
-    if kind in {ProductKind.BOND, ProductKind.CD, ProductKind.DEPOSIT}:
+    if kind in {ProductKind.BOND, ProductKind.CD, ProductKind.DEPOSIT, ProductKind.REPO}:
         family = "RATE_CREDIT"
     elif kind is ProductKind.EQUITY:
         family = "EQUITY"
@@ -159,6 +165,8 @@ def factor_family(position: Any, reporting_currency: str) -> str:
         family = "EQUITY"
     elif kind is ProductKind.CDS:
         family = "CREDIT"
+    elif kind is ProductKind.STRUCTURED:
+        family = "STRUCTURED"
     else:
         family = kind.value
     currency = str(getattr(position, "currency", "") or reporting_currency)

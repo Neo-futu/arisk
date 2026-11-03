@@ -53,7 +53,7 @@ const FEATURE_ENTRIES: FeatureEntry[] = [
   },
   {
     id: "investment-risk",
-    path: "/investment-risk",
+    path: "/investment-risk/overview",
     titleKey: "nav.investmentRisk",
     descKey: "home.feat.ir",
     categoryKey: "home.catInvest",
@@ -104,7 +104,13 @@ const FEATURE_ENTRIES: FeatureEntry[] = [
   {
     id: "data-management",
     path: "/data-management",
-    permissionPaths: ["/data-management", "/positions"],
+    permissionPaths: [
+      "/data-management",
+      "/indicator-explorer",
+      "/sql-library",
+      "/valuation",
+      "/trading",
+    ],
     titleKey: "nav.dataManagement",
     descKey: "home.feat.data",
     categoryKey: "home.catOps",

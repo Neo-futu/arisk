@@ -75,3 +75,84 @@ class PortfolioAPI:
             risk_budgets=risk_budgets,
             confidence=confidence,
         )
+
+    def fundamentals(self, *, meta: Mapping[str, Any] | None = None) -> dict[str, Any]:
+        """``/portfolio-cockpit`` 五大业务模块：组合 / 规模 / 持仓资产类型 / 收益 / 净值。"""
+
+        from .cockpit import fundamentals
+
+        return fundamentals(self._bound, meta=meta)
+
+    def overview(
+        self,
+        *,
+        meta: Mapping[str, Any] | None = None,
+        history: Any | None = None,
+        top_n: int = 10,
+    ) -> dict[str, Any]:
+        """``/investment-risk/overview``：组合 / 区间收益 / 配置 / Top10 股债 / 行业。"""
+
+        from .overview import fundamentals as overview_fundamentals
+
+        return overview_fundamentals(self._bound, meta=meta, history=history, top_n=top_n)
+
+    def basic_info(
+        self,
+        *,
+        meta: Mapping[str, Any] | None = None,
+        managers: Any | None = None,
+    ) -> dict[str, Any]:
+        """``/investment-risk/indicators`` 基本信息：组合 / 币种 / 成立日 / WAM·WAL / 投管人员。"""
+
+        from .basic_info import fundamentals as basic_info_fundamentals
+
+        return basic_info_fundamentals(self._bound, meta=meta, managers=managers)
+
+    def risk_indicators(
+        self,
+        *,
+        meta: Mapping[str, Any] | None = None,
+        confidence: float = 0.99,
+        horizon_days: int = 1,
+        rolling_window: int = 20,
+        period_start: Any | None = None,
+        period_end: Any | None = None,
+    ) -> dict[str, Any]:
+        """``/investment-risk/indicators#risk-exposure`` 风险指标：核心五卡 / 滚动波动 / VaR三方法 / 六大风控类型。"""
+
+        from .risk_indicators import fundamentals as risk_indicators_fundamentals
+
+        return risk_indicators_fundamentals(
+            self._bound,
+            meta=meta,
+            confidence=confidence,
+            horizon_days=horizon_days,
+            rolling_window=rolling_window,
+            period_start=period_start,
+            period_end=period_end,
+        )
+
+    def cockpit(self, *, meta: Mapping[str, Any] | None = None) -> dict[str, Any]:
+        """``/portfolio-cockpit`` 单组合行 + 业务模块打包。"""
+
+        from .cockpit import row_from_snapshot
+
+        return row_from_snapshot(self._bound, meta=meta)
+
+    def portfolio_opt(
+        self,
+        *,
+        meta: Mapping[str, Any] | None = None,
+        run_governed: bool = True,
+        governed_method: str = "hrp",
+    ) -> dict[str, Any]:
+        """``/portfolio-opt``：收益模型 / 有效前沿 / 画像 / HRP 闸门（提案非成交）。"""
+
+        from .optimization.pack import fundamentals
+
+        return fundamentals(
+            self._bound,
+            meta=meta,
+            run_governed=run_governed,
+            governed_method=governed_method,
+        )

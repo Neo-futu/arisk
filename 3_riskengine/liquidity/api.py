@@ -59,6 +59,28 @@ class LiquidityAPI:
             model="bloomberg_lqap",
         )
 
+    def product_stress(
+        self,
+        *,
+        meta: Any | None = None,
+        scenario_code: str = "SEVERE",
+        redemption_pct: float = 100.0,
+        cost_multiple: float = 0.5,
+        include_current_day: bool = True,
+    ) -> dict[str, Any]:
+        """``/investment-risk/indicators`` 产品压力测试：假设 / Overview / 赎回 / Horizon / Stress / LQA 字段。"""
+
+        from .product_stress.pack import fundamentals
+
+        return fundamentals(
+            self._bound,
+            meta=meta,
+            scenario_code=scenario_code,
+            redemption_pct=redemption_pct,
+            cost_multiple=cost_multiple,
+            include_current_day=include_current_day,
+        )
+
     def report(self, redemption_pct: float = 20.0) -> dict[str, Any]:
         ratio = self.ratio()
         buckets = self.buckets()

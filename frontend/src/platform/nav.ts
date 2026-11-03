@@ -3,26 +3,14 @@
 export const INVESTMENT_RISK_NAV = [
   { id: "investment-overview", titleKey: "nav.portfolioOverview", path: "/investment-risk/overview" },
   { id: "risk-exposure", titleKey: "nav.riskExposure", path: "/investment-risk/indicators#risk-exposure" },
-  { id: "factor-risk", titleKey: "nav.factorRisk", path: "/investment-risk/factor-behavior#factor-risk" },
-  { id: "market-risk", titleKey: "nav.marketRisk", path: "/investment-risk/macro-dynamics#market-risk" },
-  { id: "rates-credit", titleKey: "nav.ratesCreditRisk", path: "/investment-risk/rates-credit" },
-  { id: "liquidity-risk", titleKey: "nav.liquidityRisk", path: "/investment-risk/liquidity-stress" },
-  { id: "concentration-risk", titleKey: "nav.concentrationRisk", path: "/investment-risk/rates-credit#concentration-risk" },
-  { id: "counterparty-risk", titleKey: "nav.counterpartyRisk", path: "/investment-risk/rates-credit#counterparty-risk" },
-  { id: "leverage-derivatives-risk", titleKey: "nav.leverageDerivativesRisk", path: "/investment-risk/indicators#leverage-derivatives-risk" },
-  { id: "performance-pnl", titleKey: "nav.performancePnlAttribution", path: "/investment-risk/attribution" },
-  { id: "risk-budget", titleKey: "nav.riskBudget", path: "/investment-risk/pretrade-budget#risk-budget" },
-  { id: "macro-dynamics", titleKey: "nav.macroDynamics", path: "/investment-risk/macro-dynamics" },
+  { id: "factor-risk", titleKey: "nav.factorRisk", path: "/investment-risk/factor-risk" },
   { id: "factor-behavior", titleKey: "nav.factorBehavior", path: "/investment-risk/factor-behavior" },
 ] as const
 
+/** 组合优化风险预算：组合配置页 + 风险预算与前置试算。 */
 export const PORTFOLIO_OPT_NAV = [
-  { id: "portfolio-construction", titleKey: "nav.portfolioConstruction", path: "/portfolio-opt#construction" },
-  { id: "po-optimization", titleKey: "nav.poOptimization", path: "/portfolio-opt#optimization" },
-  { id: "po-constraints", titleKey: "nav.poConstraints", path: "/portfolio-opt#constraints" },
-  { id: "simulated-portfolio", titleKey: "nav.simulatedPortfolio", path: "/portfolio-opt#simulation" },
-  { id: "po-comparison", titleKey: "nav.poComparison", path: "/portfolio-opt#comparison" },
-  { id: "portfolio-validation", titleKey: "nav.portfolioValidation", path: "/portfolio-opt#validation" },
+  { id: "portfolio-opt-home", titleKey: "nav.portfolioAllocationOptimization", path: "/portfolio-opt" },
+  { id: "risk-budget", titleKey: "nav.pretradeBudget", path: "/investment-risk/pretrade-budget#risk-budget" },
 ] as const
 
 export const RISK_TESTING_NAV = [
@@ -90,6 +78,7 @@ export function moduleFromPath(pathname: string): string {
   if (pathname.startsWith("/data-management")) return "data-management"
   if (pathname.startsWith("/portfolio-cockpit")) return "portfolio-cockpit"
   if (pathname.startsWith("/indicator-explorer")) return "market-data"
+  if (pathname.startsWith("/sql-library")) return "sql-library"
   if (pathname.startsWith("/chat")) return "agent-ai"
   if (pathname.startsWith("/autorisk")) return "autorisk"
   return pathname.replace(/^\//, "") || "dashboard"

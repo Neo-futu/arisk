@@ -1,12 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router"
-
-import { InvestmentRiskModuleHome } from "@/modules/investment-risk/InvestmentRiskModuleHome"
+import { createFileRoute, redirect } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/_layout/investment-risk/")({
-  component: InvestmentRiskIndexPage,
-  head: () => ({ meta: [{ title: "投資風險模塊 — ARISK" }] }),
+  beforeLoad: () => {
+    throw redirect({ to: "/investment-risk/overview" })
+  },
 })
-
-function InvestmentRiskIndexPage() {
-  return <InvestmentRiskModuleHome />
-}

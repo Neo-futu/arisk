@@ -3,10 +3,13 @@ from __future__ import annotations
 
 from .investanalsis import (
     compute_factor_behavior_risk,
+    compute_factor_risk,
     compute_liquidity_stress_testing,
     compute_macro_market_dynamics,
+    compute_model_attribution,
     compute_performance_attribution,
     compute_performance_attribution_timeseries,
+    list_attribution_benchmarks,
     compute_portfolio_basic_info,
     compute_portfolio_overview,
     compute_portfolio_overview_timeseries,
@@ -34,7 +37,9 @@ __all__ = [
     "compute_portfolio_basic_info",
     "compute_security_holdings",
     "compute_risk_indicators",
+    "compute_model_attribution",
     "compute_performance_attribution",
+    "list_attribution_benchmarks",
     "compute_portfolio_overview_timeseries",
     "compute_risk_indicator_timeseries",
     "compute_performance_attribution_timeseries",
@@ -43,6 +48,7 @@ __all__ = [
     "compute_pretrade_risk_budget",
     "compute_macro_market_dynamics",
     "compute_factor_behavior_risk",
+    "compute_factor_risk",
     "compute_risk_metric_board",
     "read_reported_exposure",
 ]

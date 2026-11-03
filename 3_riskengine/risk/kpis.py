@@ -14,7 +14,7 @@ import numpy as np
 from ..core.engine import RiskEngine
 from ..core.lineage import RISKENGINE_NAME, RISKENGINE_VERSION
 from ..adapters.riskfolio import RiskfolioAdapter
-from ..instruments.classify import EQUITY_LIKE, FIXED_INCOME, issuer_name
+from ..instruments.classify import CASH_LIKE, EQUITY_LIKE, FIXED_INCOME, FUND_LIKE, MMF_LIKE, issuer_name
 
 KPI_IDS: tuple[str, ...] = (
     "VaR",
@@ -264,16 +264,22 @@ def kpi_net_exposure(snapshot: Any) -> dict[str, Any]:
 
 
 def kpi_factor_exposure(snapshot: Any) -> dict[str, Any]:
+    """Group absolute MV into RATE_CREDIT / EQUITY / FUND / MMF / CASH / FX (+ OTHER)."""
     buckets = defaultdict(float)
     for position in snapshot.positions:
-        if position.asset_class in FIXED_INCOME:
+        klass = position.asset_class or "OTHER"
+        if klass in FIXED_INCOME:
             factor = "RATE_CREDIT"
-        elif position.asset_class in EQUITY_LIKE:
+        elif klass in EQUITY_LIKE:
             factor = "EQUITY"
-        elif position.asset_class == "CASH":
+        elif klass in MMF_LIKE:
+            factor = "MMF"
+        elif klass in FUND_LIKE:
+            factor = "FUND"
+        elif klass in CASH_LIKE:
             factor = "CASH"
         else:
-            factor = position.asset_class or "OTHER"
+            factor = klass
         if position.currency != snapshot.reporting_currency:
             buckets["FX"] += abs(position.market_value_base)
         buckets[factor] += abs(position.market_value_base)
@@ -282,7 +288,7 @@ def kpi_factor_exposure(snapshot: Any) -> dict[str, Any]:
     return _report(
         "Factor Exposure",
         inputs={"reporting_currency": snapshot.reporting_currency, "nav": snapshot.net_asset},
-        calculation="absolute_mv_grouped_by_rate_equity_fx_cash",
+        calculation="absolute_mv_grouped_by_rate_equity_fund_mmf_fx_cash",
         engine=RISKENGINE_NAME,
         formula="FE_f = Σ_{i∈f} |MV_i| / NAV",
         result=rows,
@@ -495,6 +501,18 @@ KPI_FUNCS: dict[str, Any] = {
 }
 
 
+def _benchmark_series(
+    snapshot: Any,
+    benchmark_returns: Iterable[float] | None = None,
+) -> list[float] | None:
+    if benchmark_returns is not None:
+        return [float(x) for x in benchmark_returns]
+    attached = getattr(snapshot, "benchmark_returns", None)
+    if attached:
+        return [float(x) for x in attached]
+    return None
+
+
 def compute_selected(
     snapshot: Any,
     kpi_ids: Iterable[str],
@@ -502,6 +520,7 @@ def compute_selected(
     confidence: float = 0.99,
     benchmark_returns: Iterable[float] | None = None,
 ) -> dict[str, dict[str, Any]]:
+    bench = _benchmark_series(snapshot, benchmark_returns)
     reports: dict[str, dict[str, Any]] = {}
     for kpi_id in kpi_ids:
         func = KPI_FUNCS[kpi_id]
@@ -510,7 +529,7 @@ def compute_selected(
         if "confidence" in names:
             kwargs["confidence"] = confidence
         if "benchmark_returns" in names:
-            kwargs["benchmark_returns"] = benchmark_returns
+            kwargs["benchmark_returns"] = bench
         reports[kpi_id] = func(snapshot, **kwargs)
     return reports
 
@@ -533,6 +552,7 @@ def compute_kpi_pack(
         "reporting_currency": snapshot.reporting_currency,
         "engine": RISKENGINE_NAME,
         "engine_version": RISKENGINE_VERSION,
+        "benchmark_id": getattr(snapshot, "benchmark_id", None),
         "kpis": kpis,
         "data_quality": _quality(snapshot),
     }

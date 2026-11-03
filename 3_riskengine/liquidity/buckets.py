@@ -36,6 +36,8 @@ def bucket_for(product: Any, as_of) -> str:
     if kind in OTC_STICKY:
         return "ILLIQUID"
     days = float(days_to_maturity(product, as_of) or 0.0)
+    if kind is ProductKind.REPO and days <= 7:
+        return "T0" if days <= 1 else "1W"
     if days <= 1:
         return "T0"
     if days <= 7:

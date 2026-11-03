@@ -12,24 +12,11 @@ IR_IDS = (
     "investment-overview",
     "risk-exposure",
     "factor-risk",
-    "market-risk",
-    "rates-credit",
-    "liquidity-risk",
-    "concentration-risk",
-    "counterparty-risk",
-    "leverage-derivatives-risk",
-    "performance-pnl",
-    "risk-budget",
-    "macro-dynamics",
     "factor-behavior",
 )
 PO_IDS = (
-    "portfolio-construction",
-    "po-optimization",
-    "po-constraints",
-    "simulated-portfolio",
-    "po-comparison",
-    "portfolio-validation",
+    "portfolio-opt-home",
+    "risk-budget",
 )
 RT_IDS = (
     "sensitivity",
@@ -71,9 +58,10 @@ FORBIDDEN_IMPORTS = (
 def test_nav_contract_covers_wave9_views() -> None:
     for item_id in IR_IDS + PO_IDS + RT_IDS + GOV_IDS:
         assert f'id: "{item_id}"' in NAV
+    assert 'path: "/investment-risk/pretrade-budget#risk-budget"' in NAV
     assert "WORKBENCH_FLOW" in NAV
     assert "Parameter" in NAV
-    assert "AI Copilot" in NAV
+    assert "Ask AI" in NAV
     assert 'path: "/risk-governance#model-validation"' in NAV
     assert 'path: "/risk-governance#liquidity"' in NAV
 

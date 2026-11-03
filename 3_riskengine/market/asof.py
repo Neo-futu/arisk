@@ -52,6 +52,9 @@ class AsOfMarketPanel:
     resolved_source: str = MARKET_SOURCE_DB
     fallback_enabled: bool = False
     fallback_source: str | None = None
+    benchmark_id: str | None = None
+    index_levels: dict[str, float] = field(default_factory=dict)
+    benchmark_returns: list[float] = field(default_factory=list)
 
     def quality(self) -> dict[str, Any]:
         return {
@@ -64,6 +67,9 @@ class AsOfMarketPanel:
             "quote_count": len(self.prices),
             "fx_count": len(self.fx),
             "bond_risk_count": len(self.bond_risk),
+            "benchmark_id": self.benchmark_id,
+            "index_level_count": len(self.index_levels),
+            "benchmark_return_count": len(self.benchmark_returns),
             "missing": list(self.missing),
             "stale": list(self.stale),
             "abnormal": list(self.abnormal),

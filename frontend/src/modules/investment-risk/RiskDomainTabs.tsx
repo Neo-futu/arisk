@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
-import { useMemo, type ReactElement } from "react"
+import { useMemo, useState, type ReactElement } from "react"
 import { useTranslation } from "react-i18next"
 
 import { Badge } from "@/components/ui/badge"
@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { fsiApi } from "@/fsiClient"
 import { HorizontalBarList } from "@/modules/investment-risk/dashboard-kit"
+import { AttributionModelPanel } from "@/modules/investment-risk/AttributionModelPanel"
 import { EquityBetaContributionCard } from "@/modules/investment-risk/EquityBetaContributionCard"
 import { LqapPortfolioLiquidity } from "@/modules/investment-risk/LqapPortfolioLiquidity"
 import { SqlViewButton } from "@/modules/investment-risk/SqlViewButton"
@@ -148,6 +149,7 @@ function AttributionDomain({ fundId, startDate, endDate }: DomainProps) {
           </div>
         </>
       )}
+      <AttributionModelPanel fundId={fundId} startDate={startDate} endDate={endDate} />
       {equityBeta ? (
         <EquityBetaContributionCard
           fundId={fundId}
@@ -164,14 +166,53 @@ function AttributionDomain({ fundId, startDate, endDate }: DomainProps) {
   )
 }
 
+type BondAgencyFlatRow = {
+  security_code: string
+  security_name: string
+  issuer_name: string
+  market_value: number
+  weight_pct: number
+  csci: string
+  lianhe: string
+  sp: string
+  moody: string
+  fitch: string
+  internal: string
+}
+
+type RatingScaleRow = {
+  band: string
+  grade: string
+  domestic: string
+  sp_fitch: string
+  moody: string
+}
+
+function ratingCell(value: string | null | undefined) {
+  const text = (value || "").trim()
+  return text ? <span className="font-mono text-xs">{text}</span> : <span className="text-muted-foreground">—</span>
+}
+
 function RatesCreditDomain({ fundId, asOfDate }: DomainProps) {
   const { t } = useTranslation()
+  const [ratingSource, setRatingSource] = useState("all")
   const query = useQuery({
-    queryKey: ["domain-rates-credit", fundId, asOfDate],
-    queryFn: () => fsiApi.getRatesCredit(fundId, asOfDate).then((r) => r.data),
+    queryKey: ["domain-rates-credit", fundId, asOfDate, ratingSource],
+    queryFn: () => fsiApi.getRatesCredit(fundId, asOfDate, ratingSource).then((r) => r.data),
     retry: 1,
   })
   const data = query.data
+  const ratingSourceOptions = [
+    { id: "all", label_zh: t("investmentRisk.ratingSecurities.sourceAll") },
+    { id: "domestic", label_zh: t("investmentRisk.ratingSecurities.sourceDomestic") },
+    { id: "csci", label_zh: t("investmentRisk.ratingSecurities.sourceCsci") },
+    { id: "lianhe", label_zh: t("investmentRisk.ratingSecurities.sourceLianhe") },
+    { id: "foreign", label_zh: t("investmentRisk.ratingSecurities.sourceForeign") },
+    { id: "sp", label_zh: t("investmentRisk.ratingSecurities.sourceSp") },
+    { id: "moody", label_zh: t("investmentRisk.ratingSecurities.sourceMoody") },
+    { id: "fitch", label_zh: t("investmentRisk.ratingSecurities.sourceFitch") },
+    { id: "internal", label_zh: t("investmentRisk.ratingSecurities.sourceInternal") },
+  ]
   const issuerColumns = useMemo<WorkbenchColumn<{ issuer: string; market_value: number; weight_pct: number }>[]>(() => [
     { key: "issuer", header: t("investmentRisk.domains.issuer"), accessor: (row) => row.issuer },
     {
@@ -221,6 +262,126 @@ function RatesCreditDomain({ fundId, asOfDate }: DomainProps) {
       cell: (row) => <span className="font-mono">{money(row.market_value)}</span>,
     },
   ], [t])
+  const bondAgencyColumns = useMemo<WorkbenchColumn<BondAgencyFlatRow>[]>(() => [
+    {
+      key: "security_code",
+      header: t("investmentRisk.ratingSecurities.colSecurityCode"),
+      filterable: true,
+      accessor: (row) => row.security_code,
+      cell: (row) => <span className="font-mono text-xs">{row.security_code}</span>,
+    },
+    {
+      key: "security_name",
+      header: t("investmentRisk.ratingSecurities.colSecurityName"),
+      filterable: true,
+      accessor: (row) => row.security_name,
+    },
+    {
+      key: "market_value",
+      header: t("investmentRisk.domains.marketValue"),
+      align: "right",
+      accessor: (row) => row.market_value,
+      cell: (row) => <span className="font-mono">{money(row.market_value)}</span>,
+    },
+    {
+      key: "csci",
+      header: t("investmentRisk.ratingSecurities.colCsci"),
+      accessor: (row) => row.csci,
+      cell: (row) => ratingCell(row.csci),
+    },
+    {
+      key: "lianhe",
+      header: t("investmentRisk.ratingSecurities.colLianhe"),
+      accessor: (row) => row.lianhe,
+      cell: (row) => ratingCell(row.lianhe),
+    },
+    {
+      key: "sp",
+      header: t("investmentRisk.ratingSecurities.colSp"),
+      accessor: (row) => row.sp,
+      cell: (row) => ratingCell(row.sp),
+    },
+    {
+      key: "moody",
+      header: t("investmentRisk.ratingSecurities.colMoody"),
+      accessor: (row) => row.moody,
+      cell: (row) => ratingCell(row.moody),
+    },
+    {
+      key: "fitch",
+      header: t("investmentRisk.ratingSecurities.colFitch"),
+      accessor: (row) => row.fitch,
+      cell: (row) => ratingCell(row.fitch),
+    },
+    {
+      key: "internal",
+      header: t("investmentRisk.ratingSecurities.colInternal"),
+      filterable: true,
+      accessor: (row) => row.internal,
+      cell: (row) => ratingCell(row.internal),
+    },
+  ], [t])
+
+  const ratingScaleColumns = useMemo<WorkbenchColumn<RatingScaleRow>[]>(() => [
+    {
+      key: "grade",
+      header: t("investmentRisk.ratingSecurities.colGradeClass"),
+      filterable: true,
+      accessor: (row) => row.grade,
+      cell: (row) =>
+        row.grade === "investment" ? (
+          <Badge className="bg-emerald-600 hover:bg-emerald-600 text-[10px]">
+            {t("investmentRisk.ratingSecurities.igBadge")}
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="text-[10px]">
+            {t("investmentRisk.ratingSecurities.speculativeBadge")}
+          </Badge>
+        ),
+    },
+    {
+      key: "band",
+      header: t("investmentRisk.ratingSecurities.colBand"),
+      accessor: (row) => row.band,
+    },
+    {
+      key: "domestic",
+      header: t("investmentRisk.ratingSecurities.colDomesticAgencies"),
+      accessor: (row) => row.domestic,
+      cell: (row) => <span className="font-mono text-xs">{row.domestic}</span>,
+    },
+    {
+      key: "sp_fitch",
+      header: t("investmentRisk.ratingSecurities.colSpFitch"),
+      accessor: (row) => row.sp_fitch,
+      cell: (row) => <span className="font-mono text-xs">{row.sp_fitch}</span>,
+    },
+    {
+      key: "moody",
+      header: t("investmentRisk.ratingSecurities.colMoody"),
+      accessor: (row) => row.moody,
+      cell: (row) => <span className="font-mono text-xs">{row.moody}</span>,
+    },
+  ], [t])
+
+  const flattenAgencyRows = (kind: "issuer" | "debt"): BondAgencyFlatRow[] =>
+    (data?.bond_agency_rating_rows ?? []).map((row) => {
+      const ratings = kind === "issuer" ? row.issuer_ratings : row.debt_ratings
+      return {
+        security_code: row.security_code,
+        security_name: row.security_name || "—",
+        issuer_name: row.issuer_name || "—",
+        market_value: row.market_value,
+        weight_pct: row.weight_pct,
+        csci: ratings?.csci || "",
+        lianhe: ratings?.lianhe || "",
+        sp: ratings?.sp || "",
+        moody: ratings?.moody || "",
+        fitch: ratings?.fitch || "",
+        internal: ratings?.internal || "",
+      }
+    })
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -233,8 +394,12 @@ function RatesCreditDomain({ fundId, asOfDate }: DomainProps) {
           <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
             <Kpi label={t("investmentRisk.domains.bondHoldings")} value={money(data.total_bond_market_value)} detail={t("investmentRisk.domains.bondHoldingsDetail", { count: data.bond_count, pct: pct(data.bond_exposure_pct_nav) })} />
             <Kpi label={t("investmentRisk.domains.weightedDuration")} value={num(data.weighted_duration_years, 2) + " 年"} />
-            <Kpi label="DV01" value={money(data.portfolio_dv01)} />
-            <Kpi label="CS01" value={money(data.portfolio_cs01)} />
+            <Kpi label="DV01" value={money(data.portfolio_dv01)} detail={t("investmentRisk.domains.dv01Hint")} />
+            <Kpi
+              label={t("investmentRisk.domains.cs01")}
+              value={money(data.portfolio_cs01)}
+              detail={t("investmentRisk.domains.cs01Hint")}
+            />
             <Kpi label={t("investmentRisk.ratingSecurities.issuerIgPct")} value={pct(data.issuer_investment_grade_pct ?? data.investment_grade_pct)} detail={t("investmentRisk.ratingSecurities.igHint")} />
             <Kpi label={t("investmentRisk.ratingSecurities.debtIgPct")} value={pct(data.debt_investment_grade_pct ?? data.investment_grade_pct)} detail={t("investmentRisk.ratingSecurities.igHint")} />
           </div>
@@ -255,13 +420,40 @@ function RatesCreditDomain({ fundId, asOfDate }: DomainProps) {
               </CardContent>
             </Card>
           </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-sky-300/60 bg-sky-50/70 px-3 py-3 dark:border-sky-800 dark:bg-sky-950/30">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-sky-900 dark:text-sky-100">
+                {t("investmentRisk.ratingSecurities.sourceLabel")}
+              </p>
+              <p className="text-muted-foreground text-xs">
+                {query.isFetching
+                  ? t("investmentRisk.domains.loading")
+                  : t("investmentRisk.ratingSecurities.sourceHint", {
+                      count: data.rating_matched_bond_count ?? data.bond_count,
+                      total: data.bond_count,
+                    })}
+              </p>
+            </div>
+            <select
+              aria-label={t("investmentRisk.ratingSecurities.sourceLabel")}
+              className="min-w-[240px] rounded-md border border-sky-400 bg-background px-3 py-2 text-sm font-medium shadow-sm"
+              value={ratingSource}
+              onChange={(event) => setRatingSource(event.target.value)}
+            >
+              {ratingSourceOptions.map((opt) => (
+                <option key={opt.id} value={opt.id}>
+                  {opt.label_zh}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="grid gap-4 xl:grid-cols-2">
             <WorkbenchTable
               title={t("investmentRisk.ratingSecurities.issuerTable")}
               rows={data.issuer_rating_distribution ?? data.rating_distribution}
               columns={ratingColumns}
               rowId={(row) => `issuer-${row.rating}`}
-              exportFilename={`rates-issuer-ratings-${fundId}-${asOfDate}.csv`}
+              exportFilename={`rates-issuer-ratings-${fundId}-${asOfDate}-${ratingSource}.csv`}
               initialSortKey="weight_pct"
               selectable={false}
             />
@@ -270,8 +462,42 @@ function RatesCreditDomain({ fundId, asOfDate }: DomainProps) {
               rows={data.debt_rating_distribution ?? data.rating_distribution}
               columns={ratingColumns}
               rowId={(row) => `debt-${row.rating}`}
-              exportFilename={`rates-debt-ratings-${fundId}-${asOfDate}.csv`}
+              exportFilename={`rates-debt-ratings-${fundId}-${asOfDate}-${ratingSource}.csv`}
               initialSortKey="weight_pct"
+              selectable={false}
+            />
+          </div>
+          <div className="space-y-2">
+            <p className="text-muted-foreground text-xs">{t("investmentRisk.ratingSecurities.bondAgencyHint")}</p>
+            <WorkbenchTable
+              title={t("investmentRisk.ratingSecurities.bondAgencyIssuerTable")}
+              rows={flattenAgencyRows("issuer")}
+              columns={bondAgencyColumns}
+              rowId={(row) => `agency-issuer-${row.security_code}`}
+              exportFilename={`rates-bond-issuer-multi-agency-${fundId}-${asOfDate}.csv`}
+              initialSortKey="market_value"
+              selectable={false}
+            />
+            <WorkbenchTable
+              title={t("investmentRisk.ratingSecurities.bondAgencyDebtTable")}
+              rows={flattenAgencyRows("debt")}
+              columns={bondAgencyColumns}
+              rowId={(row) => `agency-debt-${row.security_code}`}
+              exportFilename={`rates-bond-debt-multi-agency-${fundId}-${asOfDate}.csv`}
+              initialSortKey="market_value"
+              selectable={false}
+            />
+          </div>
+          <div className="space-y-2">
+            <p className="text-muted-foreground text-xs">
+              {data.rating_scale_note || t("investmentRisk.ratingSecurities.scaleHint")}
+            </p>
+            <WorkbenchTable
+              title={t("investmentRisk.ratingSecurities.scaleTable")}
+              rows={(data.rating_scale_legend ?? []) as RatingScaleRow[]}
+              columns={ratingScaleColumns}
+              rowId={(row) => `scale-${row.grade}-${row.band}-${row.sp_fitch}`}
+              exportFilename={`rates-rating-scale-legend-${fundId}-${asOfDate}.csv`}
               selectable={false}
             />
           </div>

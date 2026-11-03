@@ -14,7 +14,7 @@
 對外核心路由偶發丟失（例如 /api/v1/users/me 被 404）。
 
 注意：2_processing 等子模塊改動若未觸發重載，可輕觸本文件强制 reload。
-# touch: lqa computed from holdings 2026-10-16
+# touch: attribution benchmark picker and live calculate 2026-11-02
 """
 from __future__ import annotations
 

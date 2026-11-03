@@ -72,70 +72,19 @@ def _f(value: Any) -> float | None:
     return None if value is None else float(value)
 
 
+def _is_aggregate_subject(code: str | None, name: str | None) -> bool:
+    """Skip sheet subtotal / grand-total rows when summing line items."""
+    blob = f"{code or ''} {name or ''}"
+    markers = ("合計", "合计", "總計", "总计", "小計", "小计", "TOTAL", "SUBTOTAL")
+    return any(m in blob.upper() if m.isascii() else m in blob for m in markers)
+
+
 @router.get("/report/{fund_id}", summary="每日估值報表")
 async def valuation_report(
     fund_id: str,
     as_of_date: date,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    rows = (
-        await db.execute(
-            text(
-                """
-                SELECT subject_code, subject_name, currency, quantity, unit_price,
-                       cost, market_value, weight_pct, data_source, memo
-                FROM fsi.balance_valuation_sheet
-                WHERE port_id = :fid AND evaluate_date = :d
-                ORDER BY market_value DESC NULLS LAST, subject_code
-                """
-            ),
-            {"fid": fund_id, "d": as_of_date},
-        )
-    ).mappings().all()
-
-    subjects: list[dict[str, Any]] = []
-    total_mv = 0.0
-    total_cost = 0.0
-    for row in rows:
-        mv = _f(row["market_value"]) or 0.0
-        cost = _f(row["cost"])
-        unrealized = None if cost is None else mv - cost
-        return_pct = None if not cost else unrealized / cost * 100
-        total_mv += mv
-        total_cost += cost or 0.0
-        subjects.append(
-            {
-                "subject_code": row["subject_code"],
-                "subject_name": row["subject_name"],
-                "currency": str(row["currency"]).strip(),
-                "quantity": _f(row["quantity"]),
-                "unit_price": _f(row["unit_price"]),
-                "cost": cost,
-                "market_value": mv,
-                "weight_pct": _f(row["weight_pct"]),
-                "unrealized_pnl": unrealized,
-                "return_pct": return_pct,
-                "data_source": row["data_source"],
-                "memo": row["memo"],
-            }
-        )
-
-    nav = (
-        await db.execute(
-            text(
-                """
-                SELECT currency, net_asset, unit_nav, acc_unit_nav, day_return,
-                       total_asset, total_liability
-                FROM fsi.balance_portfolio_nav
-                WHERE port_id = :fid AND evaluate_date = :d
-                ORDER BY currency
-                LIMIT 1
-                """
-            ),
-            {"fid": fund_id, "d": as_of_date},
-        )
-    ).mappings().first()
-
     available = [
         row[0]
         for row in (
@@ -151,15 +100,101 @@ async def valuation_report(
         ).all()
     ]
 
+    requested = as_of_date
+    effective = as_of_date
+    rows = (
+        await db.execute(
+            text(
+                """
+                SELECT subject_code, subject_name, currency, quantity, unit_price,
+                       cost, market_value, weight_pct, data_source, memo
+                FROM fsi.balance_valuation_sheet
+                WHERE port_id = :fid AND evaluate_date = :d
+                ORDER BY market_value DESC NULLS LAST, subject_code
+                """
+            ),
+            {"fid": fund_id, "d": as_of_date},
+        )
+    ).mappings().all()
+
+    # Far-future / empty date probes fall back to the latest available sheet.
+    if not rows and available:
+        effective = available[0]
+        rows = (
+            await db.execute(
+                text(
+                    """
+                    SELECT subject_code, subject_name, currency, quantity, unit_price,
+                           cost, market_value, weight_pct, data_source, memo
+                    FROM fsi.balance_valuation_sheet
+                    WHERE port_id = :fid AND evaluate_date = :d
+                    ORDER BY market_value DESC NULLS LAST, subject_code
+                    """
+                ),
+                {"fid": fund_id, "d": effective},
+            )
+        ).mappings().all()
+
+    subjects: list[dict[str, Any]] = []
+    total_mv = 0.0
+    total_cost = 0.0
+    line_count = 0
+    for row in rows:
+        mv = _f(row["market_value"]) or 0.0
+        cost = _f(row["cost"])
+        unrealized = None if cost is None else mv - cost
+        return_pct = None if not cost else unrealized / cost * 100
+        aggregate = _is_aggregate_subject(row["subject_code"], row["subject_name"])
+        if not aggregate:
+            total_mv += mv
+            total_cost += cost or 0.0
+            line_count += 1
+        subjects.append(
+            {
+                "subject_code": row["subject_code"],
+                "subject_name": row["subject_name"],
+                "currency": str(row["currency"]).strip(),
+                "quantity": _f(row["quantity"]),
+                "unit_price": _f(row["unit_price"]),
+                "cost": cost,
+                "market_value": mv,
+                "weight_pct": _f(row["weight_pct"]),
+                "unrealized_pnl": unrealized,
+                "return_pct": return_pct,
+                "data_source": row["data_source"],
+                "memo": row["memo"],
+                "is_aggregate": aggregate,
+            }
+        )
+
+    nav = (
+        await db.execute(
+            text(
+                """
+                SELECT currency, net_asset, unit_nav, acc_unit_nav, day_return,
+                       total_asset, total_liability
+                FROM fsi.balance_portfolio_nav
+                WHERE port_id = :fid AND evaluate_date = :d
+                ORDER BY currency
+                LIMIT 1
+                """
+            ),
+            {"fid": fund_id, "d": effective},
+        )
+    ).mappings().first()
+
     return {
         "fund_id": fund_id,
-        "as_of_date": as_of_date,
+        "as_of_date": effective,
+        "requested_date": requested.isoformat(),
+        "effective_date": effective.isoformat() if effective else None,
+        "date_fallback": requested != effective,
         "subjects": subjects,
         "totals": {
             "total_market_value": total_mv,
             "total_cost": total_cost,
             "total_unrealized_pnl": total_mv - total_cost,
-            "subject_count": len(subjects),
+            "subject_count": line_count,
         },
         "nav_summary": None
         if not nav
@@ -193,13 +228,13 @@ async def _nav_bounds(db: AsyncSession, fund_id: str) -> tuple[date, date] | Non
 @router.get("/pnl/{fund_id}", summary="階段損益分析")
 async def pnl_analysis(
     fund_id: str,
-    start: date | None = None,
-    end: date | None = None,
+    start: date | None = Query(default=None),
+    end: date | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     if start and end and start > end:
         raise HTTPException(status_code=422, detail="start must not be later than end")
-    if not (start and end):
+    if start is None or end is None:
         bounds = await _nav_bounds(db, fund_id)
         if not bounds:
             raise HTTPException(status_code=404, detail="No NAV history for this portfolio")
@@ -240,6 +275,7 @@ async def pnl_analysis(
                 "date": row["evaluate_date"].isoformat(),
                 "net_asset": _f(row["net_asset"]),
                 "unit_nav": _f(row["unit_nav"]),
+                "day_return_pct": (day_returns[i] or 0.0) * 100,
                 "cum_return_pct": (index[i] - 1.0) * 100,
             }
         )
@@ -325,6 +361,7 @@ async def _subject_attribution(
                     "contribution": (_f(r["mv_end"]) or 0.0) - (_f(r["mv_start"]) or 0.0),
                 }
                 for r in rows
+                if not _is_aggregate_subject(r["subject_code"], r["subject_name"])
             ],
         }
 
@@ -370,5 +407,6 @@ async def _subject_attribution(
                 "contribution": (_f(r["market_value"]) or 0.0) - (_f(r["cost"]) or 0.0),
             }
             for r in rows
+            if not _is_aggregate_subject(r["subject_code"], r["subject_name"])
         ],
     }

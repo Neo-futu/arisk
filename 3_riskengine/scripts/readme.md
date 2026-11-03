@@ -15,6 +15,11 @@ OpenBB 等第三方
 默认 --no-market-fallback；需要时再 --market-fallback
 # 夹具持仓 + 夹具派生行情
 python 3_riskengine/scripts/run_riskengine.py --book mixed
+# REPO + STRUCTURED（FinancePy / ORE）
+python 3_riskengine/scripts/run_riskengine.py --book hybrid
+# 独立测试套件
+python 3_riskengine/scripts/run_tests.py -q
+python 3_riskengine/scripts/run_riskengine.py --check
 # DB 持仓 + DB 行情（默认不回退，方便排查）
 python 3_riskengine/scripts/run_riskengine.py --fund-id BHMMF001 --as-of-date 2026-09-01
 # DB 持仓 + OpenBB 行情

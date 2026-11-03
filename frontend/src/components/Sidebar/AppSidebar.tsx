@@ -7,14 +7,11 @@ import {
   FlaskConical,
   Gauge,
   Home,
-  LineChart,
-  List,
   MessageSquare,
   PieChart,
   Scale,
   Settings,
   Sparkles,
-  Wallet,
 } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { useEffect, useMemo, useState } from "react"
@@ -75,7 +72,7 @@ const getFsiItems = (t: (key: string) => string): NavItem[] => [
     id: "investment-risk",
     icon: BarChart3,
     title: t("nav.investmentRisk"),
-    path: "/investment-risk",
+    path: "/investment-risk/overview",
     children: INVESTMENT_RISK_NAV.map((item) => ({
       id: item.id,
       title: t(item.titleKey),
@@ -85,8 +82,9 @@ const getFsiItems = (t: (key: string) => string): NavItem[] => [
   {
     id: "portfolio-optimization",
     icon: PieChart,
-    title: t("nav.portfolioAllocationOptimization"),
+    title: t("nav.portfolioOptRiskBudget"),
     path: "/portfolio-opt",
+    permissionPaths: ["/portfolio-opt", "/investment-risk"],
     children: PORTFOLIO_OPT_NAV.map((item) => ({
       id: item.id,
       title: t(item.titleKey),
@@ -109,31 +107,20 @@ const getFsiItems = (t: (key: string) => string): NavItem[] => [
     icon: Database,
     title: t("nav.dataManagement"),
     path: "/data-management",
-    permissionPaths: ["/data-management", "/positions"],
-    children: [
-      { id: "data-workbench", title: t("nav.dataWorkbench"), path: "/data-management", permissionPath: "/data-management" },
-      { id: "positions", title: t("nav.positions"), path: "/positions", permissionPath: "/positions" },
+    permissionPaths: [
+      "/data-management",
+      "/indicator-explorer",
+      "/sql-library",
+      "/valuation",
+      "/trading",
     ],
-  },
-  {
-    id: "market-data-indicators",
-    icon: LineChart,
-    title: t("nav.marketDataIndicators"),
-    path: "/indicator-explorer",
-    permissionPaths: ["/indicator-explorer", "/sql-library"],
     children: [
-      { id: "market-data", title: t("nav.marketData"), path: "/indicator-explorer#quotes", permissionPath: "/indicator-explorer" },
-      { id: "indicator-explorer", title: t("nav.indicatorExplorer"), path: "/indicator-explorer#catalog", permissionPath: "/indicator-explorer" },
+      { id: "portfolio-data", title: t("nav.portfolioData"), path: "/data-management", permissionPath: "/data-management" },
+      { id: "market-data-indicators", title: t("nav.marketDataIndicators"), path: "/indicator-explorer", permissionPath: "/indicator-explorer" },
       { id: "sql-library", title: t("nav.sqlLibrary"), path: "/sql-library", permissionPath: "/sql-library" },
+      { id: "valuation", title: t("nav.valuationPnl"), path: "/valuation", permissionPath: "/valuation" },
+      { id: "trading", title: t("nav.tradingManagement"), path: "/trading", permissionPath: "/trading" },
     ],
-  },
-  { id: "valuation", icon: Wallet, title: t("nav.valuationPnl"), path: "/valuation" },
-  {
-    id: "trading",
-    icon: List,
-    title: t("nav.tradingManagement"),
-    path: "/trading",
-    permissionPaths: ["/trading", "/data-management"],
   },
   {
     id: "risk-governance",
@@ -197,13 +184,43 @@ function NavSection({
   const navigate = useNavigate()
   const router = useRouterState()
   const currentPath = router.location.pathname
+  const currentHash = (router.location.hash || "").replace(/^#/, "")
   const currentHref = locationHref(currentPath, router.location.searchStr, router.location.hash)
   const targetPathname = (path: string) => parseNavPath(path).to
   const isTargetActive = (path: string) => currentHref === navHref(path)
+  const pathOwnsLocation = (path: string) => {
+    const parsed = parseNavPath(path)
+    const prefix = parsed.to
+    // Exact path only — never claim sibling routes under the same prefix
+    // (e.g. /investment-risk/overview must not own /investment-risk/pretrade-budget).
+    const pathMatch = currentPath === prefix
+    if (!pathMatch && !isTargetActive(path)) return false
+    // Hash children (e.g. /risk-governance#alerts) must match hash; bare path only
+    // matches when the URL has no hash (or the default first section).
+    if (parsed.hash) {
+      if (currentHash === parsed.hash) return true
+      return !currentHash && parsed.hash === "limits" && pathMatch
+    }
+    return pathMatch || isTargetActive(path)
+  }
   const groupOwnsLocation = (item: NavItem) => {
-    const prefix = targetPathname(item.path)
-    if (currentPath === prefix || currentPath.startsWith(`${prefix}/`)) return true
-    return Boolean(item.children?.some((child) => child.path && isTargetActive(child.path)))
+    if (item.children?.length) {
+      if (item.children.some((child) => child.path && pathOwnsLocation(child.path))) return true
+      // Parent index route only — do not treat all /prefix/* as this group
+      // (portfolio-opt owns /investment-risk/pretrade-budget, not investment-risk).
+      return currentPath === targetPathname(item.path)
+    }
+    return pathOwnsLocation(item.path)
+  }
+  const collapseOthers = (keepTitle: string | null) => {
+    setOpenGroups((previous) => {
+      const next = { ...previous }
+      for (const other of items) {
+        if (!other.children) continue
+        next[other.title] = keepTitle != null && other.title === keepTitle
+      }
+      return next
+    })
   }
   const go = (path: string) => {
     const parsed = parseNavPath(path)
@@ -222,13 +239,25 @@ function NavSection({
   )
 
   useEffect(() => {
+    // Accordion: only the group that owns the current URL stays open.
+    // Bail out with the previous object when nothing changed to avoid render loops
+    // (parent passes a freshly filtered `items` array every render).
     setOpenGroups((previous) => {
-      const next = { ...previous }
+      const next: Record<string, boolean> = {}
+      let changed = false
       for (const item of items) {
         if (!item.children) continue
-        if (groupOwnsLocation(item)) next[item.title] = true
+        const open = groupOwnsLocation(item)
+        next[item.title] = open
+        if (previous[item.title] !== open) changed = true
       }
-      return next
+      for (const key of Object.keys(previous)) {
+        if (!(key in next) && previous[key]) {
+          changed = true
+          break
+        }
+      }
+      return changed ? next : previous
     })
   }, [currentHref, items])
 
@@ -254,14 +283,13 @@ function NavSection({
                   isActive={isParentActive}
                   onClick={() => {
                     if (item.children) {
-                      setOpenGroups((previous) => ({
-                        ...previous,
-                        [item.title]: !isOpen,
-                      }))
+                      const willOpen = !isOpen
+                      collapseOthers(willOpen ? item.title : null)
                       if (item.landing !== false && !groupOwnsLocation(item)) {
                         go(item.path)
                       }
                     } else {
+                      collapseOthers(null)
                       go(item.path)
                     }
                     if (isMobile) setOpenMobile(false)
@@ -284,11 +312,12 @@ function NavSection({
                       <SidebarMenuSubItem key={child.id}>
                         <SidebarMenuSubButton
                           data-testid={`nav-${child.id}`}
-                          isActive={Boolean(child.path && isTargetActive(child.path))}
+                          isActive={Boolean(child.path && pathOwnsLocation(child.path))}
                           aria-disabled={child.disabled}
                           className={child.disabled ? "cursor-not-allowed opacity-50" : undefined}
                           onClick={() => {
                             if (child.disabled || !child.path) return
+                            collapseOthers(item.title)
                             go(child.path)
                             if (isMobile) setOpenMobile(false)
                           }}
@@ -320,17 +349,22 @@ export function AppSidebar() {
     enabled: Boolean(currentUser),
     staleTime: 30_000,
   })
-  const menuPaths = new Set(accessQuery.data?.menu_paths ?? [])
-  const menuStages = accessQuery.data?.menu_stages ?? {}
+  const menuPaths = accessQuery.data?.menu_paths
+  const menuStages = accessQuery.data?.menu_stages
+  const menuPathSet = useMemo(() => new Set(menuPaths ?? []), [menuPaths])
   // Superusers preview everything except HIDDEN modules; others follow granted GA paths.
-  const hasMenu = (path: string) =>
-    currentUser?.is_superuser ? menuStages[path] !== "HIDDEN" : menuPaths.has(path)
-  const visibleFsiItems = fsiItems.filter((item) =>
-    (item.permissionPaths ?? [item.path]).some(hasMenu),
+  const hasMenu = useMemo(() => {
+    const isSuper = Boolean(currentUser?.is_superuser)
+    const stages = menuStages ?? {}
+    return (path: string) => (isSuper ? stages[path] !== "HIDDEN" : menuPathSet.has(path))
+  }, [currentUser?.is_superuser, menuPathSet, menuStages])
+  const visibleFsiItems = useMemo(
+    () => fsiItems.filter((item) => (item.permissionPaths ?? [item.path]).some(hasMenu)),
+    [fsiItems, hasMenu],
   )
-
-  const visibleAdminItems = adminItems.filter((item) =>
-    (item.permissionPaths ?? [item.path]).some(hasMenu),
+  const visibleAdminItems = useMemo(
+    () => adminItems.filter((item) => (item.permissionPaths ?? [item.path]).some(hasMenu)),
+    [adminItems, hasMenu],
   )
 
   return (
@@ -339,9 +373,9 @@ export function AppSidebar() {
         <Logo variant="responsive" />
       </SidebarHeader>
       <SidebarContent>
-        <NavSection label={t("nav.fsiSection")} items={visibleFsiItems} stages={menuStages} canAccess={hasMenu} />
+        <NavSection label={t("nav.fsiSection")} items={visibleFsiItems} stages={menuStages ?? {}} canAccess={hasMenu} />
         {visibleAdminItems.length > 0 ? (
-          <NavSection label={t("nav.systemManagement")} items={visibleAdminItems} stages={menuStages} canAccess={hasMenu} />
+          <NavSection label={t("nav.systemManagement")} items={visibleAdminItems} stages={menuStages ?? {}} canAccess={hasMenu} />
         ) : null}
       </SidebarContent>
       <SidebarFooter>

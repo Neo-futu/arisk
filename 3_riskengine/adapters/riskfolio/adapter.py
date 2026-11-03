@@ -54,6 +54,8 @@ class RiskfolioAdapter:
         """Run a named optimizer. Riskfolio-Lib when installed, else deterministic fallback."""
 
         key = method.strip().lower()
+        if key in {"rp", "erc", "equal_risk_contribution"}:
+            key = "risk_parity"
         if key not in OPTIMIZATION_METHODS:
             raise ValueError(f"Unsupported optimization method: {method}")
         engine_name = "riskfolio" if self.available else "riskengine_fallback"

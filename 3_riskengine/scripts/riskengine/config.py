@@ -78,6 +78,7 @@ BOOKS: dict[str, Any] = {
     "mixed": _fixtures.sample_snapshot,
     "mmf": _fixtures.sample_mmf_snapshot,
     "otc": _fixtures.sample_otc_snapshot,
+    "hybrid": _fixtures.sample_repo_structured_snapshot,
 }
 
 

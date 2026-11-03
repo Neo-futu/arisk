@@ -40,7 +40,6 @@ import {
   type MarketQuote,
 } from "@/fsiClient"
 import { exportCsv } from "@/modules/investment-risk/dashboard-kit"
-import { AdapterStatusBar } from "@/platform/AdapterStatus"
 import { useBindPageContext } from "@/platform/page-context"
 
 const PROFILE_COLORS: Record<string, string> = {
@@ -448,14 +447,6 @@ export function PortfolioOptPage() {
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight"><PieChart className="h-6 w-6 text-primary" />{t("portfolioOpt.title")}</h1>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("portfolioOpt.subtitle")}</p>
-          <div className="mt-3">
-            <AdapterStatusBar
-              adapters={catalog.data?.adapters}
-              engine={catalog.data?.engine}
-              engineVersion={catalog.data?.engine_version}
-            />
-          </div>
-          <p className="mt-2 text-xs text-muted-foreground">{t("portfolioOpt.notTradeInstruction")}</p>
         </div>
       </div>
 
@@ -546,10 +537,11 @@ export function PortfolioOptPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="rounded-lg border bg-muted/30 p-3 text-xs">
-                  {t("portfolioOpt.notTradeInstruction")}
-                  {governed.data ? ` · ${governed.data.status ?? "PROPOSAL"}` : ""}
-                </div>
+                {governed.data ? (
+                  <div className="rounded-lg border bg-muted/30 p-3 text-xs">
+                    {governed.data.status ?? "PROPOSAL"}
+                  </div>
+                ) : null}
               </div>
               {governed.data ? (
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -686,18 +678,6 @@ export function PortfolioOptPage() {
                 </CardContent>
               </Card>
               </div>
-              <Card id="validation" className="scroll-mt-20">
-                <CardHeader><ZoneTitle index="08" title={t("nav.portfolioValidation")} /></CardHeader>
-                <CardContent className="text-sm text-muted-foreground" data-testid="platform-engine-note">
-                  {t("platform.engineNote")}
-                  {result.efficiency ? (
-                    <div className="mt-2 flex flex-wrap gap-6 text-xs">
-                      <span>{t("portfolioOpt.alphaLoss")}: <span className="font-mono">{pct(result.efficiency.alpha_loss)}</span></span>
-                      <span>{t("portfolioOpt.excessVol")}: <span className="font-mono">{pct(result.efficiency.excess_vol)}</span></span>
-                    </div>
-                  ) : null}
-                </CardContent>
-              </Card>
             </>
           ) : (
             <Card><CardContent className="py-16 text-center text-sm text-muted-foreground">{t("portfolioOpt.runPrompt")}</CardContent></Card>

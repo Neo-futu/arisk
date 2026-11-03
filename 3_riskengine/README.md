@@ -1,4 +1,4 @@
-<!-- 更新时间：2026-10-16（北京时间）｜生成模型：Grok 4.7 -->
+<!-- 更新时间：2026-11-03（北京时间）｜生成模型：Composer -->
 
 # 3_riskengine — 统一量化与风险计算平台
 
@@ -41,7 +41,7 @@ RiskEngine 是 ARISK **自主**的统一 Quantitative Finance & Risk Engine，�
 | `pnl/` | 快照间 PnL explain |
 | `limits/` | Limit Engine + SFC 60/120/50bp 口径 |
 | `validation/` | Pricing / Greeks / Risk / Regression / Reconciliation / Cross-engine |
-| `tests/` | 单元、确定性、回归、跨引擎样例 |
+| `tests/` | 单元、确定性、回归、跨引擎样例；`python 3_riskengine/scripts/run_tests.py` 可独立跑通 |
 
 ## 数据
 
@@ -52,8 +52,9 @@ RiskEngine 是 ARISK **自主**的统一 Quantitative Finance & Risk Engine，�
 | 组合 | `fsi.para_portfolio`、`fsi.balance_portfolio_nav` |
 | 持仓 | `fsi.balance_bond` / `cd` / `deposit` / `stock` / `fund` / `cash` |
 | 市场 | `fsi.mktdata_quotes` / `fund_nav` / `bond_risk` / `fx_rate` |
+| 指数 | `fsi.mktdata_index_quotes`（经 `para_portfolio_benchmark` 解析主基准） |
 
-加载入口仍为 `2_processing.tools.risk_testing.loader.load_portfolio_snapshot`（`3_riskengine.market.load_portfolio_snapshot` 再导出）。
+加载入口：`3_riskengine.market.load_portfolio_snapshot`（持仓 + 个券行情 + 指数基准；底层仍复用 `2_processing` loader）。
 
 ## 绑定 API
 

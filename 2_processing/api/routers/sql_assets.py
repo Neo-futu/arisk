@@ -47,8 +47,12 @@ def _parse_header(text: str) -> tuple[str | None, str]:
     return title, description
 
 
-def _category(group: str, filename: str) -> str:
+def _category(group: str, filename: str, rel: str = "") -> str:
     if group == "mmf":
+        parts = rel.split("/") if rel else []
+        # mmf/report_06/01_xxx.sql → 貨幣基金報表/report_06
+        if len(parts) >= 2 and parts[1].startswith("report_"):
+            return f"貨幣基金報表/{parts[1]}"
         return "貨幣基金報表"
     name = filename.lower()
     if name.startswith("atomic_"):
@@ -82,7 +86,8 @@ def _scan() -> list[dict[str, Any]]:
                 "id": rel,
                 "filename": path.name,
                 "group": group,
-                "category": _category(group, path.name),
+                "category": _category(group, path.name, rel),
+                "package": rel.split("/")[1] if group == "mmf" and "/" in rel else group,
                 "title": title or path.name,
                 "description": description,
                 "line_count": text.count("\n") + 1,
@@ -112,11 +117,11 @@ def catalog(
 ) -> dict[str, Any]:
     items = _scan()
     needle = search.strip().lower() if search and search.strip() else None
+    group_scoped = [item for item in items if group is None or item["group"] == group]
     filtered = [
         {k: v for k, v in item.items() if k != "sql"}
-        for item in items
-        if (group is None or item["group"] == group)
-        and (category is None or item["category"] == category)
+        for item in group_scoped
+        if (category is None or item["category"] == category)
         and (
             needle is None
             or needle in item["id"].lower()
@@ -128,7 +133,7 @@ def catalog(
         "items": filtered,
         "count": len(filtered),
         "groups": sorted({item["group"] for item in items}),
-        "categories": sorted({item["category"] for item in items}),
+        "categories": sorted({item["category"] for item in group_scoped}),
     }
 
 

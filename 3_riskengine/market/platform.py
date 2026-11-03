@@ -38,6 +38,7 @@ MARKET_TABLES = (
     "fsi.mktdata_fund_nav",
     "fsi.mktdata_bond_risk",
     "fsi.mktdata_fx_rate",
+    "fsi.mktdata_index_quotes",
 )
 
 
@@ -51,12 +52,14 @@ async def load_portfolio_snapshot(
     market_lookback_days: int = 30,
     market_fallback: bool = DEFAULT_MARKET_FALLBACK,
     market_fallback_source: str | None = DEFAULT_MARKET_FALLBACK_SOURCE,
+    benchmark_id: str | None = None,
 ) -> Any:
-    """Compose the existing ARISK snapshot and attach as-of market quotes."""
+    """Compose the existing ARISK snapshot: 持仓 + 个券行情 + 指数基准。"""
 
     from importlib import import_module
 
     from .asof import attach_market_panel, load_asof_market_panel
+    from .index import attach_benchmark, load_benchmark_pack
 
     loader = import_module("2_processing.tools.risk_testing.loader")
     snapshot = await loader.load_portfolio_snapshot(fund_id, as_of_date, db, lookback_days)
@@ -69,4 +72,11 @@ async def load_portfolio_snapshot(
         fallback_source=market_fallback_source,
     )
     attach_market_panel(snapshot, panel)
+    pack = await load_benchmark_pack(
+        db,
+        snapshot,
+        lookback_days=lookback_days,
+        benchmark_id=benchmark_id,
+    )
+    attach_benchmark(snapshot, pack)
     return snapshot

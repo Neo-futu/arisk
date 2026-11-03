@@ -84,8 +84,10 @@ CREATE TABLE IF NOT EXISTS fsi.mktdata_stock_static (
     created_at         TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     updated_at         TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
-COMMENT ON TABLE  fsi.mktdata_stock_static IS '股票靜態數據：支持全球主要市場（港股/美股/A股/歐股）';
-COMMENT ON COLUMN fsi.mktdata_stock_static.industry_standard IS 'GICS=全球行業分類 / CSRC=中國證監會 / WIND';
+COMMENT ON TABLE  fsi.mktdata_stock_static IS '股票靜態主數據：身份与股本等；行业权威见 mktdata_stock_industry';
+COMMENT ON COLUMN fsi.mktdata_stock_static.sector_level1 IS '行业一级名称缓存，与 mktdata_stock_industry 同步';
+COMMENT ON COLUMN fsi.mktdata_stock_static.sector_level2 IS '行业二级名称缓存，与 mktdata_stock_industry 同步';
+COMMENT ON COLUMN fsi.mktdata_stock_static.industry_standard IS '行业标准缓存（GICS/CSRC/WIND）；多标准映射见 mktdata_stock_industry';
 
 CREATE UNIQUE INDEX IF NOT EXISTS uidx_mkt_stock_isin ON fsi.mktdata_stock_static(isin) WHERE isin IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_mkt_stock_market ON fsi.mktdata_stock_static(market_id);

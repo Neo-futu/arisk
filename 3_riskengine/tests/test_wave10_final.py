@@ -485,10 +485,12 @@ def test_frontend_routes_permissions_and_release_stages() -> None:
     for name in required:
         assert (routes / name).is_file(), name
     assert 'id: "investment-overview"' in nav
-    assert "/portfolio-opt#construction" in nav
+    assert 'path: "/portfolio-opt"' in nav
     assert "/risk-testing/sensitivity" in nav
-    assert 'menuStages[path] !== "HIDDEN"' in sidebar
+    assert 'stages[path] !== "HIDDEN"' in sidebar or 'menuStages[path] !== "HIDDEN"' in sidebar
     assert 'itemStage === "BETA"' in sidebar
+    assert "menuStages" in sidebar
+    assert "HIDDEN" in sidebar
     spec = (ROOT / "frontend" / "tests" / "menu-architecture.spec.ts").read_text(encoding="utf-8")
     assert "deep links" in spec.lower()
     assert "menuStages" in spec
