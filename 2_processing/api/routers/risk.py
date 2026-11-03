@@ -164,6 +164,94 @@ async def governance_catalog() -> dict[str, Any]:
     return _gov.catalog()
 
 
+@router.get("/governance/pack/{fund_id}", summary="風險治理工作台數據包")
+async def governance_pack(
+    fund_id: str,
+    as_of_date: Annotated[date, Query(description="估值/持倉日期 YYYY-MM-DD")],
+    lookback_days: int = Query(252, ge=30, le=5000),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Limit evaluation + policy/appetite + model/valuation controls for the workbench."""
+    catalog = _gov.catalog()
+    policy = _gov.risk_policy()
+    appetite = _gov.risk_appetite()
+    errors: list[str] = []
+
+    snapshot = None
+    try:
+        snapshot = await _gov.load_snapshot(fund_id, as_of_date, db, lookback_days)
+    except Exception as exc:  # noqa: BLE001 — workbench must degrade, not hang the UI
+        errors.append(f"snapshot: {exc}")
+
+    limits: dict[str, Any] = {"limits": {}, "limit_ids": [], "state": None, "passed": None}
+    if snapshot is not None:
+        try:
+            limits = _gov.evaluate_limits(snapshot)
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"limits: {exc}")
+
+    model: dict[str, Any] = {"control": "model_validation", "status": "UNAVAILABLE", "checks": []}
+    valuation: dict[str, Any] = {"control": "valuation_control", "status": "UNAVAILABLE"}
+    if snapshot is not None:
+        try:
+            model = _gov.model_validation(snapshot)
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"model_validation: {exc}")
+            model = {"control": "model_validation", "status": "ERROR", "checks": [{"detail": str(exc)}]}
+        try:
+            valuation = _gov.valuation_control(snapshot)
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"valuation_control: {exc}")
+            valuation = {"control": "valuation_control", "status": "ERROR", "detail": str(exc)}
+
+    limit_rows = limits.get("limits") or {}
+    alerts = [
+        {"limit_id": lid, **row}
+        for lid, row in limit_rows.items()
+        if str(row.get("state", "")).upper() == "WARNING"
+    ]
+    breaches = [
+        {"limit_id": lid, **row}
+        for lid, row in limit_rows.items()
+        if str(row.get("state", "")).upper() in {"BREACH", "HARD_BREACH"}
+    ]
+    liquidity_ids = {"Liquidity", "WAM", "WAL", "Shadow NAV Deviation"}
+    liquidity = [
+        {"limit_id": lid, **row}
+        for lid, row in limit_rows.items()
+        if lid in liquidity_ids
+    ]
+    audit = _gov.default_cases().audit.entries()[-50:]
+    return {
+        "fund_id": fund_id,
+        "as_of_date": as_of_date,
+        "engine": catalog.get("engine"),
+        "engine_version": catalog.get("engine_version"),
+        "adapters": catalog.get("adapters"),
+        "modules": catalog.get("modules"),
+        "pre_trade_gate": catalog.get("pre_trade_gate"),
+        "decisions": catalog.get("decisions"),
+        "states": catalog.get("states"),
+        "policy": policy,
+        "appetite": appetite,
+        "limits": limits,
+        "alerts": alerts,
+        "breaches": breaches,
+        "liquidity": liquidity,
+        "model_validation": model,
+        "valuation_control": valuation,
+        "audit": audit,
+        "errors": errors,
+        "summary": {
+            "limit_count": len(limit_rows),
+            "warning_count": len(alerts),
+            "breach_count": len(breaches),
+            "aggregate_state": limits.get("state"),
+            "passed": limits.get("passed"),
+        },
+    }
+
+
 @router.post("/pre-trade", summary="前置風控：Order → Limit → APPROVE/WARNING/REJECT")
 async def pre_trade(req: PreTradeRequest, db: AsyncSession = Depends(get_db)) -> dict[str, Any]:
     snapshot = await _snapshot_for_pretrade(req, db)

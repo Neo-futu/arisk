@@ -196,6 +196,26 @@ async def limits_catalog(_user: CurrentUser, client: ProcessingClient) -> Any:
     return await _proxy(client, "/risk/limits/catalog")
 
 
+@router.get("/governance/catalog", summary="風險治理目錄")
+async def governance_catalog(_user: CurrentUser, client: ProcessingClient) -> Any:
+    return await _proxy(client, "/risk/governance/catalog")
+
+
+@router.get("/governance/pack/{fund_id}", summary="風險治理工作台數據包")
+async def governance_pack(
+    fund_id: str,
+    as_of_date: Annotated[date, Query(description="估值/持倉日期 YYYY-MM-DD")],
+    _user: PortfolioViewer,
+    client: ProcessingClient,
+    lookback_days: Annotated[int, Query(ge=30, le=5000)] = 500,
+) -> Any:
+    return await _proxy(
+        client,
+        f"/risk/governance/pack/{fund_id}",
+        {"as_of_date": str(as_of_date), "lookback_days": lookback_days},
+    )
+
+
 @router.post("/pre-trade", summary="前置風控")
 async def pre_trade(
     _user: CurrentUser,

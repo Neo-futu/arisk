@@ -102,6 +102,34 @@ async def get_risk_metric_board(
     return await _ir.compute_risk_metric_board(fund_id, start, end, db)
 
 
+@router.get("/benchmarks/{fund_id}")
+async def get_attribution_benchmarks(
+    fund_id: str,
+    as_of_date: Annotated[date, Query(description="估值日期 YYYY-MM-DD")],
+    db: AsyncSession = Depends(get_db),
+):
+    """归因可选基准：组合配置 para_portfolio_benchmark + 基准定义 para_benchmark_def。"""
+    return await _ir.list_attribution_benchmarks(db, fund_id, as_of_date)
+
+
+@router.get("/attribution-models/{fund_id}")
+async def get_attribution_models(
+    fund_id: str,
+    start: Annotated[date, Query(description="区间开始 YYYY-MM-DD")],
+    end: Annotated[date, Query(description="区间结束 YYYY-MM-DD")],
+    db: AsyncSession = Depends(get_db),
+    benchmark_id: Annotated[str | None, Query(description="基准代码，空则按组合主基准")] = None,
+):
+    """点击计算后实时跑收益贡献 / Brinson / Campisi，不读报表层。"""
+    _validate_period(start, end)
+    chosen = (benchmark_id or "").strip() or None
+    if chosen is None:
+        from importlib import import_module
+        common = import_module("2_processing.tools.performance.investment_analysis_common")
+        chosen = await common._benchmark_id(db, fund_id, end)
+    return await _ir.compute_model_attribution(fund_id, start, end, db, chosen)
+
+
 @router.get("/attribution/{fund_id}")
 async def get_performance_attribution(
     fund_id: str,
@@ -137,10 +165,21 @@ def _validate_period(start: date, end: date) -> None:
 async def get_rates_credit_sensitivity(
     fund_id: str,
     as_of_date: Annotated[date, Query(description="估值日期 YYYY-MM-DD")],
+    rating_source: Annotated[
+        str,
+        Query(
+            description="评级来源：all/domestic/foreign/sp/moody/fitch/csci/lianhe/internal",
+        ),
+    ] = "all",
     db: AsyncSession = Depends(get_db),
 ):
     """利率與信用風險敏感度：KRD/CS01/集中度/評級分佈。"""
-    return await _ir.compute_rates_credit_sensitivity(fund_id, as_of_date, db)
+    return await _ir.compute_rates_credit_sensitivity(
+        fund_id,
+        as_of_date,
+        db,
+        rating_source=rating_source,
+    )
 
 
 @router.get("/liquidity-stress/{fund_id}")
@@ -229,9 +268,23 @@ async def get_factor_behavior(
     end: Annotated[date, Query(description="區間結束日期 YYYY-MM-DD")],
     db: AsyncSession = Depends(get_db),
 ):
-    """基本面/因子/行為風險：風格暴露、擁擠度、集中度與踩踏預警。"""
+    """基本面因子与行为：Momentum/LowVol/Size、行业集中度、交易拥挤度。"""
     _validate_period(start, end)
     return await _ir.compute_factor_behavior_risk(fund_id, start, end, db)
+
+
+@router.get("/factor-risk/{fund_id}")
+async def get_factor_risk(
+    fund_id: str,
+    start: Annotated[date, Query(description="區間開始日期 YYYY-MM-DD")],
+    end: Annotated[date, Query(description="區間結束日期 YYYY-MM-DD")],
+    benchmark_id: Annotated[str | None, Query(description="基准指数代码，空则用组合主基准")] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """因子风险：RiskEngine Factor Exposure / 因子冲击 PnL / Beta·TE。"""
+    _validate_period(start, end)
+    chosen = (benchmark_id or "").strip() or None
+    return await _ir.compute_factor_risk(fund_id, start, end, db, benchmark_id=chosen)
 
 
 @router.get("/kpi-catalog", summary="投資風險 KPI 目錄")

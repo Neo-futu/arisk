@@ -63,7 +63,7 @@ class MyProduct(Product):
 
 曲线从 `market.curves["reprice_from_ytm"]` 或 `market.curves["ore_reprice"]` 取 callable，不要在产品里 `import ORE`。
 
-**REPO / STRUCTURED：** 枚举与路由已在，缺的是产品类与定价实现。优先按上表补齐，而不是新开平行引擎。
+**REPO / STRUCTURED：** `products/fixed_income.py` `Repo`（FinancePy `repo_carry`）与 `products/structured.py` `StructuredNote`（ORE `scripted_or_otc`）已接入组装与路由。
 
 ---
 

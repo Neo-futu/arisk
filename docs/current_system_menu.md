@@ -21,8 +21,8 @@
 | 投资风险分析 | `/investment-risk` | 模块总览 | `/investment-risk` | 父级点击展开 |
 | 投资风险分析 | `/investment-risk` | 组合概况 | `/investment-risk/overview` |  |
 | 投资风险分析 | `/investment-risk` | 风险指标 | `/investment-risk/indicators` |  |
-| 投资风险分析 | `/investment-risk` | 风险暴露 | `/investment-risk/indicators#risk-exposure` | 锚点，页面文件未拆分 |
-| 投资风险分析 | `/investment-risk` | 因子风险 | `/investment-risk/factor-behavior#factor-risk` |  |
+| 投资风险分析 | `/investment-risk` | 整体风险敞口 | `/investment-risk/indicators#risk-exposure` | 锚点，页面文件未拆分 |
+| 投资风险分析 | `/investment-risk` | 因子风险 | `/investment-risk/factor-risk` |  |
 | 投资风险分析 | `/investment-risk` | 市场风险 | `/investment-risk/macro-dynamics#market-risk` |  |
 | 投资风险分析 | `/investment-risk` | 利率与信用风险 | `/investment-risk/rates-credit` |  |
 | 投资风险分析 | `/investment-risk` | 外汇与资产风险 | `/investment-risk/overview#asset-risk` |  |
@@ -31,25 +31,10 @@
 | 投资风险分析 | `/investment-risk` | 交易对手风险 | `/investment-risk/rates-credit#counterparty-risk` |  |
 | 投资风险分析 | `/investment-risk` | 杠杆与衍生品风险 | `/investment-risk/indicators#leverage-derivatives-risk` |  |
 | 投资风险分析 | `/investment-risk` | 绩效与 PnL 归因 | `/investment-risk/attribution` |  |
-| 投资风险分析 | `/investment-risk` | 风险预算 | `/investment-risk/pretrade-budget#risk-budget` |  |
 | 投资风险分析 | `/investment-risk` | 宏观与市场动态 | `/investment-risk/macro-dynamics` |  |
 | 投资风险分析 | `/investment-risk` | 基本面因子与行为 | `/investment-risk/factor-behavior` |  |
-| 组合配置与优化 | `/portfolio-opt` | 模块总览 | `/portfolio-opt#overview` | 路由仍为 `/portfolio-opt` |
-| 组合配置与优化 | `/portfolio-opt` | 组合构建 | `/portfolio-opt#parameters` |  |
-| 组合配置与优化 | `/portfolio-opt` | SAA | `/portfolio-opt#return-models` |  |
-| 组合配置与优化 | `/portfolio-opt` | TAA | `/portfolio-opt#return-models` |  |
-| 组合配置与优化 | `/portfolio-opt` | 风险预算 | `/portfolio-opt#asset-metrics` |  |
-| 组合配置与优化 | `/portfolio-opt` | 风险平价 | `/portfolio-opt#portfolios` |  |
-| 组合配置与优化 | `/portfolio-opt` | Black-Litterman | `/portfolio-opt#return-models` |  |
-| 组合配置与优化 | `/portfolio-opt` | HRP / HERC | `/portfolio-opt#portfolios` |  |
-| 组合配置与优化 | `/portfolio-opt` | CVaR 优化 | `/portfolio-opt#asset-metrics` |  |
-| 组合配置与优化 | `/portfolio-opt` | 因子约束 | `/portfolio-opt#parameters` |  |
-| 组合配置与优化 | `/portfolio-opt` | 流动性约束 | `/portfolio-opt#parameters` |  |
-| 组合配置与优化 | `/portfolio-opt` | 集中度约束 | `/portfolio-opt#parameters` |  |
-| 组合配置与优化 | `/portfolio-opt` | 杠杆约束 | `/portfolio-opt#parameters` |  |
-| 组合配置与优化 | `/portfolio-opt` | 换手率约束 | `/portfolio-opt#parameters` |  |
-| 组合配置与优化 | `/portfolio-opt` | 模拟组合 | `/portfolio-opt#user-weights` |  |
-| 组合配置与优化 | `/portfolio-opt` | 组合验证 | `/portfolio-opt#charts` |  |
+| 组合优化风险预算 | `/portfolio-opt` | 组合配置与优化 | `/portfolio-opt` |  |
+| 组合优化风险预算 | `/portfolio-opt` | 风险预算与前置试算 | `/investment-risk/pretrade-budget#risk-budget` | 路由仍在 investment-risk |
 | 风险测试 | `/risk-testing` | 敏感度测试 | `/risk-testing/sensitivity` |  |
 | 风险测试 | `/risk-testing` | 压力测试 | `/risk-testing/stress` |  |
 | 风险测试 | `/risk-testing` | 情景测试 | `/risk-testing/scenario` |  |
@@ -114,8 +99,8 @@
 │   ├── 模块总览 (/investment-risk)
 │   ├── 组合概况 (/investment-risk/overview)
 │   ├── 风险指标 (/investment-risk/indicators)
-│   ├── 风险暴露 (/investment-risk/indicators#risk-exposure)
-│   ├── 因子风险 (/investment-risk/factor-behavior#factor-risk)
+│   ├── 整体风险敞口 (/investment-risk/indicators#risk-exposure)
+│   ├── 因子风险 (/investment-risk/factor-risk)
 │   ├── 市场风险 (/investment-risk/macro-dynamics#market-risk)
 │   ├── 利率与信用风险 (/investment-risk/rates-credit)
 │   ├── 外汇与资产风险 (/investment-risk/overview#asset-risk)
@@ -124,26 +109,11 @@
 │   ├── 交易对手风险 (/investment-risk/rates-credit#counterparty-risk)
 │   ├── 杠杆与衍生品风险 (/investment-risk/indicators#leverage-derivatives-risk)
 │   ├── 绩效与 PnL 归因 (/investment-risk/attribution)
-│   ├── 风险预算 (/investment-risk/pretrade-budget#risk-budget)
 │   ├── 宏观与市场动态 (/investment-risk/macro-dynamics)
 │   └── 基本面因子与行为 (/investment-risk/factor-behavior)
-├── 组合配置与优化 (/portfolio-opt)
-│   ├── 模块总览
-│   ├── 组合构建
-│   ├── SAA
-│   ├── TAA
-│   ├── 风险预算
-│   ├── 风险平价
-│   ├── Black-Litterman
-│   ├── HRP / HERC
-│   ├── CVaR 优化
-│   ├── 因子约束
-│   ├── 流动性约束
-│   ├── 集中度约束
-│   ├── 杠杆约束
-│   ├── 换手率约束
-│   ├── 模拟组合
-│   └── 组合验证
+├── 组合优化风险预算 (/portfolio-opt)
+│   ├── 组合配置与优化 (/portfolio-opt)
+│   └── 风险预算与前置试算 (/investment-risk/pretrade-budget#risk-budget)
 ├── 风险测试 (/risk-testing)
 │   ├── 敏感度测试
 │   ├── 压力测试

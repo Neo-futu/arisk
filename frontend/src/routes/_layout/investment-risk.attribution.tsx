@@ -21,6 +21,7 @@ import {
 import { fsiApi, type SecurityPnl } from "@/fsiClient"
 import { exportCsv, TrendLineChart } from "@/modules/investment-risk/dashboard-kit"
 import { EngineKpiPanel } from "@/modules/investment-risk/EngineKpiPanel"
+import { AttributionModelPanel } from "@/modules/investment-risk/AttributionModelPanel"
 import { EquityBetaContributionCard } from "@/modules/investment-risk/EquityBetaContributionCard"
 
 export const Route = createFileRoute("/_layout/investment-risk/attribution")({
@@ -158,6 +159,8 @@ function PerformanceAttributionPage() {
           </CardContent>
         </Card>
       )}
+
+      <AttributionModelPanel fundId={fundId} startDate={startDate} endDate={endDate} />
 
       {data && (
         <>

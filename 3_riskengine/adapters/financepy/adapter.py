@@ -126,6 +126,22 @@ class FinancePyAdapter:
         terminal = float(market_value_base) / base_df if base_df else float(market_value_base)
         return float(terminal * self.shocked_discount_factor(zero_rate, shock, years, as_of))
 
+    def repo_carry(
+        self,
+        repo_rate: float,
+        years: float,
+        market_value_base: float,
+        shock: float = 0.0,
+        haircut: float = 0.0,
+        value_date: date | None = None,
+    ) -> float:
+        """Repo / reverse-repo carry. Zero-shock identity = book MV; rate bump uses flat DF."""
+
+        del haircut  # haircut is audited on cashflows / liquidity; PV identity stays on book
+        if abs(float(shock)) < 1e-15:
+            return float(market_value_base)
+        return self.reprice_from_ytm(repo_rate, years, market_value_base, shock, value_date)
+
 
 class FinancePyValuationAdapter(FinancePyAdapter):
     """Compatibility name used by existing Risk Testing reports."""

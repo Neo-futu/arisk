@@ -13,12 +13,13 @@ from ..instruments.classify import coupon_rate, issuer_name, product_kind_of
 from .cash import Cash
 from .credit import CreditDefaultSwap
 from .equity import Equity
-from .fixed_income import Bond, CertificateOfDeposit, Deposit
+from .fixed_income import Bond, CertificateOfDeposit, Deposit, Repo
 from .fx import FxForward, FxOption, FxSpot
 from .futures import Future
 from .money_market.fund import MoneyMarketFund, is_money_market_book
 from .options import EquityOption
 from .rates import InterestRateSwap, Swaption
+from .structured import StructuredNote
 
 
 def _instrument(position: Any, kind: ProductKind) -> Instrument:
@@ -86,6 +87,15 @@ def product_from_holding(position: Any) -> Product:
         return Deposit(kind=kind, instrument=instrument, **common, **fi)
     if kind is ProductKind.CD:
         return CertificateOfDeposit(kind=kind, instrument=instrument, **common, **fi)
+    if kind is ProductKind.REPO:
+        return Repo(
+            kind=kind,
+            instrument=instrument,
+            **common,
+            **fi,
+            haircut=float(common["metadata"].get("haircut") or 0.0),
+            repo_rate=float(common["metadata"].get("repo_rate") or fi.get("ytm") or 0.0),
+        )
     if kind is ProductKind.EQUITY:
         return Equity(kind=kind, instrument=instrument, **common)
     if kind is ProductKind.MMF:
@@ -108,6 +118,8 @@ def product_from_holding(position: Any) -> Product:
         return Swaption(kind=kind, instrument=instrument, **common, **otc)
     if kind is ProductKind.CDS:
         return CreditDefaultSwap(kind=kind, instrument=instrument, **common, **otc)
+    if kind is ProductKind.STRUCTURED:
+        return StructuredNote(kind=kind, instrument=instrument, **common, **otc)
     if kind in {ProductKind.FUND, ProductKind.ETF}:
         return Product(kind=kind, instrument=instrument, **common)
     return Cash(kind=ProductKind.CASH, instrument=instrument, **common)

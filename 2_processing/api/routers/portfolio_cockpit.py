@@ -164,10 +164,10 @@ async def overview(
             by_id[sr["port_id"]]["history"].append(point)
             if net_asset is not None:
                 by_id[sr["port_id"]]["sparkline"].append(net_asset)
+        cockpit_math = import_module("3_riskengine.portfolio.cockpit")
         for portfolio in portfolios:
-            navs = [point["unit_nav"] for point in portfolio["history"] if point["unit_nav"]]
-            if len(navs) >= 2 and navs[0]:
-                portfolio["period_return"] = navs[-1] / navs[0] - 1.0
+            portfolio["period_return"] = cockpit_math.period_return(portfolio["history"])
+            portfolio["indexed_nav"] = cockpit_math.indexed_nav_series(portfolio["history"])
 
     by_type: dict[str, int] = {}
     for p in portfolios:
@@ -177,6 +177,8 @@ async def overview(
         if p["net_asset"] is not None:
             total_aum[p["base_currency"]] = total_aum.get(p["base_currency"], 0.0) + p["net_asset"]
 
+    cockpit_math = import_module("3_riskengine.portfolio.cockpit")
+    charts = cockpit_math.charts_payload(portfolios)
     return {
         "as_of_date": ended.isoformat() if ended else None,
         "start_date": start_date.isoformat() if start_date else None,
@@ -191,4 +193,14 @@ async def overview(
             "total_aum": total_aum,
         },
         "portfolios": portfolios,
+        "charts": charts,
+        "business_modules": list(cockpit_math.BUSINESS_MODULES),
+        "page": {
+            "path": "/portfolio-cockpit",
+            "table_columns": list(cockpit_math.TABLE_COLUMNS),
+            "chart_ids": list(cockpit_math.LEGACY_CHART_IDS),
+            "business_modules": list(cockpit_math.BUSINESS_MODULES),
+        },
+        "engine": "ARISK RiskEngine",
+        "engine_version": import_module("3_riskengine.core.lineage").RISKENGINE_VERSION,
     }

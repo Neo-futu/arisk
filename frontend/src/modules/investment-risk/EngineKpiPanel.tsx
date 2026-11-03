@@ -16,6 +16,13 @@ import { fsiApi, type InvestmentKpiReport } from "@/fsiClient"
 import { AdapterStatusBar } from "@/platform/AdapterStatus"
 import { HorizontalBarList } from "@/modules/investment-risk/dashboard-kit"
 
+function isFactorExposureMap(result: Record<string, unknown>): boolean {
+  const values = Object.values(result)
+  return values.length > 0 && values.every(
+    (item) => item && typeof item === "object" && typeof (item as { pct_nav?: unknown }).pct_nav === "number",
+  )
+}
+
 export function formatKpiResult(result: unknown): string {
   if (result == null) return "—"
   if (typeof result === "number") {
@@ -26,6 +33,15 @@ export function formatKpiResult(result: unknown): string {
     // Duration: { weighted_years, fixed_income_mv }
     if (typeof row.weighted_years === "number") {
       return `${row.weighted_years.toFixed(3)} yr`
+    }
+    // Factor Exposure: { RATE_CREDIT: {amount, pct_nav}, ... }
+    if (isFactorExposureMap(row)) {
+      return Object.entries(row)
+        .map(([factor, payload]) => {
+          const pct = Number((payload as { pct_nav: number }).pct_nav)
+          return `${factor} ${pct.toFixed(1)}%`
+        })
+        .join(" · ")
     }
     // Leverage prefers pct when present (avoid showing ratio as amount)
     if (typeof row.pct === "number" && typeof row.amount !== "number") {
@@ -45,6 +61,12 @@ export function formatKpiResult(result: unknown): string {
     }
     if (typeof row.pct_nav === "number") {
       return `${row.pct_nav.toFixed(2)}% NAV`
+    }
+    if (typeof row.beta === "number" || row.beta === null) {
+      return row.beta == null ? "—" : Number(row.beta).toFixed(4)
+    }
+    if (typeof row.annualized_pct === "number" || row.annualized_pct === null) {
+      return row.annualized_pct == null ? "—" : `${Number(row.annualized_pct).toFixed(2)}%`
     }
   }
   try {
@@ -108,6 +130,8 @@ export function EngineKpiPanel({
   variant = "full",
   badgeLabel,
   embed = false,
+  showAdapters = true,
+  showEngineBadge = true,
 }: {
   domain: string
   fundId: string
@@ -118,6 +142,10 @@ export function EngineKpiPanel({
   badgeLabel?: string
   /** 嵌入外层 Card 时不重复包一层 Card */
   embed?: boolean
+  /** 是否展示 FinancePy / Riskfolio / ORE 适配状态条 */
+  showAdapters?: boolean
+  /** 是否展示「经 RiskEngine」角标 */
+  showEngineBadge?: boolean
 }) {
   const { t } = useTranslation()
   const useReportLayer = variant === "metrics" && domain === "overview"
@@ -133,12 +161,15 @@ export function EngineKpiPanel({
     queryFn: () => fsiApi.getReportedExposure(fundId, asOfDate).then((response) => response.data),
     enabled: useReportLayer,
     retry: 1,
+    placeholderData: (previous) => previous,
   })
   const pack = useQuery({
     queryKey: ["investment-kpi-pack", fundId, asOfDate],
     queryFn: () => fsiApi.getInvestmentKpiPack(fundId, asOfDate).then((response) => response.data),
     enabled: !useReportLayer,
     retry: 1,
+    staleTime: 60_000,
+    placeholderData: (previous) => previous,
   })
 
   const reports = useMemo(() => {
@@ -151,26 +182,38 @@ export function EngineKpiPanel({
       .filter((item): item is InvestmentKpiReport => Boolean(item))
   }, [catalog.data?.domains, domain, pack.data?.domains, pack.data?.kpis, reported.data?.kpis, useReportLayer])
 
-  const chartItems = reports.map((report) => ({
-    label: localizeKpiName(report.kpi, t),
-    value: chartValue(report),
-  }))
+  const chartItems = useMemo(() => {
+    const items: Array<{ label: string; value: number }> = []
+    for (const report of reports) {
+      const result = report.result
+      if (result && typeof result === "object" && isFactorExposureMap(result as Record<string, unknown>)) {
+        for (const [factor, payload] of Object.entries(result as Record<string, { pct_nav: number }>)) {
+          items.push({ label: factor, value: Math.abs(Number(payload.pct_nav) || 0) })
+        }
+        continue
+      }
+      items.push({ label: localizeKpiName(report.kpi, t), value: chartValue(report) })
+    }
+    return items
+  }, [reports, t])
 
   const heading = title ?? t("engine.kpiPackTitle", { domain })
-  const showBadge = badgeLabel !== undefined
+  const showBadge = showEngineBadge && (badgeLabel !== undefined ? Boolean(badgeLabel) : true)
   const badge = badgeLabel ?? t("engine.viaRiskEngine")
+  const isFetching = useReportLayer ? reported.isFetching : pack.isFetching
+  const isError = useReportLayer ? reported.isError : pack.isError
 
   if (variant === "metrics") {
     const body = (
-      <>
-        {(useReportLayer ? reported.isError : pack.isError) ? (
+      <div className="min-h-[7.5rem]">
+        {isError ? (
           <p className="text-sm text-destructive">{t("engine.kpiLoadError")}</p>
         ) : null}
-        {!(useReportLayer ? reported.isFetching : pack.isFetching) && !(useReportLayer ? reported.isError : pack.isError) && !reports.length ? (
+        {!isFetching && !isError && !reports.length ? (
           <p className="text-sm text-muted-foreground">{t("platform.empty")}</p>
         ) : null}
         {reports.length ? (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className={`grid gap-4 md:grid-cols-2 xl:grid-cols-4 ${isFetching ? "opacity-70" : ""}`}>
             {reports.map((report) => (
               <div
                 key={report.kpi}
@@ -188,7 +231,7 @@ export function EngineKpiPanel({
             ))}
           </div>
         ) : null}
-      </>
+      </div>
     )
 
     if (embed) {
@@ -210,26 +253,27 @@ export function EngineKpiPanel({
 
   return (
     <Card data-testid={`engine-kpi-${domain}`}>
-      <CardHeader className="space-y-3">
+      <CardHeader className={showAdapters ? "space-y-3" : undefined}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle className="text-base">{heading}</CardTitle>
-          <Badge variant="outline">{badge}</Badge>
+          {showBadge ? <Badge variant="outline">{badge}</Badge> : null}
         </div>
-        <AdapterStatusBar
-          adapters={catalog.data?.adapters ?? pack.data?.adapters}
-          engine={catalog.data?.engine ?? pack.data?.engine}
-          engineVersion={catalog.data?.engine_version ?? pack.data?.engine_version}
-        />
+        {showAdapters ? (
+          <AdapterStatusBar
+            adapters={catalog.data?.adapters ?? pack.data?.adapters}
+            engine={catalog.data?.engine ?? pack.data?.engine}
+            engineVersion={catalog.data?.engine_version ?? pack.data?.engine_version}
+          />
+        ) : null}
       </CardHeader>
-      <CardContent className="space-y-4">
-        {pack.isFetching ? <p className="text-sm text-muted-foreground">{t("platform.loading")}</p> : null}
-        {pack.isError ? <p className="text-sm text-destructive">{t("engine.kpiLoadError")}</p> : null}
-        {!pack.isFetching && !pack.isError && !reports.length ? (
+      <CardContent className="min-h-[14rem] space-y-4">
+        {isError ? <p className="text-sm text-destructive">{t("engine.kpiLoadError")}</p> : null}
+        {!isFetching && !isError && !reports.length ? (
           <p className="text-sm text-muted-foreground">{t("platform.empty")}</p>
         ) : null}
         {reports.length ? (
-          <div className="grid gap-6 xl:grid-cols-[1.4fr_0.8fr]">
-            <div className="overflow-x-auto">
+          <div className={`grid h-[12rem] gap-6 xl:grid-cols-[1.4fr_0.8fr] ${isFetching ? "opacity-70" : ""}`}>
+            <div className="overflow-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -243,17 +287,25 @@ export function EngineKpiPanel({
                   {reports.map((report) => (
                     <TableRow key={report.kpi}>
                       <TableCell className="font-medium">{localizeKpiName(report.kpi, t)}</TableCell>
-                      <TableCell className="font-mono text-xs">{formatKpiResult(report.result)}</TableCell>
+                      <TableCell className="max-w-[18rem] truncate font-mono text-xs" title={formatKpiResult(report.result)}>
+                        {formatKpiResult(report.result)}
+                      </TableCell>
                       <TableCell className="text-xs">{report.engine}</TableCell>
-                      <TableCell className="max-w-md text-xs text-muted-foreground">{report.formula}</TableCell>
+                      <TableCell className="max-w-[14rem] truncate text-xs text-muted-foreground" title={report.formula}>
+                        {report.formula}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
-            <HorizontalBarList items={chartItems} formatter={(value) => value.toFixed(2)} />
+            <div className="overflow-auto">
+              <HorizontalBarList items={chartItems} formatter={(value) => value.toFixed(2)} />
+            </div>
           </div>
-        ) : null}
+        ) : (
+          <div className="h-[12rem]" />
+        )}
       </CardContent>
     </Card>
   )

@@ -140,6 +140,35 @@ async def get_risk_metric_board(
     )
 
 
+@router.get("/benchmarks/{fund_id}", summary="归因可选基准")
+async def get_attribution_benchmarks(
+    fund_id: str,
+    as_of_date: Annotated[date, Query(description="估值日期")],
+    _user: PortfolioViewer,
+    client: ProcessingClient,
+) -> Any:
+    return await _proxy(
+        client,
+        f"/investment/benchmarks/{fund_id}",
+        {"as_of_date": str(as_of_date)},
+    )
+
+
+@router.get("/attribution-models/{fund_id}", summary="Brinson 与 Campisi 实时计算")
+async def get_attribution_models(
+    fund_id: str,
+    start: Annotated[date, Query(description="区间开始")],
+    end: Annotated[date, Query(description="区间结束")],
+    _user: PortfolioViewer,
+    client: ProcessingClient,
+    benchmark_id: Annotated[str | None, Query(description="基准代码")] = None,
+) -> Any:
+    params: dict[str, str] = {"start": str(start), "end": str(end)}
+    if benchmark_id:
+        params["benchmark_id"] = benchmark_id
+    return await _proxy(client, f"/investment/attribution-models/{fund_id}", params)
+
+
 @router.get("/attribution/{fund_id}", summary="績效歸因")
 async def get_performance_attribution(
     fund_id: str,
@@ -176,11 +205,15 @@ async def get_rates_credit(
     as_of_date: Annotated[date, Query(description="估值日期 YYYY-MM-DD")],
     _user: PortfolioViewer,
     client: ProcessingClient,
+    rating_source: Annotated[
+        str,
+        Query(description="评级来源：all/domestic/foreign/sp/moody/fitch/csci/lianhe/internal"),
+    ] = "all",
 ) -> Any:
     return await _proxy(
         client,
         f"/investment/rates-credit/{fund_id}",
-        {"as_of_date": str(as_of_date)},
+        {"as_of_date": str(as_of_date), "rating_source": rating_source},
     )
 
 
@@ -281,6 +314,25 @@ async def get_factor_behavior(
         client,
         f"/investment/factor-behavior/{fund_id}",
         {"start": str(start), "end": str(end)},
+    )
+
+
+@router.get("/factor-risk/{fund_id}", summary="因子風險")
+async def get_factor_risk(
+    fund_id: str,
+    start: Annotated[date, Query(description="區間開始日期")],
+    end: Annotated[date, Query(description="區間結束日期")],
+    _user: PortfolioViewer,
+    client: ProcessingClient,
+    benchmark_id: Annotated[str | None, Query(description="基准指数代码")] = None,
+) -> Any:
+    params: dict[str, str] = {"start": str(start), "end": str(end)}
+    if benchmark_id:
+        params["benchmark_id"] = benchmark_id
+    return await _proxy(
+        client,
+        f"/investment/factor-risk/{fund_id}",
+        params,
     )
 
 

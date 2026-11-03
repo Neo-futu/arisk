@@ -255,6 +255,32 @@ async def handle_stock(db: AsyncSession, action: str, port_id: str, eval_date: d
                 "data_source": TEST_DATA_SOURCE,
             },
         )
+        await db.execute(
+            text("""
+                INSERT INTO fsi.mktdata_stock_industry (
+                    security_code, internal_id, standard,
+                    industry_code, industry_name,
+                    level1_code, level1_name, level2_code, level2_name,
+                    begin_date, end_date, is_primary, data_source
+                ) VALUES (
+                    :security_code, :internal_id, 'GICS',
+                    'INFORMATION-TECHNOLOGY', 'Information Technology',
+                    'INFORMATION-TECHNOLOGY', 'Information Technology',
+                    'SOFTWARE-SERVICES', 'Software & Services',
+                    DATE '1900-01-01', NULL, TRUE, :data_source
+                )
+                ON CONFLICT (security_code, standard, industry_code, begin_date) DO UPDATE
+                SET industry_name = EXCLUDED.industry_name,
+                    level1_name = EXCLUDED.level1_name,
+                    level2_name = EXCLUDED.level2_name,
+                    is_primary = TRUE
+            """),
+            {
+                "internal_id": f"STK_{TEST_STOCK_CODE.replace('.', '_')}",
+                "security_code": TEST_STOCK_CODE,
+                "data_source": TEST_DATA_SOURCE,
+            },
+        )
 
         # 3. 插入 balance_stock 持倉數據（補上 market_id）
         await db.execute(
@@ -297,7 +323,18 @@ async def handle_stock(db: AsyncSession, action: str, port_id: str, eval_date: d
             },
         )
 
-        # 2. 清理 mktdata_stock_static 測試數據
+        # 2. 清理行业映射与静态主数据
+        await db.execute(
+            text("""
+                DELETE FROM fsi.mktdata_stock_industry
+                WHERE security_code = :security_code
+                  AND data_source = :data_source;
+            """),
+            {
+                "security_code": TEST_STOCK_CODE,
+                "data_source": TEST_DATA_SOURCE,
+            },
+        )
         await db.execute(
             text("""
                 DELETE FROM fsi.mktdata_stock_static

@@ -1,7 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   Download,
-  LineChart as LineChartIcon,
   Pencil,
   Plus,
   RefreshCw,
@@ -11,7 +10,6 @@ import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -132,7 +130,7 @@ function MultiLineChart({ series }: { series: IndicatorSeries[] }) {
   )
 }
 
-export function IndicatorExplorerPage() {
+export function IndicatorExplorerPage({ embed = false }: { embed?: boolean } = {}) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [category, setCategory] = useState<string>(ALL)
@@ -238,16 +236,14 @@ export function IndicatorExplorerPage() {
 
   return (
     <div id="quotes" className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="mb-2 flex items-center gap-2">
-            <Badge className="gap-1"><LineChartIcon className="h-3.5 w-3.5" />DataJungle</Badge>
-            <Badge variant="outline">Module 3.2</Badge>
+      {!embed ? (
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">{t("indicatorExplorer.title")}</h1>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("indicatorExplorer.subtitle")}</p>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">{t("indicatorExplorer.title")}</h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{t("indicatorExplorer.subtitle")}</p>
         </div>
-      </div>
+      ) : null}
 
       <div className="space-y-5">
           <Card id="catalog" className="scroll-mt-20 border-primary/20 bg-gradient-to-br from-primary/[0.06] to-transparent">

@@ -47,7 +47,20 @@ def test_category_indicators_by_prefix() -> None:
 
 def test_category_mmf_group() -> None:
     assert sql_assets._category("mmf", "01_nav_deviation.sql") == "貨幣基金報表"
+    assert (
+        sql_assets._category("mmf", "01_nav_deviation.sql", "mmf/report_06/01_nav_deviation.sql")
+        == "貨幣基金報表/report_06"
+    )
 
 
 def test_category_other_fallback() -> None:
     assert sql_assets._category("indicators", "misc_query.sql") == "其他"
+
+
+def test_scan_has_indicators_and_mmf() -> None:
+    items = sql_assets._scan()
+    assert items, "expected SQL assets under 2_processing/sql"
+    groups = {item["group"] for item in items}
+    assert "indicators" in groups
+    assert "mmf" in groups
+    assert all("package" in item for item in items)

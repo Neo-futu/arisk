@@ -59,6 +59,7 @@ import { Route as LayoutInvestmentRiskOverviewRouteImport } from './routes/_layo
 import { Route as LayoutInvestmentRiskMacroDynamicsRouteImport } from './routes/_layout/investment-risk.macro-dynamics'
 import { Route as LayoutInvestmentRiskLiquidityStressRouteImport } from './routes/_layout/investment-risk.liquidity-stress'
 import { Route as LayoutInvestmentRiskIndicatorsRouteImport } from './routes/_layout/investment-risk.indicators'
+import { Route as LayoutInvestmentRiskFactorRiskRouteImport } from './routes/_layout/investment-risk.factor-risk'
 import { Route as LayoutInvestmentRiskFactorBehaviorRouteImport } from './routes/_layout/investment-risk.factor-behavior'
 import { Route as LayoutInvestmentRiskAttributionRouteImport } from './routes/_layout/investment-risk.attribution'
 
@@ -326,6 +327,12 @@ const LayoutInvestmentRiskIndicatorsRoute =
     path: '/indicators',
     getParentRoute: () => LayoutInvestmentRiskRoute,
   } as any)
+const LayoutInvestmentRiskFactorRiskRoute =
+  LayoutInvestmentRiskFactorRiskRouteImport.update({
+    id: '/factor-risk',
+    path: '/factor-risk',
+    getParentRoute: () => LayoutInvestmentRiskRoute,
+  } as any)
 const LayoutInvestmentRiskFactorBehaviorRoute =
   LayoutInvestmentRiskFactorBehaviorRouteImport.update({
     id: '/factor-behavior',
@@ -372,6 +379,7 @@ export interface FileRoutesByFullPath {
   '/valuation': typeof LayoutValuationRoute
   '/investment-risk/attribution': typeof LayoutInvestmentRiskAttributionRoute
   '/investment-risk/factor-behavior': typeof LayoutInvestmentRiskFactorBehaviorRoute
+  '/investment-risk/factor-risk': typeof LayoutInvestmentRiskFactorRiskRoute
   '/investment-risk/indicators': typeof LayoutInvestmentRiskIndicatorsRoute
   '/investment-risk/liquidity-stress': typeof LayoutInvestmentRiskLiquidityStressRoute
   '/investment-risk/macro-dynamics': typeof LayoutInvestmentRiskMacroDynamicsRoute
@@ -423,6 +431,7 @@ export interface FileRoutesByTo {
   '/': typeof LayoutIndexRoute
   '/investment-risk/attribution': typeof LayoutInvestmentRiskAttributionRoute
   '/investment-risk/factor-behavior': typeof LayoutInvestmentRiskFactorBehaviorRoute
+  '/investment-risk/factor-risk': typeof LayoutInvestmentRiskFactorRiskRoute
   '/investment-risk/indicators': typeof LayoutInvestmentRiskIndicatorsRoute
   '/investment-risk/liquidity-stress': typeof LayoutInvestmentRiskLiquidityStressRoute
   '/investment-risk/macro-dynamics': typeof LayoutInvestmentRiskMacroDynamicsRoute
@@ -478,6 +487,7 @@ export interface FileRoutesById {
   '/_layout/': typeof LayoutIndexRoute
   '/_layout/investment-risk/attribution': typeof LayoutInvestmentRiskAttributionRoute
   '/_layout/investment-risk/factor-behavior': typeof LayoutInvestmentRiskFactorBehaviorRoute
+  '/_layout/investment-risk/factor-risk': typeof LayoutInvestmentRiskFactorRiskRoute
   '/_layout/investment-risk/indicators': typeof LayoutInvestmentRiskIndicatorsRoute
   '/_layout/investment-risk/liquidity-stress': typeof LayoutInvestmentRiskLiquidityStressRoute
   '/_layout/investment-risk/macro-dynamics': typeof LayoutInvestmentRiskMacroDynamicsRoute
@@ -533,6 +543,7 @@ export interface FileRouteTypes {
     | '/valuation'
     | '/investment-risk/attribution'
     | '/investment-risk/factor-behavior'
+    | '/investment-risk/factor-risk'
     | '/investment-risk/indicators'
     | '/investment-risk/liquidity-stress'
     | '/investment-risk/macro-dynamics'
@@ -584,6 +595,7 @@ export interface FileRouteTypes {
     | '/'
     | '/investment-risk/attribution'
     | '/investment-risk/factor-behavior'
+    | '/investment-risk/factor-risk'
     | '/investment-risk/indicators'
     | '/investment-risk/liquidity-stress'
     | '/investment-risk/macro-dynamics'
@@ -638,6 +650,7 @@ export interface FileRouteTypes {
     | '/_layout/'
     | '/_layout/investment-risk/attribution'
     | '/_layout/investment-risk/factor-behavior'
+    | '/_layout/investment-risk/factor-risk'
     | '/_layout/investment-risk/indicators'
     | '/_layout/investment-risk/liquidity-stress'
     | '/_layout/investment-risk/macro-dynamics'
@@ -1019,6 +1032,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutInvestmentRiskIndicatorsRouteImport
       parentRoute: typeof LayoutInvestmentRiskRoute
     }
+    '/_layout/investment-risk/factor-risk': {
+      id: '/_layout/investment-risk/factor-risk'
+      path: '/factor-risk'
+      fullPath: '/investment-risk/factor-risk'
+      preLoaderRoute: typeof LayoutInvestmentRiskFactorRiskRouteImport
+      parentRoute: typeof LayoutInvestmentRiskRoute
+    }
     '/_layout/investment-risk/factor-behavior': {
       id: '/_layout/investment-risk/factor-behavior'
       path: '/factor-behavior'
@@ -1039,6 +1059,7 @@ declare module '@tanstack/react-router' {
 interface LayoutInvestmentRiskRouteChildren {
   LayoutInvestmentRiskAttributionRoute: typeof LayoutInvestmentRiskAttributionRoute
   LayoutInvestmentRiskFactorBehaviorRoute: typeof LayoutInvestmentRiskFactorBehaviorRoute
+  LayoutInvestmentRiskFactorRiskRoute: typeof LayoutInvestmentRiskFactorRiskRoute
   LayoutInvestmentRiskIndicatorsRoute: typeof LayoutInvestmentRiskIndicatorsRoute
   LayoutInvestmentRiskLiquidityStressRoute: typeof LayoutInvestmentRiskLiquidityStressRoute
   LayoutInvestmentRiskMacroDynamicsRoute: typeof LayoutInvestmentRiskMacroDynamicsRoute
@@ -1053,6 +1074,7 @@ const LayoutInvestmentRiskRouteChildren: LayoutInvestmentRiskRouteChildren = {
   LayoutInvestmentRiskAttributionRoute: LayoutInvestmentRiskAttributionRoute,
   LayoutInvestmentRiskFactorBehaviorRoute:
     LayoutInvestmentRiskFactorBehaviorRoute,
+  LayoutInvestmentRiskFactorRiskRoute: LayoutInvestmentRiskFactorRiskRoute,
   LayoutInvestmentRiskIndicatorsRoute: LayoutInvestmentRiskIndicatorsRoute,
   LayoutInvestmentRiskLiquidityStressRoute:
     LayoutInvestmentRiskLiquidityStressRoute,

@@ -2,20 +2,26 @@
 -- 原子指標：某行業佔股票市值比 (%)
 
 WITH raw_stock_holdings AS (
-    -- 1. 取出指定基金在指定日期的股票持倉，優先讀取持倉表 sector，備用靜態表 sector_level1
+    -- 1. 股票持仓行业：持仓 sector > 行业表(GICS优先) > UNCLASSIFIED
     SELECT
         b.port_id AS fund_id,
         b.evaluate_date AS as_of_date,
         COALESCE(
             NULLIF(TRIM(b.sector::text), ''),
-            NULLIF(TRIM(s.sector_level1::text), ''),
-            NULLIF(TRIM(s.sector_level2::text), ''),
+            NULLIF(TRIM(ind.level1_name::text), ''),
+            NULLIF(TRIM(ind.industry_name::text), ''),
             'UNCLASSIFIED'
         ) AS industry_name,
+        COALESCE(NULLIF(TRIM(ind.industry_code::text), ''), 'UNCLASSIFIED') AS industry_code,
         COALESCE(b.market_value_base, b.market_value, 0.0) AS market_value_hkd
     FROM fsi.balance_stock b
-    LEFT JOIN fsi.mktdata_stock_static s
-      ON b.security_code = s.security_code
+    LEFT JOIN LATERAL (
+        SELECT i.industry_code, i.industry_name, i.level1_name
+        FROM fsi.v_mktdata_stock_industry_current i
+        WHERE i.security_code = b.security_code
+        ORDER BY (i.standard = 'GICS') DESC, i.is_primary DESC
+        LIMIT 1
+    ) ind ON TRUE
     WHERE b.port_id = :fid
       AND b.evaluate_date = :end_date
 ),

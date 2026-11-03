@@ -1,4 +1,4 @@
-<!-- 更新时间：2026-10-16（北京时间）｜生成模型：Cursor Composer -->
+<!-- 更新时间：2026-11-03（北京时间）｜生成模型：Composer -->
 
 # RiskEngine 产品与金融业务功能
 
@@ -19,7 +19,7 @@
 | `BOND` | 债券 | `fixed_income.py` | FinancePy FlatDiscountCurve 按 YTM 再定价 | `fsi.balance_bond` |
 | `CD` | 存单 | 同上 | 同债券族 | `fsi.balance_cd` |
 | `DEPOSIT` | 存款 | 同上 | IborDeposit 口径的 DF 再定价 | `fsi.balance_deposit` |
-| `REPO` | 回购 | 合同已有 | 路由 financepy `repo_carry`；产品类待补 | — |
+| `REPO` | 回购 / 逆回购 | `fixed_income.py` `Repo` | financepy `repo_carry`；零冲击=账面 | metadata / 持仓 |
 | `MMF` | 货币市场基金（一等产品） | `money_market/fund.py` | PRODUCT=NAV；LOOK_THROUGH=持仓加总 | 货币账本或 FUND+MMF 提示 |
 | `FX` | 外汇现货 | `fx.py` | ORE；零冲击=账面 | metadata `asset_class=FX` |
 | `FX_FORWARD` | 外汇远期 | `fx.py` | ORE `FxForward` | 持仓 metadata |
@@ -29,7 +29,7 @@
 | `IRS` / `SWAP` | 利率互换 | `rates.py` | ORE `MakeVanillaSwap` | metadata `notional` `pay_fixed` |
 | `SWAPTION` | 互换期权 | `rates.py` | 年金 + `blackFormula`（不构造 Swaption 对象） | metadata |
 | `CDS` | 信用违约互换 | `credit.py` | FlatHazardRate + FlatForward（不构造 CDS 对象） | metadata `hazard_rate` |
-| `STRUCTURED` | 结构化 / 脚本化 OTC | 合同已有 | 路由 ore `scripted_or_otc` | metadata |
+| `STRUCTURED` | 结构化 / 脚本化 OTC | `structured.py` `StructuredNote` | ore `scripted_or_otc`；多因子 analytic delta | metadata `script_id` |
 
 **MMF 规则：** 份额层看 NAV；WAM/WAL、利率敏感度、赎回覆盖必须 **look-through** 到 Bond/CD/Deposit/Cash。SFC：WAM ≤ 60 日、WAL ≤ 120 日、影子价偏离 50bp（预警 40bp 或期限 90%）。
 
@@ -107,7 +107,7 @@ VaR, CVaR, ES, Volatility, Drawdown, Beta, Tracking Error, Risk Contribution, Gr
 - `liquidity.report`：产品分桶后加总；T0 无 haircut，ILLIQUID 25%。
 - `redemption(pct)`：从 T0 起覆盖赎回金额；MMF 赎回压力用同一瀑布。
 - `mmf()`：WAM/WAL vs 60/120 + 影子偏离。
-- **产品压力测试（LQAP）**：`liquidity.lqap` / HTTP `lqa-portfolio`——Horizon、Stress Details、Bid-Ask 阶梯；见 [`product-stress-lqap.md`](product-stress-lqap.md)。
+- **产品压力测试（LQAP）**：`liquidity.product_stress` / `lqap` / HTTP `lqa-portfolio`——假设·Overview·赎回·Horizon·Stress·LQA 字段；见 [`investment-risk-product-stress.md`](investment-risk-product-stress.md)。
 
 **交易对手**
 
@@ -148,7 +148,7 @@ Position / Issuer / Sector / Country / Currency / Counterparty（分组）、Gro
 | 限额仪表 | `limits.evaluate` | 风险治理 |
 | Governance | `governance.review` | 放行检查 |
 
-驾驶舱列表（AUM、七日收益、WAM/WAL、sparkline）仍由 SQL 供数；**是否 ok/warn/breach** 必须用 `limits.sfc.compliance_status`，与引擎同一口径。
+驾驶舱业务模块（组合 / 规模 / 持仓资产类型 / 收益 / 净值）走 `portfolio.fundamentals()`；列表 SQL 供目录与 NAV 主数据；区间收益与净值指数化共用 `portfolio.cockpit` 公式；SFC 状态走 `limits.sfc`。详见 [`portfolio-cockpit.md`](portfolio-cockpit.md)。
 
 ---
 
@@ -156,11 +156,12 @@ Position / Issuer / Sector / Country / Currency / Counterparty（分组）、Gro
 
 | 前端 / API | 业务包 | 引擎能力 |
 |---|---|---|
-| `/investment-risk` | `4_business.investment_risk` | KPI 域 + 流动性/对手方报告 |
-| `/portfolio-opt` | `4_business.portfolio_optimization` | Riskfolio 优化 + 仿真仓 + 压力 |
+| `/investment-risk` | `4_business.investment_risk` | KPI 域 + 概况 overview + 流动性/对手方 |
+| `/investment-risk/overview` | `investment_risk.overview` | 组合/区间收益/配置/Top10/行业；见 [`investment-risk-overview.md`](investment-risk-overview.md) |
+| `/portfolio-opt` | `portfolio.portfolio_opt` / `4_business.portfolio_optimization` | 收益模型·前沿·画像·HRP 闸门（见 [`portfolio-opt.md`](portfolio-opt.md)） |
 | `/risk-testing` | `4_business.risk_testing` | 十项分析；HTTP=kernel，Python=`service.run` |
 | `/risk-rules` 限额 | `4_business.risk_governance` | Limit Engine + Pre-Trade |
-| `/portfolio-cockpit` | processing cockpit | SFC 状态函数在 RiskEngine |
+| `/portfolio-cockpit` | processing cockpit + `portfolio.cockpit` | 表/图公式 + SFC 状态；见 [`portfolio-cockpit.md`](portfolio-cockpit.md) |
 | Quant / Agent | `5_integrations.quant` | 上述能力的 Python 门面 |
 
 Pre-Trade / 优化提案默认 `is_trade_instruction=False`，不写 LIVE 账本。

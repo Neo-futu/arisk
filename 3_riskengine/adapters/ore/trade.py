@@ -21,6 +21,8 @@ _TRADE_TYPE = {
     ProductKind.DEPOSIT.value: "Cash",
     ProductKind.CD.value: "Bond",
     ProductKind.MMF.value: "Fund",
+    ProductKind.REPO.value: "Repo",
+    ProductKind.STRUCTURED.value: "ScriptedTrade",
 }
 
 

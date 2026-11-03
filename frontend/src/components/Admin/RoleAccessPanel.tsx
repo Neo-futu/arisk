@@ -21,6 +21,7 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { fsiApi, type AccessCatalog, type AccessRole } from "@/fsiClient"
 import useCustomToast from "@/hooks/useCustomToast"
+import { groupMenusByPlatform } from "@/platform/menu-catalog"
 import { handleError } from "@/utils"
 
 const BUILTIN_ROLE_CODES = new Set([
@@ -128,22 +129,29 @@ function RoleEditor({
             </div>
           </section>
 
-          <section>
-            <h3 className="mb-3 text-sm font-semibold">{t("admin.roles.menuPermissions")}</h3>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {catalog.menus.map((menu) => (
-                <label key={menu.id} className="flex cursor-pointer items-center gap-3 rounded-md border p-3">
-                  <Checkbox
-                    checked={menuIds.includes(menu.id)}
-                    onCheckedChange={(checked) => setMenuIds((current) => toggle(current, menu.id, checked === true))}
-                  />
-                  <span>
-                    <span className="block text-sm font-medium">{menu.name}</span>
-                    <span className="text-xs text-muted-foreground">{menu.path || menu.code}</span>
-                  </span>
-                </label>
-              ))}
-            </div>
+          <section className="space-y-4">
+            <h3 className="text-sm font-semibold">{t("admin.roles.menuPermissions")}</h3>
+            {groupMenusByPlatform(catalog.menus).map((group) => (
+              <div key={group.id} className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  {t(group.titleKey)}
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {group.menus.map((menu) => (
+                    <label key={menu.id} className="flex cursor-pointer items-center gap-3 rounded-md border p-3">
+                      <Checkbox
+                        checked={menuIds.includes(menu.id)}
+                        onCheckedChange={(checked) => setMenuIds((current) => toggle(current, menu.id, checked === true))}
+                      />
+                      <span>
+                        <span className="block text-sm font-medium">{menu.name}</span>
+                        <span className="text-xs text-muted-foreground">{menu.path || menu.code}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
           </section>
 
           <section>

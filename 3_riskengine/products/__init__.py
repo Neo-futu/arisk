@@ -5,12 +5,13 @@ from .assemble import product_from_holding, products_from_snapshot
 from .cash import Cash
 from .credit import CreditDefaultSwap
 from .equity import Equity
-from .fixed_income import Bond, CertificateOfDeposit, Deposit
+from .fixed_income import Bond, CertificateOfDeposit, Deposit, Repo
 from .fx import FxForward, FxOption, FxSpot
 from .futures import Future
 from .money_market.fund import MoneyMarketFund
 from .options import EquityOption
 from .rates import InterestRateSwap, Swaption
+from .structured import StructuredNote
 
 __all__ = [
     "Bond",
@@ -28,6 +29,8 @@ __all__ = [
     "MoneyMarketFund",
     "Product",
     "ProductKind",
+    "Repo",
+    "StructuredNote",
     "Swaption",
     "ViewMode",
     "product_from_holding",

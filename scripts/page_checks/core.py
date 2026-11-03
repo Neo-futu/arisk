@@ -360,7 +360,8 @@ def page_dashboard(ctx: CheckContext) -> list[CheckResult]:
 
 
 def page_investment_home(ctx: CheckContext) -> list[CheckResult]:
-    out = base_checks(ctx, "/investment-risk")
+    # /investment-risk 已重定向到 overview，首页检查与组合概况同路径
+    out = base_checks(ctx, "/investment-risk/overview")
     params = {"as_of_date": ctx.as_of_date}
     out.append(check_processing_get(ctx, "processing_overview", f"/investment/overview/{ctx.fund_id}", params, ["portfolio"]))
     out.append(check_backend_get(ctx, "backend_overview", f"/api/v1/fsi/investment/overview/{ctx.fund_id}", params, ["portfolio"]))
@@ -444,8 +445,16 @@ def page_investment_macro_dynamics(ctx: CheckContext) -> list[CheckResult]:
 def page_investment_factor_behavior(ctx: CheckContext) -> list[CheckResult]:
     out = base_checks(ctx, "/investment-risk/factor-behavior")
     params = {"start": ctx.start_date, "end": ctx.end_date}
-    out.append(check_processing_get(ctx, "processing_factor_behavior", f"/investment/factor-behavior/{ctx.fund_id}", params, ["fund_id"]))
-    out.append(check_backend_get(ctx, "backend_factor_behavior", f"/api/v1/fsi/investment/factor-behavior/{ctx.fund_id}", params, ["fund_id"]))
+    out.append(check_processing_get(ctx, "processing_factor_behavior", f"/investment/factor-behavior/{ctx.fund_id}", params, ["fund_id", "style_exposure"]))
+    out.append(check_backend_get(ctx, "backend_factor_behavior", f"/api/v1/fsi/investment/factor-behavior/{ctx.fund_id}", params, ["fund_id", "style_exposure"]))
+    return out
+
+
+def page_investment_factor_risk(ctx: CheckContext) -> list[CheckResult]:
+    out = base_checks(ctx, "/investment-risk/factor-risk")
+    params = {"start": ctx.start_date, "end": ctx.end_date}
+    out.append(check_processing_get(ctx, "processing_factor_risk", f"/investment/factor-risk/{ctx.fund_id}", params, ["fund_id", "factor_risk"]))
+    out.append(check_backend_get(ctx, "backend_factor_risk", f"/api/v1/fsi/investment/factor-risk/{ctx.fund_id}", params, ["fund_id", "factor_risk"]))
     return out
 
 
@@ -540,6 +549,7 @@ PAGE_RUNNERS: dict[str, Callable[[CheckContext], list[CheckResult]]] = {
     "investment_pretrade_budget": page_investment_pretrade_budget,
     "investment_macro_dynamics": page_investment_macro_dynamics,
     "investment_factor_behavior": page_investment_factor_behavior,
+    "investment_factor_risk": page_investment_factor_risk,
     "positions": page_positions,
     "compliance": page_compliance,
     "reports": page_reports,

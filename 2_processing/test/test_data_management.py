@@ -18,6 +18,7 @@ def test_position_derives_market_value() -> None:
         unit_price=Decimal("99.5"),
     )
 
+    assert payload.asset_class == "BOND"
     assert payload.subject_code == "bond-001"
     assert payload.currency == "HKD"
     assert payload.market_value == Decimal("9950.0")

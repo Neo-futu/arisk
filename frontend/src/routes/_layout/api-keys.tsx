@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { createFileRoute } from "@tanstack/react-router"
+import { createFileRoute, redirect } from "@tanstack/react-router"
 import { Check, Copy, KeyRound, Loader2, Plus, ShieldCheck, Trash2 } from "lucide-react"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -30,7 +30,13 @@ import { fsiApi } from "@/fsiClient"
 
 export const Route = createFileRoute("/_layout/api-keys")({
   component: ApiKeysPage,
-  head: () => ({ meta: [{ title: "API Key Management — ARISK" }] }),
+  beforeLoad: async () => {
+    const access = await fsiApi.getMyAccessContext().then((response) => response.data)
+    if (!access.menu_paths.includes("/api-keys") && !access.can_manage_system) {
+      throw redirect({ to: "/" })
+    }
+  },
+  head: () => ({ meta: [{ title: "API Key 管理 — ARISK" }] }),
 })
 
 function ApiKeysPage() {
@@ -79,14 +85,16 @@ function ApiKeysPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5" data-testid="platform-workbench">
       <div>
-        <div className="mb-1 flex items-center gap-2">
-          <KeyRound className="h-5 w-5 text-primary" />
-          <span className="text-muted-foreground text-sm">{t("apiKeys.breadcrumb")}</span>
+        <div className="mb-2 flex items-center gap-2">
+          <Badge className="gap-1">
+            <KeyRound className="h-3.5 w-3.5" />
+            {t("nav.systemManagement")}
+          </Badge>
         </div>
         <h1 className="text-2xl font-bold tracking-tight">{t("apiKeys.title")}</h1>
-        <p className="text-muted-foreground text-sm">
+        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
           {t("apiKeys.subtitle")}
         </p>
       </div>

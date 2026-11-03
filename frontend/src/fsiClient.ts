@@ -162,11 +162,15 @@ export interface ValuationSubject {
   return_pct: number | null
   data_source?: string | null
   memo?: string | null
+  is_aggregate?: boolean
 }
 
 export interface ValuationReport {
   fund_id: string
   as_of_date: string
+  requested_date?: string
+  effective_date?: string | null
+  date_fallback?: boolean
   subjects: ValuationSubject[]
   totals: {
     total_market_value: number
@@ -208,6 +212,7 @@ export interface PnlPoint {
   date: string
   net_asset: number | null
   unit_nav: number | null
+  day_return_pct?: number
   cum_return_pct: number
 }
 
@@ -453,6 +458,84 @@ export interface LimitsCatalog {
   [key: string]: unknown
 }
 
+export interface GovernanceLimitRow {
+  limit_id: string
+  state?: string
+  value?: number
+  limit?: number
+  utilization?: number
+  direction?: string
+  unit?: string
+  worst_member?: string
+  members?: Array<Record<string, unknown>>
+  [key: string]: unknown
+}
+
+export interface GovernancePack {
+  fund_id: string
+  as_of_date: string
+  engine?: string
+  engine_version?: string
+  adapters?: AdapterBundle
+  modules?: string[]
+  pre_trade_gate?: string[]
+  decisions?: string[]
+  states?: string[]
+  policy?: {
+    policy_id?: string
+    name?: string
+    appetite?: string
+    limits?: Array<Record<string, unknown>>
+    states?: string[]
+    engine?: string
+  }
+  appetite?: {
+    statement?: string
+    warning_utilization?: number
+    breach_utilization?: number
+    hard_breach_utilization?: number
+    policy_id?: string
+  }
+  limits?: {
+    state?: string
+    passed?: boolean
+    limits?: Record<string, GovernanceLimitRow>
+    limit_ids?: string[]
+    engine?: string
+    engine_version?: string
+  }
+  alerts?: GovernanceLimitRow[]
+  breaches?: GovernanceLimitRow[]
+  liquidity?: GovernanceLimitRow[]
+  model_validation?: {
+    control?: string
+    status?: string
+    checks?: unknown
+    engine?: string
+  }
+  valuation_control?: {
+    control?: string
+    status?: string
+    base_pv?: number
+    engine?: string
+  }
+  audit?: Array<{
+    event_id?: string
+    event_type?: string
+    actor?: string
+    at?: string
+    payload?: Record<string, unknown>
+  }>
+  summary?: {
+    limit_count?: number
+    warning_count?: number
+    breach_count?: number
+    aggregate_state?: string
+    passed?: boolean
+  }
+  errors?: string[]
+}
+
 export interface PortfolioOptCatalog {
   module?: string
   engine?: string
@@ -590,6 +673,7 @@ export interface SqlAsset {
   filename: string
   group: string
   category: string
+  package?: string
   title: string
   description: string
   line_count: number
@@ -1023,6 +1107,84 @@ export interface PerformanceAttributionResult {
     holding_days: number
     net_pnl: number
   }>
+  brinson_model?: {
+    benchmark_id?: string | null
+    benchmark_source?: string
+    period_count?: number
+    error?: string
+    views: Record<string, {
+      method: string
+      multi_period: boolean
+      group_by: string
+      portfolio_return_pct: number
+      benchmark_return_pct: number
+      active_return_pct: number
+      allocation_effect_pct: number
+      selection_effect_pct: number
+      interaction_effect_pct: number
+      groups: Array<{
+        group: string
+        portfolio_weight_pct: number
+        benchmark_weight_pct: number
+        portfolio_return_pct: number
+        benchmark_return_pct: number
+        allocation_effect_pct: number
+        selection_effect_pct: number
+        interaction_effect_pct: number
+        active_return_pct: number
+      }>
+    }>
+  }
+  campisi_model?: {
+    period_count?: number
+    error?: string
+    views: Record<string, {
+      benchmark: boolean
+      multi_period: boolean
+      group_by: string
+      total_return_pct: number
+      income_effect_pct: number
+      treasury_effect_pct: number
+      spread_effect_pct: number
+      selection_effect_pct: number
+      groups: Array<{
+        group: string
+        weight_pct: number
+        total_return_pct: number
+        income_effect_pct: number
+        treasury_effect_pct: number
+        spread_effect_pct: number
+        selection_effect_pct: number
+      }>
+    }>
+  }
+  contribution_model?: {
+    period_count?: number
+    holding_count?: number
+    has_pnl?: boolean
+    portfolio_return_pct?: number | null
+    error?: string
+    data_sources?: Record<string, string | null | undefined>
+    views: Record<string, {
+      mode: string
+      link_method: string
+      group_by: string
+      portfolio_return_pct: number
+      contribution_total_pct: number
+      residual_pct: number
+      periods: number
+      groups: Array<{
+        group: string
+        symbol?: string
+        security_name?: string
+        asset?: string
+        industry?: string
+        weight_pct: number
+        return_pct: number
+        contribution_pct: number
+      }>
+    }>
+  }
 }
 
 export interface PerformanceAttributionTimeseriesResult {
@@ -1098,6 +1260,29 @@ export interface RatesCreditResult {
   debt_investment_grade_pct?: number | null
   debt_below_investment_grade_pct?: number | null
   bond_count: number
+  rating_source?: string
+  rating_source_options?: Array<{ id: string; group: string; label_zh: string }>
+  rating_matched_bond_count?: number
+  rating_matched_market_value?: number
+  rating_agency_counts?: Record<string, number>
+  bond_agency_rating_columns?: string[]
+  bond_agency_rating_rows?: Array<{
+    security_code: string
+    security_name?: string | null
+    issuer_name?: string | null
+    market_value: number
+    weight_pct: number
+    issuer_ratings: Record<string, string | null | undefined>
+    debt_ratings: Record<string, string | null | undefined>
+  }>
+  rating_scale_legend?: Array<{
+    band: string
+    grade: "investment" | "speculative" | string
+    domestic: string
+    sp_fitch: string
+    moody: string
+  }>
+  rating_scale_note?: string
 }
 
 export interface LqaPortfolioAnalytics {
@@ -1205,12 +1390,18 @@ export interface LiquidityStressResult {
 export interface PretradeRiskResult {
   fund_id: string
   as_of_date: string
+  source?: string
+  engine?: string
+  engine_version?: string
+  adapters?: AdapterBundle
   trade: {
     trade_amount: number
     trade_side: string
     asset_class: string
+    normalized_asset_class?: string
     duration_years: number
     issuer_name: string
+    security_code?: string
   }
   current: {
     net_asset: number
@@ -1218,6 +1409,9 @@ export interface PretradeRiskResult {
     duration_years: number
     issuer_pct_nav: number | null
     portfolio_dv01: number
+    var_pct_nav?: number | null
+    cvar_pct_nav?: number | null
+    gross_exposure_pct?: number | null
   }
   projected: {
     bond_market_value: number
@@ -1225,11 +1419,65 @@ export interface PretradeRiskResult {
     issuer_pct_nav: number | null
     portfolio_dv01: number
     tracking_error_proxy_pct: number | null
+    var_pct_nav?: number | null
+    var_delta_pct_nav?: number | null
+    cvar_pct_nav?: number | null
+    cvar_delta_pct_nav?: number | null
+    gross_exposure_pct?: number | null
   }
   limits: {
     duration_years: number
     issuer_pct_nav: number
     tracking_error_proxy_pct: number
+    var_pct_nav?: number
+  }
+  budget_utilization?: {
+    duration_used_pct?: number | null
+    duration_remaining_years?: number | null
+    var_used_pct?: number | null
+    var_remaining_pct_nav?: number | null
+    issuer_used_pct?: number | null
+  }
+  risk_budget?: {
+    by_asset_class: Array<{ asset_class: string; share_pct: number }>
+    used_var_pct_nav?: number | null
+    dominant_bucket?: string | null
+    dominant_share_pct?: number | null
+    riskfolio_available?: boolean
+    rp_reference?: {
+      method?: string
+      status?: string
+      engine?: string
+      note?: string
+      weights?: Record<string, number>
+      risk_contribution?: Record<string, number>
+      rows?: Array<{ asset_class: string; weight_pct: number; rc_pct: number }>
+    }
+  }
+  projected_risk_budget?: {
+    by_asset_class: Array<{ asset_class: string; share_pct: number }>
+    dominant_bucket?: string | null
+    dominant_share_pct?: number | null
+  }
+  decision_summary?: {
+    headline: string
+    recommendation: string
+    rationale: string[]
+    model?: string
+    nav?: number
+  }
+  engine_metrics?: {
+    current?: Record<string, unknown>
+    projected?: Record<string, unknown>
+    factor_shocks_current?: Array<{ factor: string; pnl: number }>
+    factor_shocks_projected?: Array<{ factor: string; pnl: number }>
+    top_risk_contributors?: Array<{ security_code: string; pnl: number; contribution_pct: number }>
+    top_risk_contributors_projected?: Array<{ security_code: string; pnl: number; contribution_pct: number }>
+  }
+  adapter_usage?: {
+    financepy?: string
+    riskfolio?: string
+    ore?: string
   }
   applied_rules?: Array<{
     application_id: number
@@ -1243,6 +1491,7 @@ export interface PretradeRiskResult {
   }>
   breach_flags: string[]
   decision: "ALLOW" | "ALLOW_WITH_WARNING" | "BLOCK"
+  logic?: { title: string; steps: string[] }
 }
 
 export interface MacroDynamicsResult {
@@ -1275,11 +1524,18 @@ export interface FactorBehaviorResult {
   fund_id: string
   period_start: string
   period_end: string
+  as_of_date?: string
+  source?: string
   style_exposure: {
     momentum_exposure: number | null
     low_volatility_exposure: number | null
     size_exposure: number | null
     coverage_weight: number
+    value_weight_pct?: number | null
+    growth_weight_pct?: number | null
+    large_weight_pct?: number | null
+    small_weight_pct?: number | null
+    note?: string
   }
   sector_concentration: {
     hhi: number
@@ -1298,6 +1554,51 @@ export interface FactorBehaviorResult {
     }>
   }
   warnings: string[]
+  formulas?: Record<string, string>
+  logic?: {
+    title: string
+    steps: string[]
+  }
+}
+
+export interface FactorRiskResult {
+  fund_id: string
+  period_start: string
+  period_end: string
+  as_of_date?: string
+  benchmark_id?: string | null
+  benchmark?: {
+    benchmark_id?: string | null
+    quote_count?: number
+    fund_return_days?: number
+    paired_days?: number
+    index_start?: string | null
+    index_end?: string | null
+  }
+  source?: string
+  engine?: string
+  engine_version?: string
+  adapters?: Record<string, unknown>
+  factor_risk: {
+    factor_exposure: Array<{ factor: string; amount: number; pct_nav: number }>
+    factor_shocks: Array<{ factor: string; pnl: number; pnl_pct_nav: number | null; security_count: number }>
+    risk_contribution_by_asset_class: Array<{ asset_class: string; share_pct: number }>
+    beta: { beta?: number | null; paired_observations?: number }
+    tracking_error: { annualized?: number | null; annualized_pct?: number | null; paired_observations?: number }
+    var_cvar?: Record<string, unknown>
+    data_quality?: {
+      effective_date?: string
+      source_position_count?: number
+      source_risk_coverage_pct?: number | null
+      unmapped_balance?: number
+    }
+    formulas?: Record<string, string>
+  }
+  warnings: string[]
+  logic?: {
+    title: string
+    steps: string[]
+  }
 }
 
 export interface UserApiKey {
@@ -1357,6 +1658,9 @@ export interface Position {
 export interface PositionsResponse {
   fund_id: string
   as_of_date: string
+  requested_date?: string
+  effective_date?: string
+  table?: string
   count: number
   positions: Position[]
 }
@@ -1364,15 +1668,61 @@ export interface PositionsResponse {
 export interface DataListResponse<T> {
   items: T[]
   count: number
+  requested_date?: string
+  effective_date?: string
+  table?: string
+  selected_table?: string
+}
+
+export interface DataManagementTableOption {
+  id: string
+  table: string
+  label: string
+  asset_class?: string | null
+}
+
+export interface DataManagementEntity {
+  id: "portfolios" | "positions" | "market" | "trades"
+  table: string
+  label: string
+  description: string
+  ops: string[]
+  date_field: string | null
+  fund_scoped: boolean
+  workbench_hidden?: boolean
+  tables?: DataManagementTableOption[]
+}
+
+export interface DataManagementCatalog {
+  module: string
+  entities: DataManagementEntity[]
+  audit_table: string
+}
+
+export interface DataManagementAvailability {
+  requested_date: string
+  fund_id: string | null
+  latest_position_date: string | null
+  latest_quote_date: string | null
 }
 
 export interface MarketQuoteHistoryResponse extends DataListResponse<MarketQuote> {
   source_used?: string
 }
 
+export type EditablePositionAssetClass =
+  | "BOND"
+  | "CD"
+  | "DEPOSIT"
+  | "CASH"
+  | "STOCK"
+  | "FUND"
+  | "REPO"
+
 export interface EditablePosition {
   evaluate_date: string
   port_id: string
+  asset_class?: EditablePositionAssetClass | string
   subject_code: string
   subject_name: string
   currency: string
@@ -1381,12 +1731,16 @@ export interface EditablePosition {
   cost: number | null
   market_value: number | null
   weight_pct: number | null
-  data_source: string | null
-  memo: string | null
-  loaded_at: string
+  maturity_date?: string | null
+  issuer_name?: string | null
+  source_table?: string | null
+  data_source?: string | null
+  memo?: string | null
+  loaded_at?: string
 }
 
 export interface EditablePositionPayload {
+  asset_class?: EditablePositionAssetClass | string
   subject_code?: string
   subject_name: string
   currency: string
@@ -1395,8 +1749,10 @@ export interface EditablePositionPayload {
   cost: number | null
   market_value: number | null
   weight_pct: number | null
-  data_source: string
-  memo: string | null
+  maturity_date?: string | null
+  issuer_name?: string | null
+  data_source?: string
+  memo?: string | null
 }
 
 export interface MarketQuote {
@@ -1413,10 +1769,11 @@ export interface MarketQuote {
   volume: number | null
   turnover: number | null
   data_source: string
+  source_table?: string | null
   loaded_at?: string
 }
 
-export type MarketQuotePayload = Omit<MarketQuote, "price_change_pct" | "loaded_at">
+export type MarketQuotePayload = Omit<MarketQuote, "price_change_pct" | "loaded_at" | "source_table">
 
 export type SimulatedOrderStatus = "DRAFT" | "VALIDATED" | "WARNING" | "BLOCKED" | "CANCELLED"
 
@@ -1500,6 +1857,126 @@ export interface PortfolioMasterPayload {
   mmf_wam_limit_days?: number | null
   mmf_wal_limit_days?: number | null
   mgmt_fee_bps?: number | null
+}
+
+export interface ShareClassMaster {
+  class_id: string
+  port_id: string
+  class_name: string
+  class_name_en: string | null
+  currency: string
+  isin: string | null
+  mgmt_fee_bps: number | null
+  is_active: boolean
+  inception_date: string | null
+  updated_at?: string
+}
+
+export interface ShareClassPayload {
+  class_id?: string
+  port_id?: string
+  class_name?: string
+  class_name_en?: string | null
+  currency?: string
+  isin?: string | null
+  mgmt_fee_bps?: number | null
+  is_active?: boolean
+  inception_date?: string | null
+}
+
+export interface PortfolioManagerRecord {
+  port_id: string
+  person_id: string
+  role: string
+  begin_date: string
+  end_date: string | null
+  is_lead: boolean
+}
+
+export interface PortfolioManagerPayload {
+  port_id?: string
+  person_id?: string
+  role?: string
+  begin_date?: string
+  end_date?: string | null
+  is_lead?: boolean
+}
+
+export interface ValuationSheetRow {
+  evaluate_date: string
+  port_id: string
+  subject_code: string
+  subject_name: string
+  currency: string
+  quantity: number | null
+  unit_price: number | null
+  cost: number | null
+  market_value: number | null
+  weight_pct: number | null
+  data_source: string | null
+  memo: string | null
+  loaded_at?: string
+}
+
+export interface ValuationSheetPayload {
+  subject_code?: string
+  subject_name: string
+  currency: string
+  quantity: number | null
+  unit_price: number | null
+  cost: number | null
+  market_value: number | null
+  weight_pct: number | null
+  data_source?: string
+  memo?: string | null
+}
+
+export interface PortfolioNavRow {
+  evaluate_date: string
+  port_id: string
+  currency: string
+  total_asset: number | null
+  total_liability: number | null
+  net_asset: number
+  shares_outstanding: number | null
+  unit_nav: number | null
+  acc_unit_nav: number | null
+  day_return: number | null
+  class_id: string | null
+  loaded_at?: string
+}
+
+export interface PortfolioNavPayload {
+  currency?: string
+  total_asset?: number | null
+  total_liability?: number | null
+  net_asset?: number
+  shares_outstanding?: number | null
+  unit_nav?: number | null
+  acc_unit_nav?: number | null
+  day_return?: number | null
+  class_id?: string | null
+}
+
+export interface PortfolioMmfRow {
+  evaluate_date: string
+  port_id: string
+  income_per_10k: number | null
+  return_rate_7d: number | null
+  nav_deviation: number | null
+  nav_deviation_amount: number | null
+  wam_days: number | null
+  wal_days: number | null
+  loaded_at?: string
+}
+
+export interface PortfolioMmfPayload {
+  income_per_10k?: number | null
+  return_rate_7d?: number | null
+  nav_deviation?: number | null
+  nav_deviation_amount?: number | null
+  wam_days?: number | null
+  wal_days?: number | null
 }
 
 export interface AgentTaskRequest {
@@ -1906,8 +2383,11 @@ export const fsiApi = {
   },
 
   getPnlAnalysis(fundId: string, opts?: { start?: string; end?: string }) {
+    const params: Record<string, string> = {}
+    if (opts?.start) params.start = opts.start
+    if (opts?.end) params.end = opts.end
     return axios.get<PnlAnalysis>(`${BASE}/api/v1/fsi/valuation/pnl/${fundId}`, {
-      params: opts,
+      params,
       headers: authHeaders(),
     })
   },
@@ -1939,6 +2419,16 @@ export const fsiApi = {
   getLimitsCatalog() {
     return axios.get<LimitsCatalog>(`${BASE}/api/v1/fsi/risk/limits/catalog`, {
       headers: authHeaders(),
+    })
+  },
+
+  getGovernancePack(fundId: string, asOfDate: string, opts?: { lookbackDays?: number }) {
+    return axios.get<GovernancePack>(`${BASE}/api/v1/fsi/risk/governance/pack/${fundId}`, {
+      headers: authHeaders(),
+      params: {
+        as_of_date: asOfDate,
+        lookback_days: opts?.lookbackDays,
+      },
     })
   },
 
@@ -2099,6 +2589,44 @@ export const fsiApi = {
     )
   },
 
+  /** 归因可选基准：组合配置 + 基准定义 */
+  getAttributionBenchmarks(fundId: string, asOfDate: string) {
+    return axios.get<{
+      fund_id: string
+      as_of_date: string
+      benchmarks: Array<{
+        benchmark_id: string
+        benchmark_name: string
+        benchmark_type: string
+        source: string
+        source_ticker?: string | null
+        assigned: boolean
+        benchmark_role?: string | null
+        weight_pct?: number | null
+        quote_count?: number
+        equity_components: number
+        bond_components: number
+      }>
+    }>(`${BASE}/api/v1/fsi/investment/benchmarks/${fundId}`, {
+      params: { as_of_date: asOfDate },
+      headers: authHeaders(),
+    })
+  },
+
+  /** Brinson / Campisi / 收益贡献：点击计算后实时请求，不读报表层 */
+  getAttributionModels(fundId: string, start: string, end: string, benchmarkId?: string) {
+    return axios.get<{
+      source: "realtime"
+      elapsed_ms: number
+      brinson_model?: PerformanceAttributionResult["brinson_model"]
+      campisi_model?: PerformanceAttributionResult["campisi_model"]
+      contribution_model?: PerformanceAttributionResult["contribution_model"]
+    }>(`${BASE}/api/v1/fsi/investment/attribution-models/${fundId}`, {
+      params: { start, end, ...(benchmarkId ? { benchmark_id: benchmarkId } : {}) },
+      headers: authHeaders(),
+    })
+  },
+
   /** 投資風險分析：績效歸因 */
   getPerformanceAttribution(fundId: string, start: string, end: string) {
     return axios.get<PerformanceAttributionResult>(
@@ -2116,10 +2644,13 @@ export const fsiApi = {
   },
 
   /** 投資風險分析：利率與信用敏感度 */
-  getRatesCredit(fundId: string, asOfDate: string) {
+  getRatesCredit(fundId: string, asOfDate: string, ratingSource = "all") {
     return axios.get<RatesCreditResult>(
       `${BASE}/api/v1/fsi/investment/rates-credit/${fundId}`,
-      { params: { as_of_date: asOfDate }, headers: authHeaders() },
+      {
+        params: { as_of_date: asOfDate, rating_source: ratingSource },
+        headers: authHeaders(),
+      },
     )
   },
 
@@ -2212,6 +2743,17 @@ export const fsiApi = {
     )
   },
 
+  /** 投資風險分析：因子風險（RiskEngine） */
+  getFactorRisk(fundId: string, start: string, end: string, benchmarkId?: string) {
+    return axios.get<FactorRiskResult>(
+      `${BASE}/api/v1/fsi/investment/factor-risk/${fundId}`,
+      {
+        params: { start, end, ...(benchmarkId ? { benchmark_id: benchmarkId } : {}) },
+        headers: authHeaders(),
+      },
+    )
+  },
+
   getInvestmentKpiCatalog() {
     return axios.get<InvestmentKpiCatalog>(`${BASE}/api/v1/fsi/investment/kpi-catalog`, {
       headers: authHeaders(),
@@ -2297,6 +2839,7 @@ export const fsiApi = {
       {
         params: {
           as_of_date: asOfDate,
+          fallback: true,
           ...(assetType ? { asset_type: assetType } : {}),
         },
         headers: authHeaders(),
@@ -2305,10 +2848,23 @@ export const fsiApi = {
   },
 
   // ── 數據管理中心 ──────────────────────────────────────────────
-  listEditablePositions(fundId: string, asOfDate: string, search?: string) {
+  getDataManagementCatalog() {
+    return axios.get<DataManagementCatalog>(`${BASE}/api/v1/fsi/data-management/catalog`, {
+      headers: authHeaders(),
+    })
+  },
+
+  getDataManagementAvailability(fundId?: string, asOfDate?: string) {
+    return axios.get<DataManagementAvailability>(`${BASE}/api/v1/fsi/data-management/availability`, {
+      params: { fund_id: fundId, as_of_date: asOfDate },
+      headers: authHeaders(),
+    })
+  },
+
+  listEditablePositions(fundId: string, asOfDate: string, search?: string, table?: string) {
     return axios.get<DataListResponse<EditablePosition>>(
       `${BASE}/api/v1/fsi/data-management/positions/${fundId}`,
-      { params: { as_of_date: asOfDate, search }, headers: authHeaders() },
+      { params: { as_of_date: asOfDate, search, table, fallback: true }, headers: authHeaders() },
     )
   },
 
@@ -2325,33 +2881,48 @@ export const fsiApi = {
     asOfDate: string,
     subjectCode: string,
     data: EditablePositionPayload,
+    assetClass?: string,
   ) {
-    const { subject_code: _subjectCode, ...changes } = data
+    const { subject_code: _subjectCode, asset_class: payloadClass, ...changes } = data
     return axios.patch<EditablePosition>(
       `${BASE}/api/v1/fsi/data-management/positions/${fundId}/${encodeURIComponent(subjectCode)}`,
       changes,
-      { params: { as_of_date: asOfDate }, headers: authHeaders() },
+      {
+        params: {
+          as_of_date: asOfDate,
+          asset_class: assetClass || payloadClass || undefined,
+        },
+        headers: authHeaders(),
+      },
     )
   },
 
-  deleteEditablePosition(fundId: string, asOfDate: string, subjectCode: string) {
+  deleteEditablePosition(
+    fundId: string,
+    asOfDate: string,
+    subjectCode: string,
+    assetClass?: string,
+  ) {
     return axios.delete<{ message: string }>(
       `${BASE}/api/v1/fsi/data-management/positions/${fundId}/${encodeURIComponent(subjectCode)}`,
-      { params: { as_of_date: asOfDate }, headers: authHeaders() },
+      {
+        params: { as_of_date: asOfDate, asset_class: assetClass || undefined },
+        headers: authHeaders(),
+      },
     )
   },
 
-  listMarketQuotes(priceDate: string, search?: string, marketId?: string) {
+  listMarketQuotes(priceDate: string, search?: string, marketId?: string, table?: string) {
     return axios.get<DataListResponse<MarketQuote>>(
       `${BASE}/api/v1/fsi/data-management/market-quotes`,
-      { params: { price_date: priceDate, search, market_id: marketId }, headers: authHeaders() },
+      { params: { price_date: priceDate, search, market_id: marketId, table, fallback: true }, headers: authHeaders() },
     )
   },
 
-  getMarketQuoteHistory(securityCode: string, start: string, end: string, priceType = "CLOSE") {
+  getMarketQuoteHistory(securityCode: string, start: string, end: string, priceType = "CLOSE", table?: string) {
     return axios.get<DataListResponse<MarketQuote>>(
       `${BASE}/api/v1/fsi/data-management/market-quotes/history/${encodeURIComponent(securityCode)}`,
-      { params: { start, end, price_type: priceType }, headers: authHeaders() },
+      { params: { start, end, price_type: priceType, table }, headers: authHeaders() },
     )
   },
 
@@ -2368,27 +2939,27 @@ export const fsiApi = {
     )
   },
 
-  createMarketQuote(data: MarketQuotePayload) {
+  createMarketQuote(data: MarketQuotePayload, table?: string) {
     return axios.post<MarketQuote>(
       `${BASE}/api/v1/fsi/data-management/market-quotes`,
       data,
-      { headers: authHeaders() },
+      { params: { table }, headers: authHeaders() },
     )
   },
 
-  updateMarketQuote(quote: MarketQuote, data: MarketQuotePayload) {
+  updateMarketQuote(quote: MarketQuote, data: MarketQuotePayload, table?: string) {
     const { price_date: _date, security_code: _code, price_type: _type, ...changes } = data
     return axios.patch<MarketQuote>(
       `${BASE}/api/v1/fsi/data-management/market-quotes/${quote.price_date}/${encodeURIComponent(quote.security_code)}/${quote.price_type}`,
       changes,
-      { headers: authHeaders() },
+      { params: { table }, headers: authHeaders() },
     )
   },
 
-  deleteMarketQuote(quote: MarketQuote) {
+  deleteMarketQuote(quote: MarketQuote, table?: string) {
     return axios.delete<{ message: string }>(
       `${BASE}/api/v1/fsi/data-management/market-quotes/${quote.price_date}/${encodeURIComponent(quote.security_code)}/${quote.price_type}`,
-      { headers: authHeaders() },
+      { params: { table }, headers: authHeaders() },
     )
   },
 
@@ -2431,10 +3002,33 @@ export const fsiApi = {
   },
 
   // ── 組合主數據 CRUD（para_portfolio） ─────────────────────────
-  listPortfolios(params?: { search?: string; includeInactive?: boolean }) {
-    return axios.get<{ items: PortfolioMaster[]; count: number }>(
+  listPortfolios(params?: {
+    search?: string
+    includeInactive?: boolean
+    table?: string
+    fundId?: string
+    asOfDate?: string
+  }) {
+    return axios.get<DataListResponse<
+      | PortfolioMaster
+      | ShareClassMaster
+      | PortfolioManagerRecord
+      | ValuationSheetRow
+      | PortfolioNavRow
+      | PortfolioMmfRow
+    >>(
       `${BASE}/api/v1/fsi/data-management/portfolios`,
-      { params: { search: params?.search, include_inactive: params?.includeInactive ?? true }, headers: authHeaders() },
+      {
+        params: {
+          search: params?.search,
+          include_inactive: params?.includeInactive ?? true,
+          table: params?.table,
+          fund_id: params?.fundId,
+          as_of_date: params?.asOfDate,
+          fallback: true,
+        },
+        headers: authHeaders(),
+      },
     )
   },
 
@@ -2448,6 +3042,122 @@ export const fsiApi = {
 
   deletePortfolio(portId: string) {
     return axios.delete<{ message: string }>(`${BASE}/api/v1/fsi/data-management/portfolios/${portId}`, { headers: authHeaders() })
+  },
+
+  createShareClass(payload: ShareClassPayload) {
+    return axios.post<ShareClassMaster>(`${BASE}/api/v1/fsi/data-management/share-classes`, payload, { headers: authHeaders() })
+  },
+
+  updateShareClass(classId: string, payload: ShareClassPayload) {
+    return axios.patch<ShareClassMaster>(
+      `${BASE}/api/v1/fsi/data-management/share-classes/${encodeURIComponent(classId)}`,
+      payload,
+      { headers: authHeaders() },
+    )
+  },
+
+  deleteShareClass(classId: string) {
+    return axios.delete<{ message: string }>(
+      `${BASE}/api/v1/fsi/data-management/share-classes/${encodeURIComponent(classId)}`,
+      { headers: authHeaders() },
+    )
+  },
+
+  createPortfolioManager(payload: PortfolioManagerPayload) {
+    return axios.post<PortfolioManagerRecord>(
+      `${BASE}/api/v1/fsi/data-management/portfolio-managers`,
+      payload,
+      { headers: authHeaders() },
+    )
+  },
+
+  updatePortfolioManager(
+    key: { port_id: string; person_id: string; role: string; begin_date: string },
+    payload: PortfolioManagerPayload,
+  ) {
+    return axios.patch<PortfolioManagerRecord>(
+      `${BASE}/api/v1/fsi/data-management/portfolio-managers`,
+      payload,
+      { params: key, headers: authHeaders() },
+    )
+  },
+
+  deletePortfolioManager(key: { port_id: string; person_id: string; role: string; begin_date: string }) {
+    return axios.delete<{ message: string }>(
+      `${BASE}/api/v1/fsi/data-management/portfolio-managers`,
+      { params: key, headers: authHeaders() },
+    )
+  },
+
+  createValuationSheetRow(fundId: string, asOfDate: string, data: ValuationSheetPayload) {
+    return axios.post<ValuationSheetRow>(
+      `${BASE}/api/v1/fsi/data-management/valuation-sheet/${fundId}`,
+      data,
+      { params: { as_of_date: asOfDate }, headers: authHeaders() },
+    )
+  },
+
+  updateValuationSheetRow(fundId: string, asOfDate: string, subjectCode: string, data: ValuationSheetPayload) {
+    const { subject_code: _code, ...changes } = data
+    return axios.patch<ValuationSheetRow>(
+      `${BASE}/api/v1/fsi/data-management/valuation-sheet/${fundId}/${encodeURIComponent(subjectCode)}`,
+      changes,
+      { params: { as_of_date: asOfDate }, headers: authHeaders() },
+    )
+  },
+
+  deleteValuationSheetRow(fundId: string, asOfDate: string, subjectCode: string) {
+    return axios.delete<{ message: string }>(
+      `${BASE}/api/v1/fsi/data-management/valuation-sheet/${fundId}/${encodeURIComponent(subjectCode)}`,
+      { params: { as_of_date: asOfDate }, headers: authHeaders() },
+    )
+  },
+
+  createPortfolioNav(fundId: string, asOfDate: string, data: PortfolioNavPayload) {
+    return axios.post<PortfolioNavRow>(
+      `${BASE}/api/v1/fsi/data-management/portfolio-nav/${fundId}`,
+      data,
+      { params: { as_of_date: asOfDate }, headers: authHeaders() },
+    )
+  },
+
+  updatePortfolioNav(fundId: string, asOfDate: string, currency: string, data: PortfolioNavPayload) {
+    const { currency: _currency, ...changes } = data
+    return axios.patch<PortfolioNavRow>(
+      `${BASE}/api/v1/fsi/data-management/portfolio-nav/${fundId}/${encodeURIComponent(currency)}`,
+      changes,
+      { params: { as_of_date: asOfDate }, headers: authHeaders() },
+    )
+  },
+
+  deletePortfolioNav(fundId: string, asOfDate: string, currency: string) {
+    return axios.delete<{ message: string }>(
+      `${BASE}/api/v1/fsi/data-management/portfolio-nav/${fundId}/${encodeURIComponent(currency)}`,
+      { params: { as_of_date: asOfDate }, headers: authHeaders() },
+    )
+  },
+
+  createPortfolioMmf(fundId: string, asOfDate: string, data: PortfolioMmfPayload) {
+    return axios.post<PortfolioMmfRow>(
+      `${BASE}/api/v1/fsi/data-management/portfolio-mmf/${fundId}`,
+      data,
+      { params: { as_of_date: asOfDate }, headers: authHeaders() },
+    )
+  },
+
+  updatePortfolioMmf(fundId: string, asOfDate: string, data: PortfolioMmfPayload) {
+    return axios.patch<PortfolioMmfRow>(
+      `${BASE}/api/v1/fsi/data-management/portfolio-mmf/${fundId}`,
+      data,
+      { params: { as_of_date: asOfDate }, headers: authHeaders() },
+    )
+  },
+
+  deletePortfolioMmf(fundId: string, asOfDate: string) {
+    return axios.delete<{ message: string }>(
+      `${BASE}/api/v1/fsi/data-management/portfolio-mmf/${fundId}`,
+      { params: { as_of_date: asOfDate }, headers: authHeaders() },
+    )
   },
 
   // ── 風控規則配置 API ──────────────────────────────────────────

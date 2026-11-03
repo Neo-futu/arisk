@@ -25,7 +25,7 @@ from .investment_analysis_common import (
     _number,
     _resolve_nav_period,
 )
-from .investment_analysis_factor import compute_factor_behavior_risk
+from .investment_analysis_factor import compute_factor_behavior_risk, compute_factor_risk
 from .investment_analysis_liquidity_stress import compute_liquidity_stress_testing
 from .investment_analysis_overview import compute_portfolio_overview
 from .investment_analysis_rates_credit import compute_rates_credit_sensitivity
@@ -1748,6 +1748,10 @@ async def compute_risk_metric_board(
     overview = await compute_portfolio_overview(fund_id, effective_end, db)
     attribution = await compute_performance_attribution(fund_id, period_start, period_end, db)
     factor = await compute_factor_behavior_risk(fund_id, period_start, period_end, db)
+    try:
+        factor_engine = await compute_factor_risk(fund_id, period_start, period_end, db)
+    except Exception:
+        factor_engine = {}
 
     bond_date = await _latest_balance_date(db, "balance_bond", fund_id, effective_end)
     asset_date = await _latest_balance_date(db, "balance_portfolio_asset", fund_id, effective_end)
@@ -1823,6 +1827,14 @@ async def compute_risk_metric_board(
     debt_rating_dist = rates.get("debt_rating_distribution") or []
     sector_hhi = (factor.get("sector_concentration") or {}).get("hhi")
     style = factor.get("style_exposure") or {}
+    factor_pack = (factor_engine.get("factor_risk") or {}) if isinstance(factor_engine, dict) else {}
+    factor_rows = factor_pack.get("factor_exposure") or []
+    factor_by_name = {str(row.get("factor")): row for row in factor_rows if isinstance(row, dict)}
+    equity_fe = (factor_by_name.get("EQUITY") or {}).get("pct_nav")
+    rate_fe = (factor_by_name.get("RATE_CREDIT") or {}).get("pct_nav")
+    fx_fe = (factor_by_name.get("FX") or {}).get("pct_nav")
+    beta_fe = (factor_pack.get("beta") or {}).get("beta")
+    te_fe = (factor_pack.get("tracking_error") or {}).get("annualized_pct")
 
     # Stress: rate +50bp already in liq; credit default 3% loss on credit bonds
     credit_mv = sum(assets["by_class"].get(k, 0.0) for k in _CREDIT_BOND)
@@ -1879,8 +1891,11 @@ async def compute_risk_metric_board(
                     note="mktdata_fi_credit" if ext.get("credit_spread") is not None else "加权YTM−2%",
                 ),
                 _metric("turnover", "股票年化换手率", value=_round((risk.get("equity_turnover") or {}).get("annualized_turnover_pct"), 2), unit="%", status="derived", note="核心风险指标"),
-                _metric("style_momentum", "风格暴露·动量", value=_round(style.get("momentum_exposure"), 3), unit="", status="derived", note="因子行为"),
-                _metric("style_size", "风格暴露·规模", value=_round(style.get("size_exposure"), 3), unit="", status="derived", note="因子行为"),
+                _metric("factor_equity_exposure", "因子敞口·EQUITY", value=_round(equity_fe, 2), unit="%", status="derived", note="RiskEngine Factor Exposure"),
+                _metric("factor_rate_credit_exposure", "因子敞口·RATE_CREDIT", value=_round(rate_fe, 2), unit="%", status="derived", note="RiskEngine Factor Exposure"),
+                _metric("factor_fx_exposure", "因子敞口·FX", value=_round(fx_fe, 2), unit="%", status="derived", note="RiskEngine Factor Exposure"),
+                _metric("factor_beta", "因子 Beta", value=_round(beta_fe if beta_fe is not None else style.get("momentum_exposure"), 3), unit="", status="derived", note="RiskEngine Beta"),
+                _metric("factor_tracking_error", "Tracking Error", value=_round(te_fe, 3), unit="%", status="derived" if te_fe is not None else "unavailable", note="RiskEngine TE"),
                 _metric(
                     "style_deviation",
                     "投资风格偏离（成长−价值）",

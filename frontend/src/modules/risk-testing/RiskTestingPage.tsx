@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { AlertTriangle, Download, Play, ShieldCheck } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import type { AxiosError } from "axios"
 
 import { FUNDS, FsiToolbar, lastTradeDate } from "@/components/FsiToolbar"
@@ -22,7 +22,6 @@ import {
   type RiskTestingShock,
 } from "@/fsiClient"
 import { exportCsv } from "@/modules/investment-risk/dashboard-kit"
-import { AdapterStatusBar } from "@/platform/AdapterStatus"
 import { useBindPageContext } from "@/platform/page-context"
 
 type RiskTestingPath =
@@ -55,6 +54,14 @@ const DEFAULT_CUSTOM_SHOCKS = JSON.stringify([
   { factor_type: "RATE", value: 0.0075, mode: "ABSOLUTE", label: "利率 +75bps" },
   { factor_type: "EQUITY", value: -0.08, mode: "RELATIVE", label: "权益 -8%" },
 ], null, 2)
+
+const STANDARD_SENSITIVITY_SHOCKS: RiskTestingShock[] = [
+  { factor_type: "RATE", value: 0.0001, mode: "ABSOLUTE", label: "利率 +1bp" },
+  { factor_type: "FX", value: 0.01, mode: "RELATIVE", label: "外汇 +1%" },
+  { factor_type: "VOLATILITY", value: 0.10, mode: "RELATIVE", label: "波动率 +10%" },
+  { factor_type: "EQUITY", value: 0.01, mode: "RELATIVE", label: "权益 +1%" },
+  { factor_type: "CREDIT_SPREAD", value: 0.0001, mode: "ABSOLUTE", label: "信用利差 +1bp" },
+]
 
 function number(value: unknown, digits = 2) {
   return typeof value === "number" ? value.toLocaleString("zh-HK", { maximumFractionDigits: digits }) : "—"
@@ -181,9 +188,10 @@ export function RiskTestingPage({ analytic }: { analytic: RiskTestingAnalytic })
   const meta = ANALYTICS.find((item) => item.analytic === analytic) ?? ANALYTICS[0]
   const isRangeAnalytic = RANGE_ANALYTICS.has(analytic)
   const [fundId, setFundId] = useState(FUNDS[0].id)
-  const [asOfDate, setAsOfDate] = useState(lastTradeDate)
+  const [asOfDate, setAsOfDate] = useState(() => lastTradeDate())
   const [startDate, setStartDate] = useState(() => { const d = new Date(`${lastTradeDate()}T00:00:00`); d.setDate(d.getDate() - 365); return d.toISOString().slice(0, 10) })
   const [scenarioId, setScenarioId] = useState("gfc_2008")
+  const [sensitivityMode, setSensitivityMode] = useState<"SINGLE" | "STANDARD">("STANDARD")
   const [factorType, setFactorType] = useState<RiskTestingShock["factor_type"]>("RATE")
   const [shockValue, setShockValue] = useState("0.0001")
   const [shockMode, setShockMode] = useState<RiskTestingShock["mode"]>("ABSOLUTE")
@@ -197,30 +205,42 @@ export function RiskTestingPage({ analytic }: { analytic: RiskTestingAnalytic })
   const [weightMode, setWeightMode] = useState<"CURRENT" | "CUSTOM">("CURRENT")
   const [customWeights, setCustomWeights] = useState<Record<string, string>>({})
   const catalog = useQuery({ queryKey: ["risk-testing-catalog"], queryFn: () => fsiApi.getRiskTestingCatalog().then((r) => r.data.items), staleTime: 300_000 })
-  const capabilities = useQuery({
-    queryKey: ["risk-testing-capabilities"],
-    queryFn: () => fsiApi.getRiskTestingCapabilities().then((r) => r.data),
-    staleTime: 300_000,
-    retry: 1,
-  })
   const holdings = useQuery({
     queryKey: ["risk-testing-holdings", fundId, asOfDate],
     queryFn: async () => {
       try {
+        const preferred = await fsiApi.getRiskTestingHoldings(fundId, asOfDate).then((response) => response.data)
+        if ((preferred.holdings?.length ?? 0) > 0) return preferred
+      } catch {
+        // fall through to positions API
+      }
+      try {
         const fallback = await fsiApi.getPositions(fundId, asOfDate).then((response) => response.data)
-        return mapPositionsToRiskTestingHoldings(fundId, asOfDate, fallback.positions)
+        const mapped = mapPositionsToRiskTestingHoldings(fundId, asOfDate, fallback.positions)
+        if ((mapped.holdings?.length ?? 0) > 0) return mapped
       } catch (error) {
         const status = (error as { response?: { status?: number } })?.response?.status
-        if (status === 404) {
-          return await fsiApi.getRiskTestingHoldings(fundId, asOfDate).then((response) => response.data)
-        }
-        throw error
+        if (status !== 404) throw error
       }
+      return mapPositionsToRiskTestingHoldings(fundId, asOfDate, [])
     },
     enabled: analytic === "HISTORICAL_BACKTEST",
     retry: false,
     refetchOnWindowFocus: false,
   })
+
+  useEffect(() => {
+    const effective = holdings.data?.effective_date
+    if (analytic !== "HISTORICAL_BACKTEST" || !effective || effective === asOfDate) return
+    if ((holdings.data?.holdings?.length ?? 0) === 0) return
+    setAsOfDate(effective)
+  }, [analytic, asOfDate, holdings.data?.effective_date, holdings.data?.holdings?.length])
+
+  const customWeightTotal = (holdings.data?.holdings ?? []).reduce(
+    (sum, holding) => sum + Number(customWeights[holding.security_code] ?? holding.current_weight_pct),
+    0,
+  )
+  const invalidRange = isRangeAnalytic && startDate >= asOfDate
 
   const run = useMutation({
     mutationFn: () => {
@@ -236,19 +256,20 @@ export function RiskTestingPage({ analytic }: { analytic: RiskTestingAnalytic })
         counterparty_hazard: Number(xvaHazard),
       }
       if (isRangeAnalytic) request.start_date = startDate
-      if (analytic === "SENSITIVITY") request.shocks = [{ factor_type: factorType, value: Number(shockValue), mode: shockMode, label: `${factorType} ${shockValue}` }]
+      if (analytic === "SENSITIVITY") {
+        request.shocks = sensitivityMode === "STANDARD"
+          ? STANDARD_SENSITIVITY_SHOCKS
+          : [{ factor_type: factorType, value: Number(shockValue), mode: shockMode, label: `${factorType} ${shockValue}` }]
+      }
       if ((analytic === "SCENARIO" || analytic === "STRESS" || analytic === "REVERSE_STRESS") && scenarioId === "custom") {
         request.scenario_name = "用户自定义情景"
         request.shocks = JSON.parse(customShocks) as RiskTestingShock[]
       }
       if (analytic === "HISTORICAL_BACKTEST") {
-        if ((holdings.data?.holdings?.length ?? 0) === 0) {
-          throw new Error("当前日期没有可用于回测的持仓，请切换组合或日期后重试")
-        }
         request.weight_mode = weightMode
         if (weightMode === "CUSTOM") {
-          if (customWeightTotal <= 0) {
-            throw new Error("调整持仓权重合计必须大于 0%")
+          if ((holdings.data?.holdings?.length ?? 0) === 0 || customWeightTotal <= 0) {
+            throw new Error("调整持仓权重合计必须大于 0%，请先选择有持仓的估值日")
           }
           request.custom_weights = Object.fromEntries(
             (holdings.data?.holdings ?? []).map((holding) => [
@@ -261,18 +282,32 @@ export function RiskTestingPage({ analytic }: { analytic: RiskTestingAnalytic })
       return fsiApi.runRiskTest(fundId, request).then((response) => response.data)
     },
   })
+
+  useEffect(() => {
+    if (invalidRange) return
+    if (analytic === "HISTORICAL_BACKTEST" && (holdings.isLoading || holdings.isError)) return
+    run.mutate()
+    // 仅在切换分析类型 / 基金 / 日期后自动重跑；参数微调请点「运行测试」
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analytic, fundId, asOfDate, startDate, holdings.isLoading, holdings.isError, invalidRange])
+
   const data = run.data
   const rows = reportRows(data)
   const totals = data?.totals as Record<string, number> | undefined
+  const sensitivityUpPnl = analytic === "SENSITIVITY"
+    ? rows.reduce((sum, row) => sum + (typeof row.up_pnl === "number" ? row.up_pnl : 0), 0)
+    : undefined
   const primaryPnl = typeof data?.pnl === "number"
     ? data.pnl
     : typeof totals?.total === "number"
       ? totals.total
-      : typeof rows[0]?.up_pnl === "number"
-        ? rows[0].up_pnl
-        : typeof rows[0]?.pv01 === "number"
-          ? rows[0].pv01
-          : undefined
+      : typeof sensitivityUpPnl === "number" && rows.length > 0
+        ? sensitivityUpPnl
+        : typeof rows[0]?.up_pnl === "number"
+          ? rows[0].up_pnl
+          : typeof rows[0]?.pv01 === "number"
+            ? rows[0].pv01
+            : undefined
 
   const selectedScenario = useMemo(
     () => (catalog.data ?? []).find((item) => item.scenario_id === scenarioId),
@@ -306,11 +341,8 @@ export function RiskTestingPage({ analytic }: { analytic: RiskTestingAnalytic })
   }, [displayedScenarioShocks])
 
   const dataQuality = (data?.data_quality ?? {}) as Record<string, unknown>
-  const invalidRange = isRangeAnalytic && startDate >= asOfDate
-  const customWeightTotal = (holdings.data?.holdings ?? []).reduce(
-    (sum, holding) => sum + Number(customWeights[holding.security_code] ?? holding.current_weight_pct),
-    0,
-  )
+  const effectiveDate = String(dataQuality.effective_date ?? data?.as_of_date ?? asOfDate)
+  const dateFallback = Boolean(data && effectiveDate && effectiveDate !== asOfDate)
 
   function downloadCsv() {
     if (!rows.length) return
@@ -341,13 +373,6 @@ export function RiskTestingPage({ analytic }: { analytic: RiskTestingAnalytic })
       <div>
         <h1 className="text-2xl font-bold">{meta.label}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{meta.description}</p>
-        <div className="mt-3">
-          <AdapterStatusBar
-            adapters={capabilities.data?.adapters}
-            engine={capabilities.data?.riskengine ?? capabilities.data?.engine}
-            engineVersion={capabilities.data?.riskengine_version}
-          />
-        </div>
       </div>
       <div data-testid="platform-parameter">
       <FsiToolbar
@@ -366,10 +391,24 @@ export function RiskTestingPage({ analytic }: { analytic: RiskTestingAnalytic })
       </div>
       {run.isPending ? <p className="animate-pulse text-sm text-muted-foreground" data-testid="platform-loading">正在加载…</p> : null}
       {run.isError ? <p className="text-sm text-destructive" data-testid="platform-error">{apiErrorMessage(run.error, "运行失败")}</p> : null}
+      {dateFallback ? (
+        <Card className="border-amber-300 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20">
+          <CardContent className="pt-4 text-sm text-amber-900 dark:text-amber-100">
+            请求估值日 {asOfDate} 无持仓，已自动回退到最近有效日 {effectiveDate}。
+          </CardContent>
+        </Card>
+      ) : null}
       {!run.isPending && !run.isError && !data ? <p className="text-sm text-muted-foreground" data-testid="platform-empty">暂无数据</p> : null}
 
       <Card><CardHeader><CardTitle className="text-base">参数配置</CardTitle></CardHeader><CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {analytic === "SENSITIVITY" ? <><div className="space-y-1"><Label>风险因子</Label><Select value={factorType} onValueChange={(v) => setFactorType(v as RiskTestingShock["factor_type"])}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{["RATE", "FX", "VOLATILITY", "EQUITY", "CREDIT_SPREAD"].map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent></Select></div><div className="space-y-1"><Label>冲击值</Label><Input type="number" step="0.0001" value={shockValue} onChange={(e) => setShockValue(e.target.value)} /></div><div className="space-y-1"><Label>冲击模式</Label><Select value={shockMode} onValueChange={(v) => setShockMode(v as RiskTestingShock["mode"])}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="ABSOLUTE">绝对变化</SelectItem><SelectItem value="RELATIVE">相对变化</SelectItem></SelectContent></Select></div></> : null}
+        {analytic === "SENSITIVITY" ? <>
+          <div className="space-y-1"><Label>冲击包</Label><Select value={sensitivityMode} onValueChange={(v) => setSensitivityMode(v as "SINGLE" | "STANDARD")}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="STANDARD">标准五因子</SelectItem><SelectItem value="SINGLE">单一因子</SelectItem></SelectContent></Select></div>
+          {sensitivityMode === "SINGLE" ? <>
+            <div className="space-y-1"><Label>风险因子</Label><Select value={factorType} onValueChange={(v) => setFactorType(v as RiskTestingShock["factor_type"])}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{["RATE", "FX", "VOLATILITY", "EQUITY", "CREDIT_SPREAD"].map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent></Select></div>
+            <div className="space-y-1"><Label>冲击值</Label><Input type="number" step="0.0001" value={shockValue} onChange={(e) => setShockValue(e.target.value)} /></div>
+            <div className="space-y-1"><Label>冲击模式</Label><Select value={shockMode} onValueChange={(v) => setShockMode(v as RiskTestingShock["mode"])}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="ABSOLUTE">绝对变化</SelectItem><SelectItem value="RELATIVE">相对变化</SelectItem></SelectContent></Select></div>
+          </> : <div className="text-sm text-muted-foreground md:col-span-3">RATE +1bp · FX +1% · VOL +10% · EQUITY +1% · CREDIT_SPREAD +1bp</div>}
+        </> : null}
         {["STRESS", "SCENARIO", "REVERSE_STRESS"].includes(analytic) ? <>
           <div className="space-y-1"><Label>情景</Label><Select value={scenarioId} onValueChange={setScenarioId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{(catalog.data ?? []).map((s) => <SelectItem key={s.scenario_id} value={s.scenario_id}>{s.name}</SelectItem>)}<SelectItem value="custom">自定义多因子情景</SelectItem></SelectContent></Select></div>
           {scenarioId === "custom" ? <div className="space-y-1 md:col-span-2 xl:col-span-3"><Label>冲击配置 JSON</Label><Textarea className="min-h-32 font-mono text-xs" value={customShocks} onChange={(e) => setCustomShocks(e.target.value)} /></div> : null}

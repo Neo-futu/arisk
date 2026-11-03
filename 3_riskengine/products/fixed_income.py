@@ -104,3 +104,84 @@ class CertificateOfDeposit(FixedIncomeProduct):
     def __post_init__(self) -> None:
         self.kind = ProductKind.CD
         super().__post_init__()
+
+
+@dataclass
+class Repo(FixedIncomeProduct):
+    """回购 / 逆回购。零冲击=账面；利率冲击走 FinancePy ``repo_carry`` 曲线再定价。"""
+
+    haircut: float = 0.0
+    repo_rate: float = 0.0
+
+    def __post_init__(self) -> None:
+        self.kind = ProductKind.REPO
+        meta = dict(self.metadata or {})
+        if not self.haircut:
+            self.haircut = float(meta.get("haircut") or 0.0)
+        if not self.repo_rate:
+            self.repo_rate = float(meta.get("repo_rate") or self.ytm or 0.0)
+        if abs(self.repo_rate) >= 1.0:
+            self.repo_rate /= 100.0
+        if self.repo_rate and not self.ytm:
+            self.ytm = self.repo_rate
+        super().__post_init__()
+
+    def cashflows(self, market: Market, model: Model | None = None) -> list[dict[str, Any]]:
+        del model
+        as_of = market.valuation_date if market is not None else date.min
+        years = years_to_maturity(self, as_of) if as_of != date.min else max(self.duration, 0.0)
+        rate = self.repo_rate or annual_rate(self)
+        interest = self.market_value_base * rate * years
+        return [
+            {
+                "type": "repo_interest",
+                "rate": rate,
+                "haircut": self.haircut,
+                "amount": interest,
+            },
+            {
+                "type": "repo_principal",
+                "years": years,
+                "amount": self.market_value_base,
+            },
+        ]
+
+    def value(self, market: Market, model: Model | None = None) -> float:
+        del model
+        if market is None:
+            return float(self.market_value_base)
+        wrapped = market.curves.get("repo_carry") if market is not None else None
+        if callable(wrapped):
+            as_of = market.valuation_date
+            years = years_to_maturity(self, as_of) if as_of is not None else max(self.duration, 0.0)
+            return float(
+                wrapped(
+                    self.repo_rate or annual_rate(self),
+                    years,
+                    self.market_value_base,
+                    0.0,
+                    self.haircut,
+                )
+            )
+        return _reprice(self, market, 0.0)
+
+    def sensitivity(self, market: Market, shocks: tuple[Shock, ...] = ()) -> dict[str, Any]:
+        base = self.value(market)
+        rate_shift = _rate_shift(self, market, shocks)
+        wrapped = market.curves.get("repo_carry") if market is not None else None
+        if callable(wrapped):
+            as_of = market.valuation_date
+            years = years_to_maturity(self, as_of) if as_of is not None else max(self.duration, 0.0)
+            shocked = float(
+                wrapped(
+                    self.repo_rate or annual_rate(self),
+                    years,
+                    self.market_value_base,
+                    rate_shift,
+                    self.haircut,
+                )
+            )
+        else:
+            shocked = _reprice(self, market, rate_shift) if market is not None else base
+        shocked *= _fx_multiplier(self, market, shocks)
+        return {"base_pv": base, "shocked_pv": shocked, "pnl": shocked - base}

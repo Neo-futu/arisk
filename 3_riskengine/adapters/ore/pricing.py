@@ -95,6 +95,23 @@ def terms_of(product: Any) -> dict[str, Any]:
         ),
         "maturity": maturity,
         "underlying": str(getattr(product, "underlying", "") or meta.get("underlying") or "EQUITY"),
+        "equity_beta": float(
+            getattr(product, "equity_beta", 0.0) or meta.get("equity_beta") or 0.5
+        ),
+        "rate_duration": float(
+            getattr(product, "rate_duration", 0.0)
+            or meta.get("rate_duration")
+            or meta.get("duration")
+            or getattr(product, "tenor_years", 0.0)
+            or 1.0
+        ),
+        "vol_vega": float(getattr(product, "vol_vega", 0.0) or meta.get("vol_vega") or 0.25),
+        "spread_cs01": float(
+            getattr(product, "spread_cs01", 0.0) or meta.get("spread_cs01") or 0.5
+        ),
+        "script_id": str(
+            getattr(product, "script_id", "") or meta.get("script_id") or meta.get("template") or ""
+        ),
     }
 
 
@@ -300,7 +317,8 @@ def _model_npv(ql: Any, as_of_ql: Any, terms: dict[str, Any], shifts: dict[str, 
         return _swaption_npv(ql, as_of_ql, terms, rate, vol)
     if kind == ProductKind.CDS.value:
         return _cds_npv(ql, as_of_ql, terms, rate, hazard)
-    return float(terms["market_value_base"])
+    # STRUCTURED / unknown: force analytic path (book MV alone would mask shocks).
+    raise NotImplementedError(f"no native ORE model for {kind}")
 
 
 def _analytic_delta(terms: dict[str, Any], shifts: dict[str, float]) -> float:
@@ -324,6 +342,20 @@ def _analytic_delta(terms: dict[str, Any], shifts: dict[str, float]) -> float:
         return sign * notional * years * shifts["spread"]
     if kind in {ProductKind.FX_OPTION.value, ProductKind.OPTION.value}:
         return mv * (shifts["fx"] + shifts["equity"] + 0.4 * shifts["vol"])
+    if kind == ProductKind.STRUCTURED.value:
+        # Scripted OTC: multi-factor delta from product metadata (no OREApp XML).
+        beta = float(terms.get("equity_beta") or 0.5)
+        duration = float(terms.get("rate_duration") or terms.get("tenor_years") or 1.0)
+        vega = float(terms.get("vol_vega") or 0.25)
+        cs01 = float(terms.get("spread_cs01") or 0.5)
+        notional = float(terms["notional"] or mv or 0.0)
+        return (
+            mv * beta * shifts["equity"]
+            + mv * shifts["fx"]
+            + (-notional * duration) * shifts["rate"]
+            + vega * notional * shifts["vol"]
+            + (-cs01 * notional) * shifts["spread"]
+        )
     return 0.0
 
 
